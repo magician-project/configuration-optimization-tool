@@ -1,0 +1,238 @@
+{
+  "id": "c8d9cc02",
+  "name": "Boat hull inspection",
+  "created_at": "2026-04-29T07:41:22.907880+00:00",
+  "updated_at": "2026-04-29T08:03:01.509811+00:00",
+  "answers": {
+    "q1_robot_arms": "multiple",
+    "q1_num_arms": 2,
+    "q2_camera_type": null,
+    "q2_camera_spec": null,
+    "q3_additional_sensors": [],
+    "q4_lighting": null,
+    "q5_materials": [
+      "metal"
+    ],
+    "q5_other_material": null,
+    "q6_object_size": null,
+    "q6_dimensions": null,
+    "q7_mesh": "not_available",
+    "q7_mesh_status": null,
+    "q8_defects": [
+      "dents",
+      "surface_damage"
+    ],
+    "q9_time": "tight",
+    "q9_time_value": 5.0,
+    "q9_time_unit": "minutes",
+    "q10_profit": "standard"
+  },
+  "modules": {
+    "grabber": {
+      "module_id": "grabber",
+      "module_name": "Grabber",
+      "description": "Core sensor driver. Provides software access to all physical sensors on the Sensing Robot: GiGE Camera, ATI F/T Sensor, Teensy Accelerometer, Camera Light Controller, buttons, and ToF range finders.",
+      "status": "needs_action",
+      "impacts": [
+        {
+          "characteristic": "Multiple robot arms",
+          "affects": "Process",
+          "what_changes": "The Grabber must execute multi-threaded peripheral management to handle parallel sensor data streams from multiple robot arms simultaneously. The existing threading architecture must be extended to support concurrent operations for each arm.",
+          "action_type": "reconfigure",
+          "reason": "Q1: Multiple robot arms selected"
+        }
+      ],
+      "flags": [
+        {
+          "id": "flag_cross_cutting",
+          "type": "warning",
+          "message": "Changes span 5 module(s). Phased integration and cross-module testing is strongly recommended.",
+          "module_id": "grabber",
+          "acknowledged": false
+        }
+      ],
+      "validated_at": null,
+      "deployed_at": null
+    },
+    "orienteering_solver": {
+      "module_id": "orienteering_solver",
+      "module_name": "Orienteering Solver",
+      "description": "Generates optimal schedules for cleaning robots to address defects. Determines the sequence of defects to visit and service time to spend on each. Problem variants: OP (default), TSP, TOP (multi-arm), OPTW (time windows), OPVP (variable profit).",
+      "status": "needs_action",
+      "impacts": [
+        {
+          "characteristic": "Multiple robot arms",
+          "affects": "Problem Description",
+          "what_changes": "Scheduling problem changes from Orienteering Problem (OP) to Team Orienteering Problem (TOP). Multiple agents must cooperatively share and schedule defect remediation tasks. Algorithm and Hyperparameters processes must be reconfigured for multi-agent scheduling.",
+          "action_type": "reconfigure",
+          "reason": "Q1: Multiple robot arms selected"
+        },
+        {
+          "characteristic": "Material",
+          "affects": "DefectProfitCalculator, Defect Information",
+          "what_changes": "Material(s): metal. Profit model and service time lookup must be calibrated for these materials. Partners must supply material-specific profit and service time specifications.",
+          "action_type": "reconfigure",
+          "reason": "Q5: Material(s) selected"
+        },
+        {
+          "characteristic": "Type defect",
+          "affects": "DefectProfitCalculator, Defect Information",
+          "what_changes": "Defect types: Dents/Deformations, Surface damage. Profit function and service time model must be calibrated per defect type. Partners must supply defect-type-specific economic and operational parameters.",
+          "action_type": "reconfigure",
+          "reason": "Q8: Defect types selected"
+        },
+        {
+          "characteristic": "Addition of defects have to happen in a certain timeframe",
+          "affects": "Problem Description",
+          "what_changes": "Tight time budget (5.0 minutes). Problem changes from OP to Orienteering Problem with Time Windows (OPTW). Time windows must be encoded in Problem_description. Algorithm and max_compute_time must be updated for a solver that handles time window constraints.",
+          "action_type": "reconfigure",
+          "reason": "Q9: Tight time constraints specified"
+        }
+      ],
+      "flags": [
+        {
+          "id": "flag_multi_arm",
+          "type": "human_oversight",
+          "message": "Team Orienteering Problem formulation and arm synchronisation must be reviewed by a robotics engineer.",
+          "module_id": "orienteering_solver",
+          "acknowledged": false
+        },
+        {
+          "id": "flag_cross_cutting",
+          "type": "warning",
+          "message": "Changes span 5 module(s). Phased integration and cross-module testing is strongly recommended.",
+          "module_id": "orienteering_solver",
+          "acknowledged": false
+        }
+      ],
+      "validated_at": null,
+      "deployed_at": null
+    },
+    "localiser": {
+      "module_id": "localiser",
+      "module_name": "Localiser",
+      "description": "Provides localization of entities relative to the robot in the ROS2 TF2 framework. Foundational for motion planning. Supports model-free (approach 1) and model-based localization (approaches 2 & 3, require a 3D mesh).",
+      "status": "validated",
+      "impacts": [
+        {
+          "characteristic": "Material Y",
+          "affects": "Process",
+          "what_changes": "Localization approach must be selected based on material: metal. Approach 1 (model-free, no mesh), Approach 2 or 3 (model-based, requires mesh). Selection depends on mesh availability (Q7).",
+          "action_type": "reconfigure",
+          "reason": "Q5: Material(s) selected"
+        },
+        {
+          "characteristic": "Material Y",
+          "affects": "Process",
+          "what_changes": "No mesh available. Only model-free localization (Approach 1) can be used. Initiate 3D scanning or CAD model retrieval immediately \u2014 this is a blocking prerequisite for model-based localization.",
+          "action_type": "review",
+          "reason": "Q7: Mesh not available"
+        }
+      ],
+      "flags": [
+        {
+          "id": "flag_mesh_missing",
+          "type": "error",
+          "message": "Localisation approach cannot be finalised without a mesh. Initiate 3D scanning or CAD retrieval before proceeding.",
+          "module_id": "localiser",
+          "acknowledged": true
+        },
+        {
+          "id": "flag_cross_cutting",
+          "type": "warning",
+          "message": "Changes span 5 module(s). Phased integration and cross-module testing is strongly recommended.",
+          "module_id": "localiser",
+          "acknowledged": true
+        }
+      ],
+      "validated_at": "2026-04-30T07:25:34.056405+00:00",
+      "deployed_at": null
+    },
+    "tactile_sensor": {
+      "module_id": "tactile_sensor",
+      "module_name": "Tactile Classifier",
+      "description": "Detects and classifies surface defects using tactile probe data (force, acceleration). CNN-LSTM / LSTM-CNN ensemble model. Must be retrained whenever materials, object sizes, or defect types change.",
+      "status": "needs_action",
+      "impacts": [
+        {
+          "characteristic": "Different materials, object sizes, dirt/dent types, and time constraints",
+          "affects": "Input",
+          "what_changes": "Tactile Classifier ML model must be retrained on labeled data for: metal. Retraining pipeline: Pre_calculations \u2192 Neural_network (CNN-LSTM) \u2192 Ensemble. Collect new material-specific tactile data before retraining.",
+          "action_type": "retrain",
+          "reason": "Q5: New material(s) selected"
+        },
+        {
+          "characteristic": "Different materials, object sizes, dirt/dent types, and time constraints",
+          "affects": "Input",
+          "what_changes": "Tactile Classifier must have training data for defect types: Dents/Deformations, Surface damage. Classes in the CNN-LSTM output layer must match the selected types. Re-label and retrain if any type is new.",
+          "action_type": "retrain",
+          "reason": "Q8: Defect types selected"
+        }
+      ],
+      "flags": [
+        {
+          "id": "flag_retrain",
+          "type": "error",
+          "message": "New material selected \u2014 vision and tactile classifiers must be retrained on data covering this material.",
+          "module_id": "tactile_sensor",
+          "acknowledged": false
+        },
+        {
+          "id": "flag_geometric_defects",
+          "type": "warning",
+          "message": "Dents and surface damage require 3D or depth-aware data. Verify labelled examples exist before training.",
+          "module_id": "tactile_sensor",
+          "acknowledged": false
+        },
+        {
+          "id": "flag_cross_cutting",
+          "type": "warning",
+          "message": "Changes span 5 module(s). Phased integration and cross-module testing is strongly recommended.",
+          "module_id": "tactile_sensor",
+          "acknowledged": false
+        }
+      ],
+      "validated_at": null,
+      "deployed_at": null
+    },
+    "vision_classifier": {
+      "module_id": "vision_classifier",
+      "module_name": "Vision Classifier",
+      "description": "Visual defect detection and classification using camera images. Implicitly affected when new materials are introduced \u2014 model must be retrained and the Vision Model Name parameter in the Configuration Module must be updated.",
+      "status": "needs_action",
+      "impacts": [
+        {
+          "characteristic": "(implicit) Retrain vision model on new material data",
+          "affects": "Input",
+          "what_changes": "Vision Classifier model must be retrained on images of: metal. Update Vision Model Name parameter in the Configuration Module after retraining.",
+          "action_type": "retrain",
+          "reason": "Q5: New material(s) selected \u2014 vision retraining required"
+        }
+      ],
+      "flags": [
+        {
+          "id": "flag_retrain_vision",
+          "type": "error",
+          "message": "New material selected \u2014 vision classifier must be retrained on data covering this material.",
+          "module_id": "vision_classifier",
+          "acknowledged": false
+        },
+        {
+          "id": "flag_cross_cutting",
+          "type": "warning",
+          "message": "Changes span 5 module(s). Phased integration and cross-module testing is strongly recommended.",
+          "module_id": "vision_classifier",
+          "acknowledged": false
+        }
+      ],
+      "validated_at": null,
+      "deployed_at": null
+    }
+  },
+  "confidence": {
+    "score": 5,
+    "max": 7,
+    "percentage": 71.4,
+    "level": "high"
+  }
+}
