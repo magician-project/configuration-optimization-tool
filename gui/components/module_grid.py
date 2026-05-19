@@ -124,10 +124,18 @@ class _ModuleTile(QFrame):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self._build_ui()
         self._set_border(self._NORMAL_BORDER)
+        self._apply_shadow(blur=10, offset=2, alpha=18)
+
+    def _apply_shadow(self, blur: int, offset: int, alpha: int) -> None:
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(blur)
+        shadow.setOffset(0, offset)
+        shadow.setColor(QColor(0, 0, 0, alpha))
+        self.setGraphicsEffect(shadow)
 
     def _set_border(self, colour: str) -> None:
         self.setStyleSheet(
-            f"QFrame {{ background: white; border: 1px solid {colour}; border-radius: 8px; }}"
+            "QFrame { background: white; border: none; border-radius: 8px; }"
         )
 
     def _build_ui(self) -> None:
@@ -256,15 +264,11 @@ class _ModuleTile(QFrame):
             )
 
     def enterEvent(self, event) -> None:
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(18)
-        shadow.setOffset(0, 3)
-        shadow.setColor(QColor(0, 0, 0, 40))
-        self.setGraphicsEffect(shadow)
+        self._apply_shadow(blur=22, offset=5, alpha=35)
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        self.setGraphicsEffect(None)
+        self._apply_shadow(blur=10, offset=2, alpha=18)
         super().leaveEvent(event)
 
     def mousePressEvent(self, event) -> None:

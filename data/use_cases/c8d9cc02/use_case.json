@@ -2,7 +2,7 @@
   "id": "c8d9cc02",
   "name": "Boat hull inspection",
   "created_at": "2026-04-29T07:41:22.907880+00:00",
-  "updated_at": "2026-05-08T12:26:49.171010+00:00",
+  "updated_at": "2026-05-13T08:40:37.567754+00:00",
   "answers": {
     "q1_robot_arms": "multiple",
     "q1_num_arms": 2,
@@ -87,7 +87,7 @@
       "module_id": "orienteering_solver",
       "module_name": "Orienteering Solver",
       "description": "Generates optimal schedules for cleaning robots to address defects. Determines the sequence of defects to visit and service time to spend on each. Problem variants: OP (default), TSP, TOP (multi-arm), OPTW (time windows), OPVP (variable profit).",
-      "status": "validated",
+      "status": "computing",
       "impacts": [
         {
           "characteristic": "Multiple robot arms",
@@ -166,7 +166,7 @@
           "type": "warning",
           "message": "Localisation module configuration is provisional until the mesh is available. Revisit this assessment when the mesh is ready.",
           "module_id": "localiser",
-          "acknowledged": false
+          "acknowledged": true
         },
         {
           "id": "flag_cross_cutting",
@@ -241,7 +241,7 @@
       "module_id": "vision_classifier",
       "module_name": "Vision Classifier",
       "description": "Visual defect detection and classification using camera images. Implicitly affected when new materials are introduced \u2014 model must be retrained and the Vision Model Name parameter in the Configuration Module must be updated.",
-      "status": "needs_action",
+      "status": "validated",
       "impacts": [
         {
           "characteristic": "(implicit) Retrain vision model on new material data",
@@ -257,18 +257,18 @@
           "type": "error",
           "message": "New material selected \u2014 vision classifier must be retrained on data covering this material.",
           "module_id": "vision_classifier",
-          "acknowledged": false
+          "acknowledged": true
         },
         {
           "id": "flag_cross_cutting",
           "type": "warning",
           "message": "Changes span 5 module(s). Phased integration and cross-module testing is strongly recommended.",
           "module_id": "vision_classifier",
-          "acknowledged": false
+          "acknowledged": true
         }
       ],
       "compute_result": null,
-      "validated_at": null,
+      "validated_at": "2026-05-13T08:33:55.102238+00:00",
       "computed_at": null,
       "deployed_at": null
     }
