@@ -103,6 +103,103 @@ def compute_impacts(answers: QuestionnaireAnswers) -> Dict[str, Any]:
         total_characteristics += 1
 
     # ------------------------------------------------------------------
+    # Q2 extensions: Grabber camera hardware parameters
+    # ------------------------------------------------------------------
+    cam_res = answers.q2_camera_resolution or {}
+    if cam_res.get("width") or cam_res.get("height"):
+        w = cam_res.get("width", "?")
+        h = cam_res.get("height", "?")
+        result["grabber"]["impacts"].append(_impact(
+            characteristic="Camera resolution",
+            affects="Input",
+            what_changes=(
+                f"Capture resolution set to {w}×{h} px. "
+                "Update --size flag and params.yaml width/height accordingly. "
+                "Higher resolutions increase storage and processing load."
+            ),
+            action_type="reconfigure",
+            reason="Q2: Camera resolution specified",
+        ))
+        total_characteristics += 1
+
+    if answers.q2_camera_framerate:
+        fps = float(answers.q2_camera_framerate)
+        ram_note = " RAM-backed storage (--ram) is required at this frame rate." if fps > 10 else ""
+        result["grabber"]["impacts"].append(_impact(
+            characteristic="Camera frame rate",
+            affects="Input",
+            what_changes=(
+                f"Target frame rate: {fps} Hz.{ram_note} "
+                "Update --fps flag and params.yaml frame_rate."
+            ),
+            action_type="reconfigure",
+            reason="Q2: Camera frame rate specified",
+        ))
+        if fps > 10:
+            result["grabber"]["flags"].append(_flag(
+                id="flag_framerate_ram",
+                type="warning",
+                message=(
+                    f"Frame rate {fps} Hz > 10 Hz requires RAM-backed storage. "
+                    "Ensure --ram flag is set in launch args."
+                ),
+                module_id="grabber",
+            ))
+        total_characteristics += 1
+
+    if answers.q2_stream_shm == "yes":
+        stream_name = answers.q2_stream_shm_name or "stream1"
+        result["grabber"]["impacts"].append(_impact(
+            characteristic="Shared memory streaming",
+            affects="Output",
+            what_changes=(
+                f"Camera frames will be published to POSIX shared memory stream '{stream_name}' "
+                "(--stream flag). File output is disabled when streaming. "
+                "Required for the live vision classifier."
+            ),
+            action_type="reconfigure",
+            reason="Q2: Shared memory streaming enabled",
+        ))
+        total_characteristics += 1
+
+    # ------------------------------------------------------------------
+    # Q3 extensions: Grabber hardware paths and lighting mode
+    # ------------------------------------------------------------------
+    if "distance" in answers.q3_additional_sensors:
+        lighting = answers.q3_lighting_mode or "none"
+        lighting_label = {
+            "rlight": "round-robin", "dlight": "distance-based",
+            "tlight": "pattern-based", "trigger": "manual trigger", "none": "none",
+        }.get(lighting, lighting)
+        result["grabber"]["impacts"].append(_impact(
+            characteristic="Distance sensor + lighting controller (Arduino)",
+            affects="Process",
+            what_changes=(
+                f"Arduino distance sensor thread enabled. "
+                f"Lighting mode: {lighting_label}. "
+                f"Serial port: {answers.q3_arduino_path or '/dev/ttyUSB0'}. "
+                "Update --arduino and --distance flags in launch args."
+            ),
+            action_type="reconfigure",
+            reason="Q3: Distance sensors selected",
+        ))
+        total_characteristics += 1
+
+    if "tactile" in answers.q3_additional_sensors and answers.q3_force_sensor_ip:
+        result["grabber"]["impacts"].append(_impact(
+            characteristic="ATI NetFT force/torque sensor",
+            affects="Input",
+            what_changes=(
+                f"ATI NetFT configured at {answers.q3_force_sensor_ip}:"
+                f"{answers.q3_force_sensor_port or 49152}. "
+                "Update ati_ip and ati_port in params.yaml."
+            ),
+            action_type="reconfigure",
+            reason="Q3: Force sensor IP configured",
+        ))
+        total_characteristics += 1
+
+    # ------------------------------------------------------------------
     # Q4: Lighting
     # ------------------------------------------------------------------
     if answers.q4_lighting == "additional":
@@ -338,6 +435,130 @@ def compute_impacts(answers: QuestionnaireAnswers) -> Dict[str, Any]:
             ))
 
     # ------------------------------------------------------------------
+    # Q8 extensions: Vision Classifier configuration
+    # ------------------------------------------------------------------
+    clf_model = answers.q_clf_model
+    clf_tile  = answers.q_clf_tile_size
+    clf_path  = (answers.q_clf_model_path or "").strip()
+    clf_data  = (answers.q_clf_dataset_dir or "").strip()
+
+    if clf_model:
+        result["vision_classifier"]["impacts"].append(_impact(
+            characteristic="Classifier backbone architecture",
+            affects="Process",
+            what_changes=(
+                f"Backbone set to '{clf_model}'. "
+                "This must match the backbone used during training. "
+                "Update model field in training_config.json and live_config.json."
+            ),
+            action_type="reconfigure",
+            reason="Q8 ext: Classifier backbone selected",
+        ))
+        total_characteristics += 1
+
+    if clf_tile:
+        result["vision_classifier"]["impacts"].append(_impact(
+            characteristic="Tile size",
+            affects="Input, Process",
+            what_changes=(
+                f"Tile size set to {clf_tile} px. "
+                "Tile size must match between training and live inference. "
+                "Update tile_size in training_config.json and step_size in live_config.json accordingly."
+            ),
+            action_type="reconfigure",
+            reason="Q8 ext: Tile size specified",
+        ))
+        total_characteristics += 1
+
+    if clf_path:
+        import os as _os
+        exists = _os.path.isfile(clf_path)
+        result["vision_classifier"]["impacts"].append(_impact(
+            characteristic="Pre-trained model checkpoint",
+            affects="Input",
+            what_changes=(
+                f"Model checkpoint: {clf_path}. "
+                + ("File found — training will be skipped." if exists
+                   else "WARNING: file not found at this path.")
+            ),
+            action_type="reconfigure",
+            reason="Q8 ext: Model path provided",
+        ))
+        if not exists:
+            result["vision_classifier"]["flags"].append(_flag(
+                id="flag_model_not_found",
+                type="error",
+                message=f"Model checkpoint not found: {clf_path}. Verify the path before deploying.",
+                module_id="vision_classifier",
+            ))
+        total_characteristics += 1
+    elif clf_data:
+        result["vision_classifier"]["impacts"].append(_impact(
+            characteristic="Training dataset",
+            affects="Input",
+            what_changes=(
+                f"Dataset directory: {clf_data}. "
+                "No pre-trained model provided — retraining is required. "
+                "Run trainMagicianVisionClassifierTorch.py with the generated training_config.json."
+            ),
+            action_type="retrain",
+            reason="Q8 ext: Dataset directory provided, no model path",
+        ))
+        result["vision_classifier"]["flags"].append(_flag(
+            id="flag_retrain_required",
+            type="warning",
+            message=(
+                "Retraining required before deployment. "
+                "Use the generated training_config.json with trainMagicianVisionClassifierTorch.py."
+            ),
+            module_id="vision_classifier",
+        ))
+        total_characteristics += 1
+
+    if answers.q_clf_use_lasers == "yes":
+        result["vision_classifier"]["impacts"].append(_impact(
+            characteristic="Laser distance sensor fusion",
+            affects="Input, Output",
+            what_changes=(
+                "Classifier will subscribe to 3 distance sensor topics and fuse depth into "
+                "DetectionM messages using IDW interpolation. "
+                "Laser topics and pixel positions must be set in live_config.json."
+            ),
+            action_type="reconfigure",
+            reason="Q8 ext: Laser fusion enabled",
+        ))
+        total_characteristics += 1
+
+    # Advanced polarization channels
+    extra_channels = [
+        c for c, field in [("AoLP", answers.q_clf_aolp), ("DoLP", answers.q_clf_dolp),
+                           ("Unpolarized", answers.q_clf_unpolarized)]
+        if field == "yes"
+    ]
+    if extra_channels:
+        result["vision_classifier"]["impacts"].append(_impact(
+            characteristic="Extra polarization input channels",
+            affects="Process",
+            what_changes=(
+                f"Additional input channels enabled: {', '.join(extra_channels)}. "
+                "These are computed from the 4 Stokes base channels. "
+                "Must be set in training_config.json (hparams) and the model must be trained with them."
+            ),
+            action_type="reconfigure",
+            reason="Q8 ext: Polarization channels configured",
+        ))
+        result["vision_classifier"]["flags"].append(_flag(
+            id="flag_polar_channels",
+            type="warning",
+            message=(
+                f"Extra polarization channels ({', '.join(extra_channels)}) are baked into the model "
+                "at training time. Ensure any existing checkpoint was also trained with these settings."
+            ),
+            module_id="vision_classifier",
+        ))
+        total_characteristics += 1
+
+    # ------------------------------------------------------------------
     # Q9: Time constraints
     # ------------------------------------------------------------------
     if answers.q9_time == "none":
@@ -478,22 +699,48 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
 def _compute_confidence(answers: QuestionnaireAnswers) -> Dict[str, Any]:
     score = 0
 
+    # Cat 1: Robot Arms
     if answers.q1_robot_arms:
         score += 1
-    if answers.q2_camera_type or answers.q3_additional_sensors:
+
+    # Cat 2: Camera / Sensors (original + new grabber camera questions)
+    if (answers.q2_camera_type or answers.q3_additional_sensors
+            or answers.q2_camera_resolution or answers.q2_camera_framerate
+            or answers.q2_camera_exposure or answers.q2_stream_shm):
         score += 1
+
+    # Cat 3: Lighting
     if answers.q4_lighting:
         score += 1
+
+    # Cat 4: Material / Size
     if answers.q5_materials or answers.q6_object_size:
         score += 1
-    if answers.q8_defects:
+
+    # Cat 5: Defect Types (original + classifier config)
+    if answers.q8_defects or answers.q_clf_model or answers.q_clf_tile_size or answers.q_clf_threshold:
         score += 1
+
+    # Cat 6: Time / Profit
     if answers.q9_time or answers.q10_profit:
         score += 1
+
+    # Cat 7: Mesh
     if answers.q7_mesh:
         score += 1
 
-    pct = (score / 7) * 100
+    # Cat 8: Grabber Hardware (force sensor, lighting mode, serial paths)
+    if (answers.q3_force_sensor_ip or answers.q3_lighting_mode
+            or answers.q3_arduino_path or answers.q3_teensy_path
+            or answers.q2_camera_framerate):
+        score += 1
+
+    # Cat 9: Classifier Config (model path or dataset + key inference params)
+    if (answers.q_clf_model_path or answers.q_clf_dataset_dir
+            or answers.q_clf_use_lasers or answers.q_clf_threshold or answers.q_clf_fps):
+        score += 1
+
+    pct = (score / 9) * 100
     if pct < 40:
         level = "low"
     elif pct < 70:
@@ -501,7 +748,7 @@ def _compute_confidence(answers: QuestionnaireAnswers) -> Dict[str, Any]:
     else:
         level = "high"
 
-    return {"score": score, "max": 7, "percentage": round(pct, 1), "level": level}
+    return {"score": score, "max": 9, "percentage": round(pct, 1), "level": level}
 
 
 # ---------------------------------------------------------------------------
