@@ -20,14 +20,43 @@ corresponding `ros2 param set` commands to the running node.
 
 ## Inputs (from questionnaire)
 
+These fields remain in the **global questionnaire** (`QuestionnaireAnswers`) because they
+influence multiple modules:
+
 | Question key | Description |
 |---|---|
 | `q1_robot_arms` | `"single"` or `"multiple"` |
 | `q1_num_arms` | Number of arms (int, only when multiple) |
-| `q2_camera_type` | Camera driver variant (`"standard"`, `"depth"`, etc.) |
+| `q2_camera_type` | Camera driver variant (`"standard"`, `"gige"`, `"other"`) |
 | `q2_camera_spec` | Optional camera model string |
-| `q3_additional_sensors` | List: `["tactile"]`, `["vision"]`, or both |
-| `q4_lighting` | `"standard"` or `"additional"` |
+| `q2_camera_resolution` | `{"width": int, "height": int}` |
+| `q2_camera_framerate` | Target frame rate in Hz |
+| `q2_stream_shm` | `"yes"` / `"no"` — publish frames to shared memory |
+| `q2_stream_shm_name` | POSIX SHM stream name (default `"stream1"`) |
+| `q3_additional_sensors` | `["tactile"]`, `["distance"]`, or both |
+| `q4_lighting` | `"sufficient"` or `"additional"` |
+
+## Module-specific hardware configuration (Grabber Config tab)
+
+These fields live in `module_answers["grabber"]` (`q_grab_*`), rendered in the
+**Module Configuration** tab of the Grabber detail panel:
+
+| Field | CLI flag | Description |
+|---|---|---|
+| `q_grab_exposure` | `--exposure` | Camera exposure time in µs (capped at 50 000) |
+| `q_grab_gain` | `--gain` | Analogue gain |
+| `q_grab_blacklevel` | `--blacklevel` | Black-level offset |
+| `q_grab_arduino_path` | `--arduino` | Arduino serial port (default `/dev/ttyUSB0`) |
+| `q_grab_lighting_mode` | `--rlight/--dlight/--tlight/--trigger` | LED ring control mode |
+| `q_grab_teensy_path` | `--teensy` | Teensy serial port (default `/dev/ttyACM0`) |
+| `q_grab_force_sensor_ip` | `--atiip` | ATI NetFT IP address |
+| `q_grab_force_sensor_port` | `--atiport` | ATI NetFT UDP port (default 49152) |
+| `q_grab_tactile_stream` | `--tactilestream` | Tactile SHM stream name (default `"stream_tactile"`) |
+| `q_grab_run_duration` | `--duration` | Max capture seconds (0 = run forever) |
+| `q_grab_countdown` | `--countdown` | Seconds to count down before starting |
+| `q_grab_compress` | `--compress` | Save frames as PNG instead of PNM |
+| `q_grab_silent` | `--silent` | Suppress per-frame progress output |
+| `q_grab_unixtime` | `--unixtime` | Use Unix epoch timestamps |
 
 ## Outputs (written to `result.json`)
 

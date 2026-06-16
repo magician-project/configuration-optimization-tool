@@ -22,31 +22,31 @@ def generate_training_config(outputs: dict) -> dict:
     Build a dict that matches the schema expected by load_hyperparameters()
     in trainMagicianVisionClassifierTorch.py (the bigmodel.json layout).
     """
-    tile_size     = int(outputs.get("tile_size", 48))
-    batch_size    = int(outputs.get("batch_size", 64))
-    epochs        = int(outputs.get("training_epochs", 10))
-    dropout_rate  = float(outputs.get("dropout_rate", 0.25))
-    seed          = int(outputs.get("seed", 42))
-    grad_clip     = float(outputs.get("gradient_clip_value", 1.0))
+    tile_size = int(outputs.get("tile_size", 48))
+    batch_size = int(outputs.get("batch_size", 64))
+    epochs = int(outputs.get("training_epochs", 10))
+    dropout_rate = float(outputs.get("dropout_rate", 0.25))
+    seed = int(outputs.get("seed", 42))
+    grad_clip = float(outputs.get("gradient_clip_value", 1.0))
     base_channels = int(outputs.get("base_channels", 48))
-    dense_layer   = int(outputs.get("final_dense_layer", 512))
-    lr            = float(outputs.get("learning_rate", 5e-4))
-    val_split     = float(outputs.get("validation_split", 0.2))
-    num_workers   = int(outputs.get("num_workers", 0))
-    balanced      = bool(outputs.get("balanced_sampling", False))
-    cache_ram     = bool(outputs.get("cache_all_to_ram", False))
-    loss          = str(outputs.get("loss", "focal"))
-    class_weight  = bool(outputs.get("class_weight", False))
+    dense_layer = int(outputs.get("final_dense_layer", 512))
+    lr = float(outputs.get("learning_rate", 5e-4))
+    val_split = float(outputs.get("validation_split", 0.2))
+    num_workers = int(outputs.get("num_workers", 0))
+    balanced = bool(outputs.get("balanced_sampling", False))
+    cache_ram = bool(outputs.get("cache_all_to_ram", False))
+    loss = str(outputs.get("loss", "focal"))
+    class_weight = bool(outputs.get("class_weight", False))
     pen_false_clean = float(outputs.get("penalize_false_clean", 0.0))
-    dataset_dir   = str(outputs.get("dataset_directory", ""))
-    val_dataset   = outputs.get("validation_dataset") or None
-    selected_cls  = outputs.get("selected_classes") or []
-    accelerator   = str(outputs.get("accelerator", "auto"))
-    devices       = int(outputs.get("devices", 1))
-    model         = str(outputs.get("model", "resnet18"))
-    aolp          = bool(outputs.get("aolp", False))
-    dolp          = bool(outputs.get("dolp", False))
-    unpolarized   = bool(outputs.get("unpolarized", False))
+    dataset_dir = str(outputs.get("dataset_directory", ""))
+    val_dataset = outputs.get("validation_dataset") or None
+    selected_cls = outputs.get("selected_classes") or []
+    accelerator = str(outputs.get("accelerator", "auto"))
+    devices = int(outputs.get("devices", 1))
+    model = str(outputs.get("model", "resnet18"))
+    aolp = bool(outputs.get("aolp", False))
+    dolp = bool(outputs.get("dolp", False))
+    unpolarized = bool(outputs.get("unpolarized", False))
 
     # Optional model name prefix (used to build output filenames)
     name = outputs.get("model_name") or "magician"
@@ -148,10 +148,10 @@ def write_configs(outputs: dict, output_dir: str) -> tuple[str, str]:
     os.makedirs(output_dir, exist_ok=True)
 
     training_path = os.path.join(output_dir, "training_config.json")
-    live_path     = os.path.join(output_dir, "live_config.json")
+    live_path = os.path.join(output_dir, "live_config.json")
 
     training_cfg = generate_training_config(outputs)
-    live_cfg     = generate_live_config(outputs)
+    live_cfg = generate_live_config(outputs)
 
     with open(training_path, "w", encoding="utf-8") as f:
         json.dump(training_cfg, f, indent=2)

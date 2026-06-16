@@ -58,10 +58,30 @@ def load(use_case_id: str) -> Optional[UseCase]:
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        return UseCase(**data)
+        uc = UseCase(**data)
+        _ensure_all_modules(uc)
+        return uc
     except Exception:
         logger.exception("Failed to load use case: %s", use_case_id)
         return None
+
+
+def _ensure_all_modules(uc: UseCase) -> None:
+    """Add any modules that exist in the registry but are missing from the stored use case.
+    This handles the case where new modules are added after a use case was first saved."""
+    from app.engine.module_registry import MODULES
+    from app.models.use_case import ModuleState
+    for mid, info in MODULES.items():
+        if mid not in uc.modules:
+            # Default ergodic_control (and any future always-required modules) to needs_action
+            _ALWAYS_NEEDS_ACTION = {"ergodic_control"}
+            status = "needs_action" if mid in _ALWAYS_NEEDS_ACTION else "ok"
+            uc.modules[mid] = ModuleState(
+                module_id=mid,
+                module_name=info["name"],
+                description=info["description"],
+                status=status,
+            )
 
 
 def list_all() -> List[UseCase]:
@@ -76,7 +96,9 @@ def list_all() -> List[UseCase]:
         try:
             with open(uc_path, encoding="utf-8") as f:
                 data = json.load(f)
-            use_cases.append(UseCase(**data))
+            uc = UseCase(**data)
+            _ensure_all_modules(uc)
+            use_cases.append(uc)
         except Exception:
             logger.exception("Failed to load use case in folder: %s", entry.name)
     return sorted(use_cases, key=lambda u: u.created_at, reverse=True)

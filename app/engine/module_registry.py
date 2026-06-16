@@ -76,4 +76,20 @@ MODULES: Dict[str, dict] = {
         ],
         "compute_module": "modules.vision_classifier.compute",
     },
+    "ergodic_control": {
+        "name": "Ergodic Control",
+        "ros_name": "magician_ergodic_control",
+        "description": (
+            "Plans inspection trajectories that prioritise high-risk surface regions. "
+            "Uses a Kalman filter to maintain a belief over defect distributions, "
+            "combines historical data and welding process priors, then solves an ergodic "
+            "control optimisation to generate end-effector waypoints on the 3D mesh."
+        ),
+        "characteristics": [
+            "Mesh availability (trajectory planning requires a 3D surface model)",
+            "Time budget (affects trajectory density and waypoint count)",
+            "Material / defect context (informs prior distribution)",
+        ],
+        "compute_module": "modules.ergodic_control.compute",
+    },
 }

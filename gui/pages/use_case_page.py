@@ -16,13 +16,12 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTabWidget, QMessageBox, QSplitter,
+    QTabWidget, QMessageBox,
 )
 from PySide6.QtCore import Qt, Signal, Slot
 
 from app.models.use_case import UseCase, ComputeResult
 from app.engine.questionnaire_engine import compute_impacts, apply_impacts_to_modules
-from app.engine.compute_runner import ComputeRunner
 from app.ros.ros2_adapter import get_adapter
 from app.storage import json_store
 from gui.components.confidence_bar import ConfidenceBar
@@ -30,6 +29,7 @@ from gui.components.questionnaire_form import QuestionnaireForm
 from gui.components.module_grid import ModuleGrid
 from gui.components.module_detail import ModuleDetail
 from gui.components.compute_progress_dialog import ComputeProgressDialog
+from app.engine.compute_runner import ComputeRunner
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,7 @@ class UseCasePage(QWidget):
 
         self._use_case.answers = parsed
         self._use_case.updated_at = datetime.now(timezone.utc).isoformat()
-        result = compute_impacts(parsed)
+        result = compute_impacts(parsed, module_answers=self._use_case.module_answers)
         apply_impacts_to_modules(self._use_case, result)
         json_store.save(self._use_case)
 
@@ -246,14 +246,33 @@ class UseCasePage(QWidget):
         ms = self._use_case.modules.get(module_id)
         if ms is None:
             return
-        dlg = ModuleDetail(ms, parent=self)
+        module_config = self._use_case.module_answers.get(module_id, {})
+        dlg = ModuleDetail(ms, module_config=module_config, parent=self)
         dlg.action_requested.connect(self._handle_module_action)
+        dlg.module_config_changed.connect(self._on_module_config_changed)
         self._active_detail_dlg = dlg
         dlg.exec()
         self._active_detail_dlg = None
         # Refresh grid in case compute/deploy changed state outside the dialog
         if self._use_case:
             self._module_grid.update_modules(self._use_case.modules)
+
+    @Slot(str, dict)
+    def _on_module_config_changed(self, module_id: str, config: dict) -> None:
+        """Persist module-specific config and re-evaluate impacts."""
+        if self._use_case is None:
+            return
+        self._use_case.module_answers[module_id] = config
+        self._use_case.updated_at = datetime.now(timezone.utc).isoformat()
+        result = compute_impacts(self._use_case.answers, module_answers=self._use_case.module_answers)
+        apply_impacts_to_modules(self._use_case, result)
+        json_store.save(self._use_case)
+        self._module_grid.update_modules(self._use_case.modules)
+        # Refresh the open dialog
+        if self._active_detail_dlg:
+            ms = self._use_case.modules.get(module_id)
+            if ms:
+                self._active_detail_dlg.refresh(ms)
 
     @Slot(str, str)
     def _handle_module_action(self, module_id: str, action: str) -> None:
@@ -343,6 +362,8 @@ class UseCasePage(QWidget):
             self._module_grid.update_modules(uc.modules)
             if self._active_detail_dlg:
                 self._active_detail_dlg.refresh(ms)
+
+        runner = ComputeRunner(uc, module_id, on_line, on_done)
         runner.start()
 
     def _deploy_module(self, module_id: str) -> None:

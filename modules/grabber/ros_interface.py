@@ -80,4 +80,3 @@ def get_commands(outputs: dict) -> List[ROS2Command]:
         ))
 
     return commands
-

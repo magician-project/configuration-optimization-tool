@@ -35,12 +35,12 @@ def generate_yaml(outputs: dict) -> str:
     params: dict = {}
 
     # Hardware enable flags
-    params["use_camera"]    = bool(outputs.get("use_camera", False))
-    params["use_arduino"]   = bool(outputs.get("use_arduino", False))
-    params["use_teensy"]    = bool(outputs.get("use_teensy", False))
+    params["use_camera"] = bool(outputs.get("use_camera", False))
+    params["use_arduino"] = bool(outputs.get("use_arduino", False))
+    params["use_teensy"] = bool(outputs.get("use_teensy", False))
     params["use_ati_force"] = bool(outputs.get("use_ati_force", False))
-    params["stream_data"]   = bool(outputs.get("stream_data", False))
-    params["simulate"]      = bool(outputs.get("simulate", False))
+    params["stream_data"] = bool(outputs.get("stream_data", False))
+    params["simulate"] = bool(outputs.get("simulate", False))
 
     # Camera settings
     if outputs.get("width"):
@@ -76,9 +76,13 @@ def generate_yaml(outputs: dict) -> str:
 
     # Lighting
     params["manual_trigger_light"] = bool(outputs.get("manual_trigger_light", False))
-    params["use_ram"]   = bool(outputs.get("use_ram", False))
-    params["compress"]  = bool(outputs.get("compress", False))
+    params["use_ram"] = bool(outputs.get("use_ram", False))
+    params["compress"] = bool(outputs.get("compress", False))
+    params["silent"] = bool(outputs.get("silent", False))
+    params["unixtime"] = bool(outputs.get("unixtime", False))
     params["run_forever"] = bool(outputs.get("run_forever", True))
+    if outputs.get("countdown"):
+        params["countdown"] = int(outputs["countdown"])
     if not outputs.get("run_forever", True) and outputs.get("max_time_seconds"):
         params["max_time_seconds"] = int(outputs["max_time_seconds"])
 
@@ -148,6 +152,13 @@ def generate_launch_args(outputs: dict) -> str:
         parts.append("--ram")
     if outputs.get("compress"):
         parts.append("--compress")
+    if outputs.get("silent"):
+        parts.append("--silent")
+    if outputs.get("unixtime"):
+        parts.append("--unixtime")
+
+    if outputs.get("countdown"):
+        parts += ["--countdown", str(int(outputs["countdown"]))]
 
     if outputs.get("run_forever", True):
         parts.append("--forever")

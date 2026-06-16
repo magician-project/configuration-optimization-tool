@@ -8,14 +8,19 @@ from app.engine.module_registry import MODULES
 # Public API
 # ---------------------------------------------------------------------------
 
-def compute_impacts(answers: QuestionnaireAnswers) -> Dict[str, Any]:
+def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) -> Dict[str, Any]:
     """
-    Pure function. Given questionnaire answers, returns:
+    Pure function. Given questionnaire answers and optional per-module config,
+    returns:
       {
         "module_impacts": {module_id: {"impacts": [...], "flags": [...]}},
         "confidence": {score, max, percentage, level},
       }
+    module_answers: dict keyed by module_id, e.g.
+      {"vision_classifier": {"q_clf_model": "resnet18", ...}}
     """
+    if module_answers is None:
+        module_answers = {}
     result: Dict[str, Dict] = {mid: {"impacts": [], "flags": []} for mid in MODULES}
     total_characteristics = 0
 
@@ -166,7 +171,8 @@ def compute_impacts(answers: QuestionnaireAnswers) -> Dict[str, Any]:
     # Q3 extensions: Grabber hardware paths and lighting mode
     # ------------------------------------------------------------------
     if "distance" in answers.q3_additional_sensors:
-        lighting = answers.q3_lighting_mode or "none"
+        grab = module_answers.get("grabber", {})
+        lighting = grab.get("q_grab_lighting_mode") or "none"
         lighting_label = {
             "rlight": "round-robin", "dlight": "distance-based",
             "tlight": "pattern-based", "trigger": "manual trigger", "none": "none",
@@ -177,7 +183,7 @@ def compute_impacts(answers: QuestionnaireAnswers) -> Dict[str, Any]:
             what_changes=(
                 f"Arduino distance sensor thread enabled. "
                 f"Lighting mode: {lighting_label}. "
-                f"Serial port: {answers.q3_arduino_path or '/dev/ttyUSB0'}. "
+                f"Serial port: {grab.get('q_grab_arduino_path') or '/dev/ttyUSB0'}. "
                 "Update --arduino and --distance flags in launch args."
             ),
             action_type="reconfigure",
@@ -185,19 +191,21 @@ def compute_impacts(answers: QuestionnaireAnswers) -> Dict[str, Any]:
         ))
         total_characteristics += 1
 
-    if "tactile" in answers.q3_additional_sensors and answers.q3_force_sensor_ip:
-        result["grabber"]["impacts"].append(_impact(
-            characteristic="ATI NetFT force/torque sensor",
-            affects="Input",
-            what_changes=(
-                f"ATI NetFT configured at {answers.q3_force_sensor_ip}:"
-                f"{answers.q3_force_sensor_port or 49152}. "
-                "Update ati_ip and ati_port in params.yaml."
-            ),
-            action_type="reconfigure",
-            reason="Q3: Force sensor IP configured",
-        ))
-        total_characteristics += 1
+    if "tactile" in answers.q3_additional_sensors:
+        grab = module_answers.get("grabber", {})
+        if grab.get("q_grab_force_sensor_ip"):
+            result["grabber"]["impacts"].append(_impact(
+                characteristic="ATI NetFT force/torque sensor",
+                affects="Input",
+                what_changes=(
+                    f"ATI NetFT configured at {grab['q_grab_force_sensor_ip']}:"
+                    f"{grab.get('q_grab_force_sensor_port') or 49152}. "
+                    "Update ati_ip and ati_port in params.yaml."
+                ),
+                action_type="reconfigure",
+                reason="Q3: Force sensor IP configured",
+            ))
+            total_characteristics += 1
 
     # ------------------------------------------------------------------
     # Q4: Lighting
@@ -436,11 +444,13 @@ def compute_impacts(answers: QuestionnaireAnswers) -> Dict[str, Any]:
 
     # ------------------------------------------------------------------
     # Q8 extensions: Vision Classifier configuration
+    # (fields now live in module_answers["vision_classifier"])
     # ------------------------------------------------------------------
-    clf_model = answers.q_clf_model
-    clf_tile  = answers.q_clf_tile_size
-    clf_path  = (answers.q_clf_model_path or "").strip()
-    clf_data  = (answers.q_clf_dataset_dir or "").strip()
+    clf = module_answers.get("vision_classifier", {})
+    clf_model = clf.get("q_clf_model")
+    clf_tile = clf.get("q_clf_tile_size")
+    clf_path = (clf.get("q_clf_model_path") or "").strip()
+    clf_data = (clf.get("q_clf_dataset_dir") or "").strip()
 
     if clf_model:
         result["vision_classifier"]["impacts"].append(_impact(
@@ -515,7 +525,7 @@ def compute_impacts(answers: QuestionnaireAnswers) -> Dict[str, Any]:
         ))
         total_characteristics += 1
 
-    if answers.q_clf_use_lasers == "yes":
+    if clf.get("q_clf_use_lasers") == "yes":
         result["vision_classifier"]["impacts"].append(_impact(
             characteristic="Laser distance sensor fusion",
             affects="Input, Output",
@@ -531,8 +541,8 @@ def compute_impacts(answers: QuestionnaireAnswers) -> Dict[str, Any]:
 
     # Advanced polarization channels
     extra_channels = [
-        c for c, field in [("AoLP", answers.q_clf_aolp), ("DoLP", answers.q_clf_dolp),
-                           ("Unpolarized", answers.q_clf_unpolarized)]
+        c for c, field in [("AoLP", clf.get("q_clf_aolp")), ("DoLP", clf.get("q_clf_dolp")),
+                           ("Unpolarized", clf.get("q_clf_unpolarized"))]
         if field == "yes"
     ]
     if extra_channels:
@@ -631,6 +641,125 @@ def compute_impacts(answers: QuestionnaireAnswers) -> Dict[str, Any]:
         total_characteristics += 1
 
     # ------------------------------------------------------------------
+    # Ergodic Control: driven by q7_mesh, q9_time, q5_materials/q8_defects,
+    # and q1_robot_arms (all choices the user made affect the trajectory plan)
+    # ------------------------------------------------------------------
+
+    # q7: Mesh availability — core requirement for trajectory planning
+    if answers.q7_mesh == "not_available":
+        result["ergodic_control"]["impacts"].append(_impact(
+            characteristic="No 3D mesh available",
+            affects="Input",
+            what_changes=(
+                "Ergodic Control requires a 3D surface mesh to project trajectories. "
+                "Without a mesh, trajectory planning falls back to 2D approximation only. "
+                "Provide a mesh file path in the Ergodic Control configuration once available."
+            ),
+            action_type="review",
+            reason="Q7: 3D mesh not available",
+        ))
+        result["ergodic_control"]["flags"].append(_flag(
+            id="flag_ergodic_no_mesh",
+            type="warning",
+            message=(
+                "No 3D mesh available. Ergodic trajectory planning will be limited to "
+                "2D approximation until a mesh is provided."
+            ),
+            module_id="ergodic_control",
+        ))
+        total_characteristics += 1
+    elif answers.q7_mesh == "in_preparation":
+        result["ergodic_control"]["impacts"].append(_impact(
+            characteristic="3D mesh in preparation",
+            affects="Input",
+            what_changes=(
+                "Mesh is not yet available. Configure the mesh path in the Ergodic Control "
+                "module config tab once the mesh is ready."
+            ),
+            action_type="review",
+            reason="Q7: 3D mesh in preparation",
+        ))
+        result["ergodic_control"]["flags"].append(_flag(
+            id="flag_ergodic_mesh_pending",
+            type="human_oversight",
+            message="3D mesh is in preparation — configure the mesh path before running compute.",
+            module_id="ergodic_control",
+        ))
+        total_characteristics += 1
+
+    # q9: Time constraints affect trajectory density
+    if answers.q9_time == "tight":
+        time_str = ""
+        if answers.q9_time_value is not None:
+            time_str = f" ({answers.q9_time_value} {answers.q9_time_unit or 'minutes'})"
+        result["ergodic_control"]["impacts"].append(_impact(
+            characteristic="Tight time budget",
+            affects="Process",
+            what_changes=(
+                f"Tight time budget{time_str} constrains trajectory length. "
+                "Adjust the time budget and trajectory density in the Ergodic Control "
+                "configuration to ensure the trajectory fits within the allowed window."
+            ),
+            action_type="reconfigure",
+            reason="Q9: Tight time constraints specified",
+        ))
+        total_characteristics += 1
+    elif answers.q9_time == "none":
+        result["ergodic_control"]["impacts"].append(_impact(
+            characteristic="No time constraint",
+            affects="Process",
+            what_changes=(
+                "No time budget specified — dense trajectory mode is available. "
+                "Consider setting a high time budget in the Ergodic Control configuration "
+                "to maximise surface coverage."
+            ),
+            action_type="reconfigure",
+            reason="Q9: No time constraints",
+        ))
+        total_characteristics += 1
+
+    # q5/q8: Material and defect context informs the prior distribution
+    if answers.q5_materials or answers.q8_defects:
+        mat_str = ", ".join(answers.q5_materials) if answers.q5_materials else "unspecified"
+        def_str = ", ".join(answers.q8_defects) if answers.q8_defects else "unspecified"
+        result["ergodic_control"]["impacts"].append(_impact(
+            characteristic="Material / defect context updated",
+            affects="Input",
+            what_changes=(
+                f"Target materials: {mat_str}. Defect types: {def_str}. "
+                "The Ergodic Control prior distribution is seeded from this context — "
+                "re-run compute to regenerate trajectory and Kalman configs."
+            ),
+            action_type="reconfigure",
+            reason="Q5/Q8: Material or defect types specified",
+        ))
+        total_characteristics += 1
+
+    # q1: Multiple robot arms require coordinated trajectory planning
+    if answers.q1_robot_arms == "multiple":
+        result["ergodic_control"]["impacts"].append(_impact(
+            characteristic="Multiple robot arms",
+            affects="Process",
+            what_changes=(
+                "Trajectory must be partitioned across multiple arms to avoid collisions "
+                "and ensure complementary coverage. The ergodic optimisation must account "
+                "for multi-agent coordination."
+            ),
+            action_type="reconfigure",
+            reason="Q1: Multiple robot arms selected",
+        ))
+        result["ergodic_control"]["flags"].append(_flag(
+            id="flag_ergodic_multi_arm",
+            type="human_oversight",
+            message=(
+                "Multi-arm ergodic trajectory partitioning requires manual review. "
+                "Verify that arm assignments are collision-free before deployment."
+            ),
+            module_id="ergodic_control",
+        ))
+        total_characteristics += 1
+
+    # ------------------------------------------------------------------
     # Cross-cutting flag: >= 5 characteristics triggered
     # ------------------------------------------------------------------
     affected_modules = [mid for mid, data in result.items() if data["impacts"]]
@@ -647,7 +776,7 @@ def compute_impacts(answers: QuestionnaireAnswers) -> Dict[str, Any]:
                 module_id=mid,
             ))
 
-    confidence = _compute_confidence(answers)
+    confidence = _compute_confidence(answers, module_answers)
     return {"module_impacts": result, "confidence": confidence}
 
 
@@ -681,6 +810,9 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
                 new_flags.append(flag)
 
         new_status = "needs_action" if new_impacts else "ok"
+        # Ergodic Control always requires configuration before compute
+        if mid == "ergodic_control" and new_status == "ok":
+            new_status = "needs_action"
 
         use_case.modules[mid] = ModuleState(
             module_id=mid,
@@ -696,7 +828,9 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
 # Confidence scoring (7 categories)
 # ---------------------------------------------------------------------------
 
-def _compute_confidence(answers: QuestionnaireAnswers) -> Dict[str, Any]:
+def _compute_confidence(answers: QuestionnaireAnswers, module_answers: dict = None) -> Dict[str, Any]:
+    if module_answers is None:
+        module_answers = {}
     score = 0
 
     # Cat 1: Robot Arms
@@ -717,8 +851,8 @@ def _compute_confidence(answers: QuestionnaireAnswers) -> Dict[str, Any]:
     if answers.q5_materials or answers.q6_object_size:
         score += 1
 
-    # Cat 5: Defect Types (original + classifier config)
-    if answers.q8_defects or answers.q_clf_model or answers.q_clf_tile_size or answers.q_clf_threshold:
+    # Cat 5: Defect Types
+    if answers.q8_defects:
         score += 1
 
     # Cat 6: Time / Profit
@@ -729,15 +863,18 @@ def _compute_confidence(answers: QuestionnaireAnswers) -> Dict[str, Any]:
     if answers.q7_mesh:
         score += 1
 
-    # Cat 8: Grabber Hardware (force sensor, lighting mode, serial paths)
-    if (answers.q3_force_sensor_ip or answers.q3_lighting_mode
-            or answers.q3_arduino_path or answers.q3_teensy_path
+    # Cat 8: Grabber Hardware (now in module_answers["grabber"])
+    _grab_conf = module_answers.get("grabber", {})
+    if (_grab_conf.get("q_grab_force_sensor_ip") or _grab_conf.get("q_grab_lighting_mode")
+            or _grab_conf.get("q_grab_arduino_path") or _grab_conf.get("q_grab_teensy_path")
             or answers.q2_camera_framerate):
         score += 1
 
-    # Cat 9: Classifier Config (model path or dataset + key inference params)
-    if (answers.q_clf_model_path or answers.q_clf_dataset_dir
-            or answers.q_clf_use_lasers or answers.q_clf_threshold or answers.q_clf_fps):
+    # Cat 9: Classifier Config — now sourced from module_answers["vision_classifier"]
+    _clf_conf = module_answers.get("vision_classifier", {})
+    if (_clf_conf.get("q_clf_model_path") or _clf_conf.get("q_clf_dataset_dir")
+            or _clf_conf.get("q_clf_use_lasers") or _clf_conf.get("q_clf_threshold")
+            or _clf_conf.get("q_clf_fps")):
         score += 1
 
     pct = (score / 9) * 100

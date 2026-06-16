@@ -2,15 +2,28 @@
   "id": "c8d9cc02",
   "name": "Boat hull inspection",
   "created_at": "2026-04-29T07:41:22.907880+00:00",
-  "updated_at": "2026-05-13T08:40:37.567754+00:00",
+  "updated_at": "2026-06-16T08:00:23.618436+00:00",
   "answers": {
     "q1_robot_arms": "multiple",
     "q1_num_arms": 2,
     "q2_camera_type": "gige",
     "q2_camera_spec": null,
+    "q2_camera_resolution": null,
+    "q2_camera_framerate": null,
+    "q2_camera_exposure": null,
+    "q2_camera_gain": null,
+    "q2_camera_blacklevel": null,
+    "q2_stream_shm": null,
+    "q2_stream_shm_name": null,
     "q3_additional_sensors": [
       "tactile"
     ],
+    "q3_force_sensor_ip": null,
+    "q3_force_sensor_port": null,
+    "q3_arduino_path": null,
+    "q3_teensy_path": null,
+    "q3_lighting_mode": null,
+    "q3_tactile_stream": null,
     "q4_lighting": "sufficient",
     "q5_materials": [
       "metal"
@@ -27,14 +40,27 @@
     "q9_time": "tight",
     "q9_time_value": 5.0,
     "q9_time_unit": "minutes",
-    "q10_profit": null
+    "q10_profit": null,
+    "q_ergodic_mesh_path": null,
+    "q_ergodic_mesh_available": null,
+    "q_ergodic_time_budget": null,
+    "q_ergodic_sensor_offset": null,
+    "q_ergodic_use_welding_priors": null,
+    "q_ergodic_use_historical": null,
+    "q_ergodic_pdf_resolution": null,
+    "q_ergodic_kalman_process_noise": null,
+    "q_ergodic_kalman_measurement_noise": null,
+    "q_ergodic_trajectory_density": null
+  },
+  "module_answers": {
+    "vision_classifier": {}
   },
   "modules": {
     "grabber": {
       "module_id": "grabber",
       "module_name": "Grabber",
       "description": "Core sensor driver. Provides software access to all physical sensors on the Sensing Robot: GiGE Camera, ATI F/T Sensor, Teensy Accelerometer, Camera Light Controller, buttons, and ToF range finders.",
-      "status": "computed",
+      "status": "needs_action",
       "impacts": [
         {
           "characteristic": "Multiple robot arms",
@@ -67,27 +93,16 @@
           "acknowledged": true
         }
       ],
-      "compute_result": {
-        "module_id": "grabber",
-        "success": true,
-        "outputs": {
-          "multi_arm_mode": 1,
-          "num_arms": 2,
-          "camera_type": "gige",
-          "extra_sensor_mask": 1,
-          "extra_lighting": 0
-        },
-        "error": null
-      },
-      "validated_at": "2026-05-08T12:23:29.230583+00:00",
-      "computed_at": "2026-05-08T12:24:41.078979+00:00",
+      "compute_result": null,
+      "validated_at": null,
+      "computed_at": null,
       "deployed_at": null
     },
     "orienteering_solver": {
       "module_id": "orienteering_solver",
       "module_name": "Orienteering Solver",
       "description": "Generates optimal schedules for cleaning robots to address defects. Determines the sequence of defects to visit and service time to spend on each. Problem variants: OP (default), TSP, TOP (multi-arm), OPTW (time windows), OPVP (variable profit).",
-      "status": "computing",
+      "status": "needs_action",
       "impacts": [
         {
           "characteristic": "Multiple robot arms",
@@ -135,7 +150,7 @@
         }
       ],
       "compute_result": null,
-      "validated_at": "2026-05-08T12:26:49.171010+00:00",
+      "validated_at": null,
       "computed_at": null,
       "deployed_at": null
     },
@@ -241,7 +256,7 @@
       "module_id": "vision_classifier",
       "module_name": "Vision Classifier",
       "description": "Visual defect detection and classification using camera images. Implicitly affected when new materials are introduced \u2014 model must be retrained and the Vision Model Name parameter in the Configuration Module must be updated.",
-      "status": "validated",
+      "status": "needs_action",
       "impacts": [
         {
           "characteristic": "(implicit) Retrain vision model on new material data",
@@ -268,15 +283,15 @@
         }
       ],
       "compute_result": null,
-      "validated_at": "2026-05-13T08:33:55.102238+00:00",
+      "validated_at": null,
       "computed_at": null,
       "deployed_at": null
     }
   },
   "confidence": {
     "score": 7,
-    "max": 7,
-    "percentage": 100.0,
+    "max": 9,
+    "percentage": 77.8,
     "level": "high"
   }
 }

@@ -80,8 +80,19 @@ def main() -> None:
             border: 1px solid #d1d5db;
             border-radius: 4px;
             background: white;
+            color: #111827;
             selection-background-color: #162759;
             selection-color: white;
+            outline: 0px;
+        }
+        QComboBox QAbstractItemView::item {
+            background: white;
+            color: #111827;
+            padding: 4px 10px;
+        }
+        QComboBox QAbstractItemView::item:selected {
+            background: #162759;
+            color: white;
         }
         QLineEdit, QSpinBox, QDoubleSpinBox {
             border: 1px solid #d1d5db;

@@ -14,16 +14,16 @@ promotes them to proper ROS 2 parameters.
 from typing import List
 from app.models.use_case import ROS2Command
 
-_NODE        = "/magician_vision_classifier"
+_NODE = "/magician_vision_classifier"
 _CONFIG_NODE = "/magician_configuration"
 
 # Service names from liveClassifierTorchROS.py create_service() calls
-_SVC_SET_FPS       = "magician_vision_classifier/set_fps"
-_SVC_SET_STEP      = "magician_vision_classifier/set_step"
+_SVC_SET_FPS = "magician_vision_classifier/set_fps"
+_SVC_SET_STEP = "magician_vision_classifier/set_step"
 _SVC_SET_THRESHOLD = "magician_vision_classifier/set_threshold"
-_SVC_SET_MAJ_VOTE  = "magician_vision_classifier/set_majority_voting"
+_SVC_SET_MAJ_VOTE = "magician_vision_classifier/set_majority_voting"
 _SVC_SET_TWO_STAGE = "magician_vision_classifier/set_two_stage"
-_SVC_RELOAD_MODEL  = "magician_vision_classifier/reload_model"
+_SVC_RELOAD_MODEL = "magician_vision_classifier/reload_model"
 
 
 def get_commands(outputs: dict) -> List[ROS2Command]:
@@ -115,4 +115,3 @@ def get_commands(outputs: dict) -> List[ROS2Command]:
         ))
 
     return commands
-

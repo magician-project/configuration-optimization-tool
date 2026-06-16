@@ -71,5 +71,9 @@ class UseCase(BaseModel):
     created_at: str
     updated_at: str
     answers: QuestionnaireAnswers = QuestionnaireAnswers()
+    # Module-specific config, keyed by module_id. Separate from the general
+    # use-case questionnaire answers. E.g. module_answers["vision_classifier"]
+    # holds all q_clf_* fields configured in the module detail panel.
+    module_answers: Dict[str, dict] = {}
     modules: Dict[str, ModuleState] = {}
     confidence: ConfidenceScore = ConfidenceScore(score=0, percentage=0.0, level="low")

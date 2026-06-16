@@ -1,5 +1,5 @@
 """
-ModuleGrid — shows all 5 modules as clickable tiles with status colours.
+ModuleGrid — shows all 6 modules as clickable tiles with status colours.
 Emits module_selected(module_id) when a tile is clicked.
 """
 
@@ -24,7 +24,7 @@ _STATUS_STYLE = {
     "validated":     ("#34d399", "#15803d", "Validated"),
     "computing":     ("#60a5fa", "#1d4ed8", "Computing…"),
     "computed":      ("#34d399", "#15803d", "Ready to deploy"),
-    "compute_failed":("#f87171", "#b91c1c", "Compute failed"),
+    "compute_failed": ("#f87171", "#b91c1c", "Compute failed"),
     "deploying":     ("#60a5fa", "#1d4ed8", "Deploying…"),
     "deployed":      ("#10b981", "#065f46", "Deployed"),
     "deploy_failed": ("#f87171", "#b91c1c", "Deploy failed"),
@@ -36,7 +36,7 @@ _ACTION_TYPE_COLOURS = {
     "review":      ("#374151", "#f3f4f6"),
 }
 
-MODULE_ORDER = ["grabber", "orienteering_solver", "localiser", "tactile_sensor", "vision_classifier"]
+MODULE_ORDER = ["grabber", "orienteering_solver", "localiser", "tactile_sensor", "vision_classifier", "ergodic_control"]
 
 
 class ModuleGrid(QWidget):

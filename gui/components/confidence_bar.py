@@ -3,7 +3,6 @@ ConfidenceBar — segmented dot display showing questionnaire completeness (0–
 """
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel
-from PySide6.QtCore import Qt
 
 from app.models.use_case import ConfidenceScore
 

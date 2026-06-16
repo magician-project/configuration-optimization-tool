@@ -40,40 +40,40 @@ def run(answers: dict, output_dir: str) -> dict:
     tile_size = answers.get("q_clf_tile_size", "48")
     outputs["tile_size"] = int(tile_size) if tile_size else 48
 
-    outputs["step_size"]  = int(answers.get("q_clf_step_size", 18) or 18)
-    outputs["threshold"]  = float(answers.get("q_clf_threshold", 0.6) or 0.6)
+    outputs["step_size"] = int(answers.get("q_clf_step_size", 18) or 18)
+    outputs["threshold"] = float(answers.get("q_clf_threshold", 0.6) or 0.6)
     outputs["target_fps"] = float(answers.get("q_clf_fps", 23.0) or 23.0)
 
-    outputs["majority_voting"]   = answers.get("q_clf_majority_voting", "yes") == "yes"
+    outputs["majority_voting"] = answers.get("q_clf_majority_voting", "yes") == "yes"
     outputs["two_stage_enabled"] = answers.get("q_clf_two_stage", "no") == "yes"
 
     # ── Training hyperparameters ──────────────────────────────────────────────
-    outputs["training_epochs"]     = int(answers.get("q_clf_epochs", 10) or 10)
-    outputs["batch_size"]          = int(answers.get("q_clf_batch_size", 64) or 64)
-    outputs["learning_rate"]       = float(answers.get("q_clf_learning_rate", 5e-4) or 5e-4)
-    outputs["loss"]                = str(answers.get("q_clf_loss", "focal") or "focal")
-    outputs["dropout_rate"]        = 0.25
-    outputs["seed"]                = 42
+    outputs["training_epochs"] = int(answers.get("q_clf_epochs", 10) or 10)
+    outputs["batch_size"] = int(answers.get("q_clf_batch_size", 64) or 64)
+    outputs["learning_rate"] = float(answers.get("q_clf_learning_rate", 5e-4) or 5e-4)
+    outputs["loss"] = str(answers.get("q_clf_loss", "focal") or "focal")
+    outputs["dropout_rate"] = 0.25
+    outputs["seed"] = 42
     outputs["gradient_clip_value"] = 1.0
-    outputs["base_channels"]       = 48
-    outputs["final_dense_layer"]   = 512
-    outputs["validation_split"]    = 0.2
-    outputs["num_workers"]         = 0
-    outputs["balanced_sampling"]   = False
-    outputs["cache_all_to_ram"]    = False
-    outputs["class_weight"]        = False
-    outputs["penalize_false_clean"]= 0.0
-    outputs["accelerator"]         = "auto"
-    outputs["devices"]             = 1
-    outputs["selected_classes"]    = []
+    outputs["base_channels"] = 48
+    outputs["final_dense_layer"] = 512
+    outputs["validation_split"] = 0.2
+    outputs["num_workers"] = 0
+    outputs["balanced_sampling"] = False
+    outputs["cache_all_to_ram"] = False
+    outputs["class_weight"] = False
+    outputs["penalize_false_clean"] = 0.0
+    outputs["accelerator"] = "auto"
+    outputs["devices"] = 1
+    outputs["selected_classes"] = []
 
     # ── Polarization channels (advanced) ─────────────────────────────────────
-    outputs["aolp"]        = answers.get("q_clf_aolp", "no") == "yes"
-    outputs["dolp"]        = answers.get("q_clf_dolp", "no") == "yes"
+    outputs["aolp"] = answers.get("q_clf_aolp", "no") == "yes"
+    outputs["dolp"] = answers.get("q_clf_dolp", "no") == "yes"
     outputs["unpolarized"] = answers.get("q_clf_unpolarized", "no") == "yes"
 
     # ── Dataset / model path ─────────────────────────────────────────────────
-    model_path  = str(answers.get("q_clf_model_path", "") or "").strip()
+    model_path = str(answers.get("q_clf_model_path", "") or "").strip()
     dataset_dir = str(answers.get("q_clf_dataset_dir", "") or "").strip()
 
     if model_path and os.path.isfile(model_path):
@@ -88,7 +88,7 @@ def run(answers: dict, output_dir: str) -> dict:
         outputs["model_path"] = os.path.join(dataset_dir, f"{stem}.pth")
         outputs["model_name"] = stem
         print(f"[vision_classifier] Retraining required — dataset: {dataset_dir}")
-        print(f"  Run:  python trainMagicianVisionClassifierTorch.py training_config.json")
+        print("  Run:  python trainMagicianVisionClassifierTorch.py training_config.json")
     else:
         outputs["retrain_required"] = 0
         outputs["model_path"] = model_path  # may be empty; warn
@@ -99,9 +99,15 @@ def run(answers: dict, output_dir: str) -> dict:
     # ── Laser distance fusion ─────────────────────────────────────────────────
     outputs["use_lasers"] = answers.get("q_clf_use_lasers", "yes") == "yes"
 
-    outputs["laser_topic_1"] = str(answers.get("q_clf_laser_topic_1", "magician_grabber/distance1") or "magician_grabber/distance1")
-    outputs["laser_topic_2"] = str(answers.get("q_clf_laser_topic_2", "magician_grabber/distance2") or "magician_grabber/distance2")
-    outputs["laser_topic_3"] = str(answers.get("q_clf_laser_topic_3", "magician_grabber/distance3") or "magician_grabber/distance3")
+    outputs["laser_topic_1"] = str(
+        answers.get("q_clf_laser_topic_1", "magician_grabber/distance1") or "magician_grabber/distance1"
+    )
+    outputs["laser_topic_2"] = str(
+        answers.get("q_clf_laser_topic_2", "magician_grabber/distance2") or "magician_grabber/distance2"
+    )
+    outputs["laser_topic_3"] = str(
+        answers.get("q_clf_laser_topic_3", "magician_grabber/distance3") or "magician_grabber/distance3"
+    )
 
     outputs["laser_px1_x"] = float(answers.get("q_clf_laser_px1_x", 120.0) or 120.0)
     outputs["laser_px1_y"] = float(answers.get("q_clf_laser_px1_y", 200.0) or 200.0)
@@ -126,12 +132,14 @@ def main() -> None:
         sys.exit(1)
 
     use_case_path = sys.argv[1]
-    output_dir    = sys.argv[2]
+    output_dir = sys.argv[2]
 
     with open(use_case_path, encoding="utf-8") as f:
         use_case = json.load(f)
 
     answers = use_case.get("answers", {})
+    # Merge in module-specific answers (q_clf_* fields now stored separately)
+    answers = {**answers, **use_case.get("module_answers", {}).get("vision_classifier", {})}
 
     print(f"[vision_classifier] Computing configuration for use case: {use_case.get('name', '?')}")
     outputs = run(answers, output_dir)
@@ -166,8 +174,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
 
 if __name__ == "__main__":
     main()

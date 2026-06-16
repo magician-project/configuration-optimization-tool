@@ -1,6 +1,6 @@
-# COT 12-Month Development Roadmap
+﻿# COT 12-Month Development Roadmap
 **Period:** July 2026 – June 2027  
-**Capacity:** ~16 hours / month (solo developer)  
+**Capacity:** ~16 hours / month (solo developer) · ~48 h per quarter  
 **Total budget:** ~192 hours  
 **Top priority:** Feature completeness — all modules covered, artifacts generated correctly  
 **Deployment target:** Local machine (no server/auth required this year)
@@ -11,258 +11,172 @@
 
 | Constraint | Impact on planning |
 |---|---|
-| 16 h/month | Each milestone must be completable independently; no multi-month in-progress work |
+| 16 h/month | Quarters are the unit of planning; individual months flex within a quarter |
 | Solo developer | No parallel tracks; strict sequencing |
 | No external deadline | Sequence by value, not by date |
 | New modules may be added | Keep module code easy to copy (template-based), not plug-in framework |
 | GUI = existing React app | Improve what exists; no platform switch |
-| Light testing | Smoke tests + schema validation only; full unit tests only for critical helpers |
+| Light testing | Smoke tests + schema validation only; full unit test coverage only for critical helpers |
 | ROS adapter = file-based | Generate `params.yaml` / config JSONs; no direct ROS connection this year |
 
 ---
 
-## Milestone Overview
+## Overview
 
 ```
-Month  1   M2 — GUI: render new questions (conditional B/D extension)
-Month  2   M3 — Localiser module integration
-Month  3   M4 — Tactile sensor module integration
-Month  4   M5 — Orienteering solver module integration
-Month  5   M6 — Smoke test suite + schema validation CI
-Month  6   M7 — Deploy artifact display in GUI
-Month  7   M8 — Questionnaire engine: cross-module dependencies & conflict detection
-Month  8   M9 — Module template & contributor guide (new-module workflow)
-Month  9   M10 — Export / configuration report (PDF or structured JSON)
-Month 10   M11 — Docker packaging + local install script
-Month 11   M12 — Hardening, backlog, and retrospective
+Q1  Jul – Sep 2026   First Setup      — all five modules have a working compute + config
+Q2  Oct – Dec 2026   Refinement       — GUI polished, tests green, artifacts visible
+Q3  Jan – Mar 2027   MVP              — cross-module logic, conflict detection, report export
+Q4  Apr – Jun 2027   Production-ready — Docker, contributor guide, hardening, v1.0 tag
 ```
 
 ---
 
-## Detailed Milestones
+## Q1 — First Setup (Jul – Sep 2026)
 
-### M2 — GUI: Conditional Question Rendering
-**Month:** Month 1 (July 2026) | **Budget:** 16 h
+**Goal:** Every module in the codebase produces real output. By end of Q1 you can fill in the questionnaire and get a config file out of every module.
 
-**Context:** The React form renders questions from the schema. The new questions have `condition` fields (e.g. show `q3_force_sensor_ip` only when `tactile` is selected in `q3_additional_sensors`). The current renderer ignores these conditions, so all 50 questions are visible simultaneously.
+### Q1-A — GUI: Conditional Question Rendering
+- Evaluate `condition` and `follow_up` fields per question in the form renderer; hide/show questions dynamically
+- Handle operators: `value`, `contains`, `empty`, `in`
+- **Done when:** Filling in Section B with different sensor choices shows/hides the right follow-up fields
 
-**Work items:**
-- Update `gui/components/questionnaire_form.py` (or the React equivalent) to evaluate `condition` fields on each question and hide/show accordingly
-- Handle the three condition operators used in the schema: `value`, `contains`, `empty`, `in`
-- Ensure follow-up questions (existing `follow_up` pattern) continue to work alongside the new `condition` pattern
-- Visual grouping: add a subtle separator or label when transitioning from the original questions to the new Magician-specific questions within a section
-- Smoke test: click through Section B and D with different sensor combinations; verify only relevant questions appear
+### Q1-B — Localiser Module
+- Research localiser parameters from the magician-project repo; add schema questions for map resolution, tracking mode, reference frame
+- Implement `modules/localiser/compute.py`, `generate_config.py`, `ros_interface.py`
+- Update questionnaire engine impact rules and confidence categories for localiser
+- **Done when:** A use case with localiser answers produces a `localiser_config.json` and correct ROS commands
 
-**Done when:** The form hides irrelevant fields and shows only contextually appropriate questions.
+### Q1-C — Tactile Sensor Module
+- Research tactile processing parameters (window size, force thresholds, training data path); add schema questions
+- Implement `modules/tactile_sensor/compute.py`, `generate_config.py`, `ros_interface.py`
+- Note: `useATIForce` / `useTeensy` are already captured via grabber — focus on tactile-specific processing params
+- **Done when:** A use case with tactile sensing produces a tactile config and grabber config reflects the ATI/Teensy dependency
 
----
-
-### M3 — Localiser Module Integration
-**Month:** August 2026 | **Budget:** 16 h
-
-**Context:** `modules/localiser/` has stub `compute.py` and `ros_interface.py`. The localiser module determines how the robot maps its environment and tracks object positions.
-
-**Work items:**
-- Research: identify localiser parameters from the magician-project repository (equivalent of what we did for grabber/classifier)
-- Add new schema questions to Section A or B for localiser-specific config (map resolution, tracking mode, reference frame, etc.)
-- Implement `modules/localiser/compute.py` — derive outputs from answers
-- Create `modules/localiser/generate_config.py` — write a `localiser_config.json` artifact
-- Implement `modules/localiser/ros_interface.py` — param and service calls for `/magician_localiser`
-- Update questionnaire engine impact rules for localiser
-- Update confidence categories to include localiser fields
-
-**Done when:** A use case with localiser answers produces a `localiser_config.json` and correct ROS commands.
+### Q1-D — Orienteering Solver Module
+- Research solver parameters (profit weights, path constraints, time budget, mesh path); add schema follow-up questions to Section E
+- Implement `modules/orienteering_solver/compute.py`, `generate_config.py`, `ros_interface.py`
+- **Done when:** A use case with time/profit constraints produces an orienteering solver config
 
 ---
 
-### M4 — Tactile Sensor Module Integration
-**Month:** September 2026 | **Budget:** 16 h
+## Q2 — Refinement (Oct – Dec 2026)
 
-**Context:** `modules/tactile_sensor/` is a stub. The tactile sensor (ATI NetFT + Teensy accelerometer) has hardware overlap with the grabber and a dedicated `train.py` for force-based defect detection.
+**Goal:** Q1 delivered raw functionality — Q2 makes it reliable and usable. A `make test` command catches regressions across all five modules. Every generated config file (params.yaml, training_config.json, etc.) is viewable and downloadable directly in the GUI. Parameter edge cases discovered during Q1 testing are fixed before they reach a demo. By end of Q2 the generated artifacts are verified to be executable on the ROS 2 framework.
 
-**Work items:**
-- Research: identify tactile sensor parameters (window size, feature extraction settings, force thresholds, training data path)
-- Add schema questions for tactile-specific config — note that `useATIForce` and `useTeensy` are already captured via grabber; focus on tactile *processing* parameters
-- Implement `modules/tactile_sensor/compute.py` and `generate_config.py`
-- Handle the grabber/tactile dependency: if `tactile_sensor` is active, grabber compute must also set `useATIForce=True` and `useTeensy=True` — implement cross-module constraint checking
-- Implement `modules/tactile_sensor/ros_interface.py`
-- Update questionnaire engine for tactile impacts
+### Q2-A — Smoke Test Suite
+- Add `tests/` with pytest; schema smoke test (unique IDs, valid condition references); compute smoke test per module (expected output keys, sensible types); YAML/JSON validity check for generated artifacts
+- Add `make test` target; document in `README.md`
+- **Done when:** `make test` passes from a clean checkout with no additional setup
 
-**Done when:** A use case with force sensing enabled produces correct tactile config and the grabber config reflects the dependency.
+### Q2-B — Artifact Display in GUI
+- List generated artifact files per module in the Module Detail view after compute
+- "View" button opens file in a read-only, syntax-highlighted panel; "Copy" and "Download" actions available
+- Show a banner when `retrain_required=1`; show `launch_args.txt` as a copyable code block
+- **Done when:** An operator can view and copy all config files without touching the file system
 
----
+### Q2-C — Schema & Engine Hardening
+- Review all questions against real use: fix awkward conditions, missing option labels, or unclear question text discovered during Q1
+- Ensure all five modules' impact rules are consistent: same action type naming, no orphaned flag IDs
+- Extend confidence scoring if new questions were added in Q1
+- **Done when:** No open schema TODOs; `make test` still passes after any fixes
 
-### M5 — Orienteering Solver Module Integration
-**Month:** October 2026 | **Budget:** 16 h
+### Q2-D — Module Parameter Sync
+- Check each module's `generate_config.py` against its upstream repo for any parameter changes since the initial integration
+- Update parameter tables in `magician_integration_plan.md` to reflect current state
+- **Done when:** All five `generate_config.py` implementations match the current upstream parameter schemas
 
-**Context:** `modules/orienteering_solver/` is a stub. This module plans inspection paths optimising coverage and defect-finding profit.
-
-**Work items:**
-- Research: identify orienteering solver parameters (profit weights, path constraints, time budget, mesh input path)
-- Add schema questions — note that `q9_time` and `q10_profit` are already in Section E; add orienteering-specific follow-up questions there
-- Implement `modules/orienteering_solver/compute.py` and `generate_config.py`
-- Implement `modules/orienteering_solver/ros_interface.py`
-- Update questionnaire engine for orienteering solver impacts
-
-**Done when:** A use case with time/profit constraints produces an orienteering solver config with correct path parameters.
-
----
-
-### M6 — Smoke Test Suite
-**Month:** November 2026 | **Budget:** 16 h
-
-**Context:** After 5 modules are integrated, regressions become more likely. Light testing only — no full coverage.
-
-**Work items:**
-- Add `tests/` directory with pytest setup
-- Schema smoke test: verify all question IDs are unique, all `condition.field` references point to existing question IDs, all `confidence_categories` field references are valid
-- Compute smoke test: for each module, run `compute.run()` with a fully-populated synthetic answers dict and assert the output dict has all expected keys and sensible types
-- Config generation smoke tests: for grabber, assert `generate_yaml()` produces valid YAML; for classifier, assert `generate_training_config()` produces a dict matching the `bigmodel.json` required keys
-- CI setup: add a `Makefile` target `make test` that runs the suite; document it in `README.md`
-
-**Done when:** `make test` passes from a clean checkout with no additional setup.
+### Q2-E — ROS 2 Execution Readiness
+- Validate that the generated `params.yaml` files are accepted by `ros2 run --params-file` without errors for grabber and localiser
+- Validate that `ros2 service call` commands emitted by each `ros_interface.py` use the correct service names and message types against the actual running nodes
+- Document the manual verification steps (node name, topic, expected response) in each module's `README.md`
+- Update the Constraints & Principles table: ROS adapter moves from "file-based only" to "file-based + verified against live nodes"
+- **Done when:** A developer can take the generated artifacts from any module and launch the corresponding ROS 2 node without manual parameter editing
 
 ---
 
-### M7 — GUI: Deploy Artifact Display
-**Month:** December 2026 | **Budget:** 16 h
+## Q3 — MVP (Jan – Mar 2027)
 
-**Context:** After compute runs, each module now writes artifact files (params.yaml, training_config.json, live_config.json, launch_args.txt). The GUI currently has no way to show or download these.
+**Goal:** The tool behaves like a real product. Multiple modules talk to each other, conflicts surface automatically, and the output is shareable.
 
-**Work items:**
-- After compute completes, list artifact files per module in the Module Detail view
-- Add "View" button that opens the file content in a read-only text panel (syntax-highlighted YAML/JSON)
-- Add "Copy to clipboard" and "Download" actions per artifact file
-- Show a clear banner when `retrain_required=1` explaining the operator must run training manually before deploying
-- Show launch_args.txt content as a copyable code block with a label "Run this command to start the grabber"
+### Q3-A — Cross-Module Conflict Detection
+- Implement `app/engine/conflict_checker.py` with a `cross_module_rules` list
+- Initial rules: `frame_rate > 10 → use_ram required`; `use_ati_force → tactile_sensor must be active`; `stream_data=False → classifier cannot run live`; `tile_size must match dataset tiling`
+- Surface conflicts in GUI: warning badge on module tile, plain-language explanation in detail view
+- **Done when:** A use case with a known conflict shows a visible warning with the two parameters involved
 
-**Done when:** An operator can see and copy all generated config files from the GUI without opening a file explorer.
+### Q3-B — Cross-Module Integration Tests
+- Write end-to-end compute tests that fill answers for two or more modules simultaneously and assert the combined outputs are consistent
+- Cover at least 3 multi-module scenarios that exercise the conflict rules from Q3-A
+- Add these to the `make test` suite
+- **Done when:** All multi-module scenario tests pass in CI
 
----
+### Q3-C — Configuration Report Export
+- Add "Export Report" button to the use case page (visible after compute)
+- Generate `configuration_report.json`: use case metadata, full answers, per-module impact summary, artifact paths, active conflict warnings
+- Optionally generate a Markdown version; both downloadable from the GUI
+- **Done when:** Clicking "Export Report" downloads a complete, self-contained configuration record
 
-### M8 — Cross-Module Dependencies & Conflict Detection
-**Month:** January 2027 | **Budget:** 16 h
-
-**Context:** Some parameter choices conflict across modules (e.g. tile_size in classifier must match the annotator's dataset tiling; grabber framerate > 10 Hz requires use_ram; tactile sensor requires grabber's ATI/Teensy flags). These are currently silent.
-
-**Work items:**
-- Define a `cross_module_rules` structure in the questionnaire engine (or a new `app/engine/conflict_checker.py`) listing known inter-module constraints
-- Implement conflict checking after compute: return a list of warnings/errors per use case
-- Surface conflicts in the GUI: yellow warning badge on affected module tiles; detail view lists the conflict and the two parameters involved
-- Initial rule set (at minimum):
-  - `frame_rate > 10` → `use_ram` must be true (grabber)
-  - `use_ati_force=True` → `tactile_sensor` module must also be active
-  - `tile_size` (classifier) should match dataset tile size if dataset_dir is provided
-  - `stream_data=False` → classifier cannot receive frames (streaming is required for live inference)
-
-**Done when:** A use case with a known conflict shows a visible warning in the GUI with a plain-language explanation.
+### Q3-D — UX Pass
+- Walk through the full flow (create use case → fill questionnaire → compute → view artifacts → export report) and fix friction points
+- Improve empty states, error messages, and loading indicators; ensure the confidence score is explained to the user
+- **Done when:** A colleague unfamiliar with the codebase can complete the full flow without help
 
 ---
 
-### M9 — Module Template & Contributor Guide
-**Month:** February 2027 | **Budget:** 16 h
+## Q4 — Production-Ready (Apr – Jun 2027)
 
-**Context:** New modules may be added. A clear template and guide will let future contributors (or future-you) add a module correctly without reverse-engineering existing code.
+**Goal:** The tool can be handed to a new developer or consortium partner with no setup friction. It is packaged, documented, and tagged as v1.0.
 
-**Work items:**
-- Create `modules/_template/` with:
-  - `__init__.py`
-  - `compute.py` — annotated template with all required function signatures and doc strings
-  - `generate_config.py` — template for writing config artifacts
-  - `ros_interface.py` — template showing how to add param + service commands
-  - `README.md` — step-by-step guide: "how to add a new module"
+### Q4-A — Module Template & Contributor Guide
+- Create `modules/_template/` with annotated `compute.py`, `generate_config.py`, `ros_interface.py`, and `README.md`
+- Document the schema extension pattern and questionnaire engine impact rule pattern
 - Update top-level `modules/README.md` to reference the template
-- Document the schema extension pattern: how to add questions, conditions, and confidence categories for a new module
-- Document the questionnaire engine: how to add impact rules for new questions
+- **Done when:** A new contributor can add a module by following the template with no prior codebase knowledge
 
-**Done when:** A new contributor can add a new module following the template with no knowledge of the existing codebase.
+### Q4-B — Docker Packaging
+- Write multi-stage `Dockerfile` (Python backend + Node frontend build) and `docker-compose.yml`
+- Verify the full flow works inside Docker; add a health-check endpoint to the backend
+- Add Docker quick-start section to `README.md`
+- **Done when:** `docker compose up` gives a fully functional tool with no manual setup
 
----
+### Q4-C — Final Hardening & Backlog
+- Fix regressions or edge cases discovered during Q3 real use
+- Review all five modules against upstream repos one final time
+- Address any remaining backlog items that fit within the time budget
+- **Done when:** No known open bugs; all `make test` checks pass on a clean Docker build
 
-### M10 — Configuration Report Export
-**Month:** March 2027 | **Budget:** 16 h
-
-**Context:** Operators and MAGICIAN partners need a shareable record of a configuration decision: what answers were given, what modules are impacted, what artifacts were generated.
-
-**Work items:**
-- Add "Export Report" button to the use case page (visible once compute is complete)
-- Generate a structured JSON report (`configuration_report.json`) containing:
-  - Use case metadata (name, created_at, computed_at)
-  - Full answers dict
-  - Per-module: impact type, confidence score, outputs summary, artifact file paths, validation status
-  - Any active conflict warnings
-- Optionally generate a human-readable Markdown version of the same report
-- Download both files directly from the GUI
-
-**Done when:** Clicking "Export Report" downloads a JSON (and optional Markdown) file containing the full configuration context.
-
----
-
-### M11 — Docker Packaging
-**Month:** April 2027 | **Budget:** 16 h
-
-**Context:** Currently the tool requires manual Python venv setup + npm install. A Docker image makes it portable and shareable within the MAGICIAN consortium even if still running locally.
-
-**Work items:**
-- Write `Dockerfile` (multi-stage: Python backend + Node frontend build)
-- Write `docker-compose.yml` with a single `docker compose up` workflow
-- Update `README.md` with Docker quick-start section
-- Verify the full flow (create use case → fill questionnaire → compute → view artifacts) works inside Docker
-- Add a health check endpoint to the backend
-
-**Done when:** A colleague can run `docker compose up` and use the full tool without any Python/Node setup.
-
----
-
-### M12 — Hardening, Backlog & Retrospective
-**Month:** May 2027 | **Budget:** 16 h
-
-**Context:** Final month for cleanup, deferred items, and planning the next cycle.
-
-**Work items (flexible — fill from backlog):**
-- Fix any regressions or issues discovered during M1–M11
-- Address schema edge cases found through real use: missing question types, awkward conditional flows, etc.
-- Review all five module `compute.py` implementations against their upstream repos for any parameters added in the past year
-- Write a brief retrospective noting what was built, what was deferred, and what the next 12-month priorities should be
-- Tag a `v1.0` release in git with a `CHANGELOG.md`
-
-**Done when:** The codebase is tagged, documented, and the next roadmap cycle is outlined.
+### Q4-D — v1.0 Release
+- Write `CHANGELOG.md` covering everything built across Q1–Q4
+- Tag `v1.0` in git
+- Write a brief retrospective: what was built, what was deferred, next 12-month priorities
+- **Done when:** The repo has a `v1.0` tag, a `CHANGELOG.md`, and a next-cycle outline
 
 ---
 
 ## Budget Summary
 
-| Month | Milestone | Focus area |
-|---|---|---|
-| Jul 2026 | M2 | Frontend — conditional rendering |
-| Aug 2026 | M3 | Module — localiser |
-| Sep 2026 | M4 | Module — tactile sensor |
-| Oct 2026 | M5 | Module — orienteering solver |
-| Nov 2026 | M6 | Quality — smoke tests |
-| Dec 2026 | M7 | Frontend — artifact display |
-| Jan 2027 | M8 | Backend — conflict detection |
-| Feb 2027 | M9 | Extensibility — module template |
-| Mar 2027 | M10 | Output — report export |
-| Apr 2027 | M11 | DevOps — Docker |
-| May 2027 | M12 | Hardening + retrospective |
-| Jun 2027 | — | (Buffer / overflow month) |
+| Quarter | Period | Theme | Budget |
+|---|---|---|---|
+| Q1 | Jul – Sep 2026 | First Setup — all modules producing output | ~48 h |
+| Q2 | Oct – Dec 2026 | Refinement — tests, GUI polish, parameter sync | ~48 h |
+| Q3 | Jan – Mar 2027 | MVP — cross-module logic, conflict detection, export | ~48 h |
+| Q4 | Apr – Jun 2027 | Production-ready — Docker, template, v1.0 | ~48 h |
 
-**Total estimated hours:** 192 h (12 × 16 h)
+**Total estimated hours:** ~192 h
 
 ---
 
 ## Backlog (deferred, not scheduled)
 
-Items that are desirable but did not fit the 12-month budget:
-
 - **Multi-user / auth** — use case ownership, login, shared access
-- **Real ROS 2 adapter** — direct ros2 service call / param set connection (requires hardware access)
+- **Real ROS 2 adapter** — direct ros2 service call / param set connection (requires hardware)
 - **Cloud hosting** — make the tool accessible outside the local machine
-- **Automated retraining trigger** — call `trainMagicianVisionClassifierTorch.py` directly from COT compute
-- **Database backend** — replace JSON file storage with SQLite or PostgreSQL for better querying
-- **Version control of use cases** — track history of changes to a single use case over time
+- **Automated retraining trigger** — invoke `trainMagicianVisionClassifierTorch.py` from COT compute
+- **Database backend** — replace JSON file storage with SQLite or PostgreSQL
+- **Use case version history** — track changes to a single use case over time
 - **Advanced UI polishing** — wizard flow, mobile layout, accessibility audit
-- **Integration tests** — end-to-end tests covering the full HTTP → compute → GUI flow
+- **Full integration tests** — HTTP → compute → GUI end-to-end coverage
 
 ---
 
@@ -270,8 +184,8 @@ Items that are desirable but did not fit the 12-month budget:
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| Upstream magician repos change parameter names | Medium | Each module's `generate_config.py` is the single place to update; parameter tables in `magician_integration_plan.md` serve as a reference |
-| Localiser/tactile/orienteering param discovery takes longer than 1 month | Medium | Scope M3–M5 to include research; defer non-critical params to the backlog rather than blocking the milestone |
-| 16 h/month is insufficient for a milestone | Medium | Each milestone is scoped for 16 h; if overrun, defer polish to M12 and mark the core deliverable as done |
-| New modules added mid-roadmap | Low | M9 (template) provides a clear onboarding path; new module can slot into the next available month |
-| Solo developer absence | Low | Docker (M11) + documented templates (M9) reduce bus-factor risk |
+| Upstream repos change parameter names | Medium | Each module's `generate_config.py` is the single update point; `magician_integration_plan.md` serves as reference |
+| Module parameter research takes longer than expected | Medium | Q1 milestones include research time; defer non-critical params to Q2-D sync |
+| 16 h/month is insufficient for a quarter milestone | Medium | Quarters have flex across 3 months; defer polish within the quarter rather than blocking |
+| New modules added mid-roadmap | Low | Q4-A template provides a clear onboarding path |
+| Solo developer absence | Low | Docker (Q4-B) + documented templates (Q4-A) reduce bus-factor risk |

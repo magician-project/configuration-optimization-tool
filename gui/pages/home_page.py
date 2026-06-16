@@ -7,16 +7,15 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QScrollArea, QFrame, QMessageBox, QSizePolicy,
+    QPushButton, QScrollArea, QFrame, QMessageBox,
 )
 from PySide6.QtCore import Qt, Signal
 from datetime import datetime, timezone
 
-from app.models.use_case import UseCase, ConfidenceScore
-from app.engine.module_registry import MODULES
+
 from app.engine.questionnaire_engine import apply_impacts_to_modules
-from app import storage
 from app.storage import json_store
+from app.models import UseCase
 
 import uuid
 
@@ -195,7 +194,7 @@ class HomePage(QWidget):
             updated_at=now,
         )
         # Initialise modules
-        from app.engine.questionnaire_engine import apply_impacts_to_modules, compute_impacts
+        from app.engine.questionnaire_engine import compute_impacts
         result = compute_impacts(uc.answers)
         apply_impacts_to_modules(uc, result)
 

@@ -15,10 +15,9 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QWidget, QFrame, QTextEdit, QSizePolicy,
+    QScrollArea, QWidget, QFrame, QTabWidget,
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
 
 from app.models.use_case import ModuleState
 
@@ -31,7 +30,7 @@ _ACTION_COLOURS = {
 _FLAG_STYLES = {
     "error":          ("#fca5a5", "#991b1b"),
     "warning":        ("#fcd34d", "#92400e"),
-    "human_oversight":("#99f6e4", "#0f766e"),
+    "human_oversight": ("#99f6e4", "#0f766e"),
 }
 
 _STATUS_STYLE = {
@@ -40,7 +39,7 @@ _STATUS_STYLE = {
     "validated":     ("Validated — ready to compute", "#d1fae5", "#065f46"),
     "computing":     ("Computing…", "#dbeafe", "#1e40af"),
     "computed":      ("Computed — ready to deploy", "#d1fae5", "#065f46"),
-    "compute_failed":("Compute failed", "#fee2e2", "#991b1b"),
+    "compute_failed": ("Compute failed", "#fee2e2", "#991b1b"),
     "deploying":     ("Deploying…", "#dbeafe", "#1e40af"),
     "deployed":      ("Deployed", "#d1fae5", "#065f46"),
     "deploy_failed": ("Deploy failed", "#fee2e2", "#991b1b"),
@@ -51,26 +50,107 @@ class ModuleDetail(QDialog):
     # Emitted when user requests an action; parent handles async work
     action_requested = Signal(str, str)   # (module_id, action)
     # action: "acknowledge" | "validate" | "compute" | "deploy"
+    # Emitted when module-specific config fields are changed and saved
+    module_config_changed = Signal(str, dict)  # (module_id, config_dict)
 
-    def __init__(self, module: ModuleState, parent=None) -> None:
+    def __init__(self, module: ModuleState, module_config: dict = None, parent=None) -> None:
         super().__init__(parent)
         self._module = module
+        self._module_config: dict = dict(module_config or {})
         self.setWindowTitle(module.module_name)
-        self.setMinimumSize(600, 500)
+        self.setMinimumSize(640, 560)
         self.setModal(True)
         self._build_ui()
+
+    def _build_tabbed_ui(self, root: QVBoxLayout) -> None:
+        """Two-tab layout: Impacts/Flags | Module Configuration."""
+        from app.engine.schema import VISION_CLASSIFIER_CONFIG, ERGODIC_CONTROL_CONFIG, GRABBER_CONFIG
+        from gui.components.questionnaire_form import QuestionnaireForm
+
+        _MODULE_CONFIGS = {
+            "vision_classifier": VISION_CLASSIFIER_CONFIG,
+            "ergodic_control":   ERGODIC_CONTROL_CONFIG,
+            "grabber":           GRABBER_CONFIG,
+        }
+        config_questions = _MODULE_CONFIGS.get(self._module.module_id, [])
+
+        tabs = QTabWidget()
+
+        # Tab 1: Impacts & Flags (existing dynamic content)
+        impacts_tab = QWidget()
+        impacts_layout = QVBoxLayout(impacts_tab)
+        impacts_layout.setContentsMargins(0, 4, 0, 0)
+        self._insert_dynamic_widgets(impacts_layout, include_footer=False)
+        tabs.addTab(impacts_tab, "Impacts & Flags")
+
+        # Tab 2: Module Configuration
+        config_tab = QWidget()
+        config_layout = QVBoxLayout(config_tab)
+        config_layout.setContentsMargins(0, 4, 0, 4)
+        config_layout.setSpacing(8)
+
+        info = QLabel(
+            "Configure this module below. "
+            "Changes are saved immediately and re-evaluated on the next questionnaire save."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet("color: #6b7280; font-size: 11px; padding: 4px 0;")
+        config_layout.addWidget(info)
+
+        self._config_form = QuestionnaireForm(questions=config_questions)
+        self._config_form.load_answers(self._module_config)
+        self._config_form.answers_changed.connect(self._on_config_changed)
+        config_layout.addWidget(self._config_form, stretch=1)
+
+        # Save button
+        save_bar = QHBoxLayout()
+        save_bar.addStretch()
+        save_btn = QPushButton("Save Configuration")
+        save_btn.setStyleSheet(
+            "background: #162759; color: white; padding: 5px 16px; "
+            "border-radius: 4px; font-weight: bold; border: none;"
+        )
+        save_btn.clicked.connect(self._save_config)
+        save_bar.addWidget(save_btn)
+        config_layout.addLayout(save_bar)
+
+        tabs.addTab(config_tab, "Module Configuration")
+        root.addWidget(tabs, stretch=1)
+
+        root.addWidget(self._build_footer())
+
+    def _on_config_changed(self, config: dict) -> None:
+        self._module_config = config
+
+    def _save_config(self) -> None:
+        self.module_config_changed.emit(self._module.module_id, self._module_config)
+        # Brief visual feedback via window title flash
+        orig = self.windowTitle()
+        self.setWindowTitle(f"{orig}  ✓ saved")
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(1500, lambda: self.setWindowTitle(orig))
 
     def refresh(self, module: ModuleState) -> None:
         """Update the dialog in-place after an action has been taken."""
         self._module = module
-        # Rebuild only the dynamic part (status + scroll + footer)
-        # The root layout items: 0=header, 1=desc, 2=status_banner, 3=scroll, 4=footer
         root = self.layout()
-        for idx in (4, 3, 2):          # remove in reverse order
-            item = root.takeAt(idx)
-            if item and item.widget():
-                item.widget().deleteLater()
-        self._insert_dynamic_widgets(root)
+
+        _TABBED_MODULES = {"vision_classifier", "ergodic_control"}
+        if self._module.module_id in _TABBED_MODULES:
+            # Tabbed layout: items are 0=header(layout), 1=desc, 2=tabs, 3=footer
+            # Remove tabs + footer, rebuild
+            for idx in (3, 2):
+                item = root.takeAt(idx)
+                if item and item.widget():
+                    item.widget().deleteLater()
+            self._build_tabbed_ui(root)
+        else:
+            # Flat layout: 0=header(layout), 1=desc, 2=status_banner, 3=scroll, 4=footer
+            for idx in (4, 3, 2):
+                item = root.takeAt(idx)
+                if item and item.widget():
+                    item.widget().deleteLater()
+            self._insert_dynamic_widgets(root)
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -92,9 +172,14 @@ class ModuleDetail(QDialog):
         desc.setStyleSheet("color: #6b7280; font-size: 12px;")
         root.addWidget(desc)
 
-        self._insert_dynamic_widgets(root)
+        # Modules with their own config schema get a tabbed layout
+        _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber"}
+        if self._module.module_id in _TABBED_MODULES:
+            self._build_tabbed_ui(root)
+        else:
+            self._insert_dynamic_widgets(root)
 
-    def _insert_dynamic_widgets(self, root) -> None:
+    def _insert_dynamic_widgets(self, root, include_footer: bool = True) -> None:
         """Build (or rebuild) status banner + scroll area + footer."""
         # Status banner
         status_text, bg, fg = _STATUS_STYLE.get(
@@ -138,7 +223,8 @@ class ModuleDetail(QDialog):
         scroll.setWidget(inner)
         root.addWidget(scroll, stretch=1)
 
-        root.addWidget(self._build_footer())
+        if include_footer:
+            root.addWidget(self._build_footer())
 
     def _build_impact_card(self, impact) -> QWidget:
         frame = QFrame()

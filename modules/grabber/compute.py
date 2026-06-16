@@ -47,7 +47,7 @@ def run(answers: dict) -> dict:
     # Camera resolution
     cam_res = answers.get("q2_camera_resolution") or {}
     if cam_res.get("width"):
-        outputs["width"]  = int(cam_res["width"])
+        outputs["width"] = int(cam_res["width"])
     if cam_res.get("height"):
         outputs["height"] = int(cam_res["height"])
 
@@ -59,14 +59,14 @@ def run(answers: dict) -> dict:
     else:
         outputs["use_ram"] = False
 
-    if answers.get("q2_camera_exposure"):
-        outputs["exposure"] = int(answers["q2_camera_exposure"])
+    if answers.get("q_grab_exposure"):
+        outputs["exposure"] = int(answers["q_grab_exposure"])
 
-    if answers.get("q2_camera_gain") is not None:
-        outputs["gain"] = float(answers["q2_camera_gain"])
+    if answers.get("q_grab_gain") is not None:
+        outputs["gain"] = float(answers["q_grab_gain"])
 
-    if answers.get("q2_camera_blacklevel") is not None:
-        outputs["black_level"] = float(answers["q2_camera_blacklevel"])
+    if answers.get("q_grab_blacklevel") is not None:
+        outputs["black_level"] = float(answers["q_grab_blacklevel"])
 
     # Shared memory streaming
     outputs["stream_data"] = answers.get("q2_stream_shm") == "yes"
@@ -79,8 +79,8 @@ def run(answers: dict) -> dict:
     # ── Additional sensors ───────────────────────────────────────────────────
     sensors = answers.get("q3_additional_sensors") or []
     outputs["use_ati_force"] = "tactile" in sensors
-    outputs["use_teensy"]    = "tactile" in sensors
-    outputs["use_arduino"]   = "distance" in sensors or "tactile" in sensors
+    outputs["use_teensy"] = "tactile" in sensors
+    outputs["use_arduino"] = "distance" in sensors or "tactile" in sensors
 
     # Keep legacy bitmask for backwards compatibility
     sensor_mask = 0
@@ -89,36 +89,45 @@ def run(answers: dict) -> dict:
     if "distance" in sensors: sensor_mask |= 4
     outputs["extra_sensor_mask"] = sensor_mask
 
-    # Serial paths
-    if answers.get("q3_arduino_path"):
-        outputs["arduino_path"] = str(answers["q3_arduino_path"])
-    if answers.get("q3_teensy_path"):
-        outputs["teensy_path"] = str(answers["q3_teensy_path"])
+    # Serial paths — now in module_answers["grabber"]
+    if answers.get("q_grab_arduino_path"):
+        outputs["arduino_path"] = str(answers["q_grab_arduino_path"])
+    if answers.get("q_grab_teensy_path"):
+        outputs["teensy_path"] = str(answers["q_grab_teensy_path"])
 
     # Tactile stream name
     outputs["tactile_stream_name"] = (
-        str(answers["q3_tactile_stream"])
-        if answers.get("q3_tactile_stream")
+        str(answers["q_grab_tactile_stream"])
+        if answers.get("q_grab_tactile_stream")
         else "stream_tactile"
     )
 
-    # ATI force sensor
-    if answers.get("q3_force_sensor_ip"):
-        outputs["ati_ip"] = str(answers["q3_force_sensor_ip"])
-    if answers.get("q3_force_sensor_port"):
-        outputs["ati_port"] = int(answers["q3_force_sensor_port"])
+    # ATI force sensor — now in module_answers["grabber"]
+    if answers.get("q_grab_force_sensor_ip"):
+        outputs["ati_ip"] = str(answers["q_grab_force_sensor_ip"])
+    if answers.get("q_grab_force_sensor_port"):
+        outputs["ati_port"] = int(answers["q_grab_force_sensor_port"])
 
     # ── Lighting ─────────────────────────────────────────────────────────────
     outputs["extra_lighting"] = 1 if answers.get("q4_lighting") == "additional" else 0
 
-    lighting = answers.get("q3_lighting_mode", "none")
-    outputs["lighting_mode"]        = lighting if lighting else "none"
+    lighting = answers.get("q_grab_lighting_mode", "none")  # module_answers["grabber"]
+    outputs["lighting_mode"] = lighting if lighting else "none"
     outputs["manual_trigger_light"] = lighting == "trigger"
 
-    # ── Run-time / misc ───────────────────────────────────────────────────────
-    outputs["run_forever"] = True
-    outputs["compress"]    = False
-    outputs["simulate"]    = False
+    # ── Operational flags ──────────────────────────────────────────────────────────────
+    run_duration = answers.get("q_grab_run_duration") or 0
+    if run_duration and int(run_duration) > 0:
+        outputs["run_forever"] = False
+        outputs["max_time_seconds"] = int(run_duration)
+    else:
+        outputs["run_forever"] = True
+
+    outputs["countdown"] = int(answers.get("q_grab_countdown") or 0)
+    outputs["compress"] = answers.get("q_grab_compress", "no") == "yes"
+    outputs["silent"] = answers.get("q_grab_silent",   "no") == "yes"
+    outputs["unixtime"] = answers.get("q_grab_unixtime", "no") == "yes"
+    outputs["simulate"] = False
 
     return outputs
 
@@ -129,12 +138,14 @@ def main() -> None:
         sys.exit(1)
 
     use_case_path = sys.argv[1]
-    output_dir    = sys.argv[2]
+    output_dir = sys.argv[2]
 
     with open(use_case_path, encoding="utf-8") as f:
         use_case = json.load(f)
 
     answers = use_case.get("answers", {})
+    # Merge grabber-specific module answers (q_grab_* fields) into the dict
+    answers = {**answers, **use_case.get("module_answers", {}).get("grabber", {})}
 
     print(f"[grabber] Computing configuration for use case: {use_case.get('name', '?')}")
     outputs = run(answers)
