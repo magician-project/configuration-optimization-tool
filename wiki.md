@@ -1,17 +1,156 @@
-The Configuration Optimization Tool (COT) is a decision-support and orchestration platform developed as part of the MAGICIAN project to help engineers adapt the robot system to new or evolving inspection use cases. The core idea is that when an operator or systems engineer needs to deploy MAGICIAN for a different task whether that is a minor variation of an existing job or a completely new inspection scenario they do not need to manually trace through the robot software to figure out what needs changing. Instead, COT provides a guided, structured process that converts a use case description into concrete, actionable recommendations for each of the MAGICIAN software modules.
+# Configuration Optimization Tool — Wiki
 
-The starting point for a new use case in COT is a questionnaire. This questionnaire is divided into thematic sections: robot configuration, sensors and perception, material and surface properties, defect detection, and time and priority constraints. Across these sections, questions collectively capture the key characteristics of a deployment scenario, such as the number of robot arms, the camera type in use, whether additional sensors like tactile or force sensing are needed, the types of surfaces and defects involved, and whether there are time constraints on operations. Each question is designed not as a generic survey but as a direct reflection of the parameters and design choices that are known to affect one or more of the MAGICIAN modules. This questionnaire design is the result of a knowledge-gathering process with module owners who provided input on which operational characteristics drive parameter changes in their module, what those parameters are, and what values or ranges are acceptable. This part is also still under development, since not all modules are finalized yet.
+## Overview
 
-This collaboration with module owners is a central part of the COT design philosophy. For each module, we worked through which characteristics of a use case would require the module to be reconfigured, retrained, or at minimum reviewed by a qualified engineer. The Orienteering Solver is sensitive to the number of arms, the presence of time windows, and the profit structure of the inspection task, because each of these shifts the underlying combinatorial optimisation problem to a different variant from the standard Orienteering Problem to the Team Orienteering Problem, the Time-Windowed variant, or a Variable Profit formulation. The Tactile Classifier and Vision Classifier are both machine learning models, meaning they need retraining whenever materials, defect types, or object sizes change, because the underlying data distributions shift with these characteristics.
+The Configuration Optimization Tool (COT) is a decision-support and orchestration desktop application developed as part of the MAGICIAN project to help engineers adapt the robot system to new or evolving inspection use cases. When an operator or systems engineer needs to deploy MAGICIAN for a different task — whether a minor variation of an existing job or a completely new inspection scenario — they do not need to manually trace through the robot software to figure out what needs changing. Instead, COT provides a guided, structured process that converts a use case description into concrete, actionable recommendations for each of the MAGICIAN software modules.
 
-Once a user fills in the questionnaire and saves the use case, COT runs its rule-based impact engine. This engine evaluates each answer against the known rules derived from module owner input and produces a structured impact report per module. Each impact entry describes the specific characteristic that triggered it, what aspect of the module is affected, what change is needed, and what type of action is required, either a reconfiguration, a retraining, or a review by a human expert. Alongside these impacts, the engine can raise flags for cases where automated guidance is not sufficient and human oversight from a robotics engineer is explicitly required.
+COT is a standalone Python desktop application built with PySide6. It does not run inside ROS and does not require a live ROS environment for its decision-making logic. This separation keeps the ROS runtime stable and predictable while giving COT full flexibility as an external orchestration tool.
 
-The results are shown in a Module Dashboard, where each of the five MAGICIAN modules is represented as a tile. Each tile clearly communicates the required action type and any active flags, so engineers can immediately see where attention is needed. Clicking on a module tile opens a detailed view that shows all individual impact entries, the reasoning behind each one, and any flags that need to be acknowledged. Engineers can acknowledge flags, review the recommendations, and when they are satisfied that the module configuration is correct, mark the module as validated. The Deploy to ROS button at the bottom of the dashboard only becomes active once all affected modules have been validated, ensuring that no deployment happens without explicit human sign-off on every impacted component.
+---
 
-A second key feature of the COT is the offline parameter computation step. For each module, COT can run a dedicated compute script that reads the questionnaire answers and derives the specific ROS parameter values needed for that module without requiring a live ROS environment. These computed values are stored in a result file per module and serve as the source of truth for what will eventually be sent to ROS. This offline computation approach means that all configuration decisions can be reviewed, audited, and if necessary corrected before any command is issued to the running robot system. Module owners need to provide these scripts and are part of the close collaboration between the COT and the module owners.
+## Architecture
 
-The final step sending configuration updates to ROS is handled through a dedicated ROS interface layer in COT. Each module has its own ROS interface that translates the computed parameter values into a precise list of ROS 2 commands, typically ros2 param set calls targeting specific nodes, or ROS 2 service calls for more complex update operations. COT is intentionally built outside the ROS framework, meaning it does not run inside ROS and does not depend on a live ROS environment for its decision-making logic. This separation keeps the ROS runtime stable and predictable while giving COT full flexibility as an external orchestration tool.
+COT is structured into four layers:
 
-For the machine learning modules the Tactile Classifier and the Vision Classifier the workflow in COT goes beyond parameter reconfiguration. When material types, defect categories, or object sizes change, these models need to be retrained on new data. COT will be designed to eventually host this training pipeline directly, so that an engineer can trigger model training from within the tool, monitor progress, and then pass the resulting model checkpoint through to the ROS deployment step. At that point, the relevant ROS parameter pointing to the active model file would be updated to reference the new checkpoint, completing the full loop from use case definition to deployed model. The training integration is currently in its placeholder phase, with the interfaces and data flow already defined and waiting for the real training pipelines to be connected.
+**`app/`** — Core application logic
+- `engine/` — Questionnaire schema, rule-based impact computation, compute subprocess runner
+- `models/` — Pydantic data models for use cases, questionnaire answers, module state, and ROS commands
+- `ros/` — ROS 2 adapter layer (mock for development, real for deployment)
+- `storage/` — JSON file persistence
 
-Together, these components make COT a practical bridge between operational requirements and the ROS configuration layer. It captures expert knowledge from module owners in a structured, rule-driven form, guides engineers through the configuration process with appropriate human checkpoints, computes parameter values offline so they can be reviewed before deployment, and then fires targeted update commands into ROS when the team is ready. Whether the task at hand is a small tweak to an existing use case or the introduction of a completely new inspection scenario, COT provides a consistent and traceable workflow that reduces the risk of misconfiguration and keeps the MAGICIAN system aligned with real-world project goals
+**`gui/`** — PySide6 desktop interface
+- `pages/` — Home page (use case list) and Use Case page (questionnaire + dashboard)
+- `components/` — Reusable widgets: questionnaire form, module grid, module detail dialog, confidence bar, compute progress dialog
+
+**`modules/`** — Per-module compute scripts and ROS interface definitions. Each module directory contains a `compute.py` (offline parameter derivation) and a `ros_interface.py` (ROS 2 command generation).
+
+**`data/`** — Persisted use case files. Each use case lives in `data/use_cases/{id}/`, containing `use_case.json` and per-module compute output folders.
+
+---
+
+## The Questionnaire
+
+The starting point for a new use case is the questionnaire. It is divided into five sections that together capture the key characteristics of a deployment scenario:
+
+| Section | Topics covered |
+|---------|---------------|
+| A — Robot Configuration | Number of robot arms |
+| B — Sensors & Perception | Camera type, resolution, frame rate, shared memory streaming, additional sensors, lighting |
+| C — Material & Surface Properties | Material types, object size and dimensions, 3D mesh availability |
+| D — Defect Detection | Defect types to detect |
+| E — Time & Priority Constraints | Time window constraints, profit definition |
+
+Each question directly reflects parameters and design choices that are known to affect one or more MAGICIAN modules. The schema is defined in `app/engine/schema.py` and serves as the single source of truth for both the GUI form renderer and the impact engine.
+
+Module-specific configuration (for example, vision classifier model selection or ergodic control time budget) is stored separately in `UseCase.module_answers[module_id]` and is collected through the module detail dialog rather than the main questionnaire form.
+
+### Confidence Score
+
+A multi-category completeness bar shows how thoroughly the questionnaire has been filled in. Categories include: Robot Arms, Camera/Sensors, Lighting, Material/Size, Defect Types, Time/Profit, Mesh, Grabber Hardware, and Classifier Config. The score drives a low / medium / high confidence level displayed on each use case card.
+
+---
+
+## Impact Engine
+
+When the user saves the questionnaire, `app/engine/questionnaire_engine.py` runs a rule-based impact computation. It evaluates each answer against rules derived from module owner input and produces a structured impact report per module. Each impact entry records:
+
+- **characteristic** — the use-case property that triggered it
+- **affects** — which aspect of the module is affected (Input, Process, Problem Description, etc.)
+- **what_changes** — a human-readable explanation of what must be done
+- **action_type** — `reconfigure`, `retrain`, or `review`
+- **reason** — which question triggered this impact
+
+Alongside impacts, the engine raises **flags** for cases where automated guidance is not sufficient and human oversight from a robotics engineer is explicitly required.
+
+---
+
+## Module Dashboard
+
+The Module Dashboard shows all six MAGICIAN modules as tiles. Each tile communicates the module's current status and any active flags at a glance. The full module lifecycle is:
+
+```
+ok → needs_action → validated → computing → computed → deploying → deployed
+                                                 ↓                     ↓
+                                           compute_failed         deploy_failed
+```
+
+Clicking a tile opens the module detail dialog, where engineers can:
+- Review all impact entries and the reasoning behind each
+- Acknowledge flags that require human sign-off
+- Configure module-specific parameters
+- Validate the module (required before compute)
+- Trigger the offline compute step
+
+**Ergodic Control** is the only module that starts in `needs_action` by default (regardless of questionnaire answers), because trajectory planning always requires configuration.
+
+---
+
+## Offline Compute
+
+For each module, COT can run a dedicated `compute.py` script that reads the questionnaire answers and derives the specific ROS parameter values without requiring a live ROS environment. The runner (`app/engine/compute_runner.py`) spawns the script as a child subprocess and streams its stdout/stderr back to a progress dialog in the GUI.
+
+Computed outputs are written to:
+
+```
+data/use_cases/{id}/compute_outputs/{module_id}/
+    result.json         Structured parameter values
+    *.json              Any intermediate config files (e.g. kalman_config.json)
+```
+
+These files serve as the auditable source of truth for what will be sent to ROS. Module owners are responsible for providing `compute.py` scripts for their modules.
+
+---
+
+## ROS 2 Deployment
+
+Once all impacted modules are validated and computed, the **Deploy to ROS** button becomes active. Deployment translates the computed parameter values into a list of `ROS2Command` objects (defined in `app/models/use_case.py`) and fires them via the ROS adapter layer:
+
+- `ROS_MOCK=true` (default) — `MockROS2Adapter` logs the commands that would be sent without executing them. No ROS installation required.
+- `ROS_MOCK=false` — `ROS2Adapter` executes `ros2 param set` and `ros2 service call` via subprocess, targeting specific nodes in the running ROS 2 environment.
+
+Each module provides its own `ros_interface.py` that knows which ROS nodes and parameters map to the computed values.
+
+---
+
+## MAGICIAN Modules
+
+### Grabber (`magician_grabber`)
+Core sensor driver. Provides software access to all physical sensors on the Sensing Robot: GiGE Camera, ATI F/T Sensor, Teensy Accelerometer, Camera Light Controller, buttons, and ToF range finders. Impacted by changes to camera type, resolution, frame rate, additional sensor modalities, and lighting configuration.
+
+### Orienteering Solver (`op_solver`)
+Generates optimal schedules for cleaning robots to address defects. Determines the sequence of defects to visit and service time to spend at each. The problem variant shifts based on use-case characteristics: single arm → OP, no time constraint → TSP, multiple arms → TOP, time windows on defects → OPTW, custom profit definition → OPVP.
+
+### Localiser (`localisation`)
+Provides localisation of entities relative to the robot in the ROS 2 TF2 framework. Supports model-free localisation (approach 1) and model-based localisation (approaches 2 & 3, requiring a 3D mesh). Mesh availability and time constraints influence the localisation approach selection.
+
+### Tactile Classifier (`tactile_classifier_system`)
+Detects and classifies surface defects using tactile probe data (force, acceleration). Runs a CNN-LSTM / LSTM-CNN ensemble model. Must be retrained whenever materials, object sizes, or defect types change, because the underlying data distributions shift with these characteristics.
+
+### Vision Classifier (`magician_vision_classifier`)
+Visual defect detection and classification using camera images. Implicitly affected when new materials are introduced — the model must be retrained and the Vision Model Name parameter in the Configuration Module updated. Model selection, tile size, and confidence threshold are configured through the module detail panel.
+
+### Ergodic Control (`magician_ergodic_control`)
+Plans inspection trajectories that prioritise high-risk surface regions. Uses a Kalman filter to maintain a belief over defect distributions, combines historical data and welding process priors, then solves an ergodic control optimisation to generate end-effector waypoints on the 3D mesh. Always requires configuration; sensitive to mesh availability, time budget, and material/defect context.
+
+---
+
+## Data Persistence
+
+Use cases are stored as JSON files under `data/use_cases/{id}/use_case.json`. The file contains:
+- Use case metadata (id, name, created_at, updated_at)
+- Questionnaire answers (`answers`)
+- Module-specific configuration (`module_answers`)
+- Full module state for all six modules (`modules`) including impacts, flags, compute results, and lifecycle timestamps
+- Confidence score
+
+When a use case is loaded and the registry contains modules that are not yet present in the stored file (e.g. after a new module is added to the codebase), the missing modules are inserted automatically with their default status.
+
+---
+
+## Development Notes
+
+- COT is intentionally built outside the ROS framework. All decision logic runs without any ROS dependency.
+- The questionnaire schema (`app/engine/schema.py`) is the single source of truth — the GUI form and the impact engine both read from it.
+- Module-specific config questions live in `module_answers`, not in `QuestionnaireAnswers`, to keep the core questionnaire focused on use-case characteristics rather than module internals.
+- Training pipelines for the Tactile Classifier and Vision Classifier (`train.py`) are present as placeholders; the interfaces and data flow are defined and waiting for the real training pipelines to be connected.
+- Three modules — Body Pose Estimation, General Visual Perception, and LBD Multicamera Tracking — are present in the `modules/` directory as stubs and are not yet registered in the impact engine.

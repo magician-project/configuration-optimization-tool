@@ -10,6 +10,7 @@ Module owners work exclusively inside their own folder.
 | `grabber/` | Grabber | `/magician_grabber` | Reconfiguration |
 | `orienteering_solver/` | Orienteering Solver | `/op_solver` | Reconfiguration |
 | `localiser/` | Localiser | `/localisation` | Reconfiguration |
+| `motion_planning/` | Motion Planning | `/motion_planning` | Reconfiguration |
 | `tactile_sensor/` | Tactile Sensor | `/tactile_classifier_system` | Retrain + Reconfigure |
 | `vision_classifier/` | Vision Classifier | `/magician_vision_classifier` | Retrain + Reconfigure |
 

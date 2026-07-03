@@ -1,73 +1,90 @@
 # Configuration Optimization Tool (COT)
 
-Decision-support layer for configuring MAGICIAN robot modules to new use cases.  
+Decision-support desktop application for configuring MAGICIAN robot modules to new use cases.  
 Part of the MAGICIAN project — Phase 1 (Human-in-the-loop, rule-based recommendations).
 
 ---
 
 ## Running locally
 
-**Prerequisites:** Python 3.10+, Node 18+, the `.venv` already created in the repo root.
+**Prerequisites:** Python 3.10+, a `.venv` created in the repo root with dependencies installed.
 
-### 1 — Backend (FastAPI)
+### 1 — Install dependencies
 
 ```bash
 # from repo root
-cd backend
-..\.venv\Scripts\python.exe -m uvicorn main:app --reload
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # Linux / macOS
+pip install -r requirements.txt
 ```
 
-API runs at **http://localhost:8000**  
-Interactive docs at **http://localhost:8000/docs**
-
-### 2 — Frontend (React + Vite)
+### 2 — Run the application
 
 ```bash
-# second terminal, from repo root
-npm --prefix frontend run dev
+python app/main.py
 ```
 
-UI runs at **http://localhost:5173**
+The desktop GUI opens directly. No server process is needed.
 
 ---
 
 ## What it does
 
-1. Create a **use case** (e.g. "Boat hull inspection")
-2. Fill in the **questionnaire** — 10 questions across 5 sections (robot setup, sensors, materials, defects, time constraints)
-3. After saving, a banner shows which of the 5 MAGICIAN modules need action and takes you to the **Module Dashboard**
+1. Create a **use case** (e.g. "Boat hull inspection") from the home screen
+2. Fill in the **questionnaire** — questions across 5 sections (robot setup, sensors, materials, defects, time constraints)
+3. Save answers → COT runs its rule-based impact engine and updates the **Module Dashboard**
 4. Each module tile shows the required action type (`retrain` / `reconfigure` / `review`) and any flags
-5. Click a tile to see the full recommendation, acknowledge flags, and mark the module as **validated**
-6. Once all impacted modules are validated, the **Deploy to ROS** button sends updates to the ROS framework (mocked in Phase 1)
+5. Click a tile to see the full impact list, acknowledge flags, and configure module-specific parameters
+6. Mark the module as **validated**, then run the offline **Compute** step to derive exact ROS parameter values
+7. Once all impacted modules are computed and validated, **Deploy to ROS** fires the changes to the ROS 2 framework
 
 ---
 
 ## Project structure
 
 ```
-backend/
-  main.py                   FastAPI app entry point
+app/
+  main.py                     Entry point — launches the PySide6 desktop app
   engine/
-    questionnaire_engine.py Rule-based impact computation (all 10 questions)
-    module_registry.py      Static definitions of the 5 MAGICIAN modules
-    ros_adapter.py          ROS interface (MockROSAdapter by default)
-  models/                   Pydantic models
-  routers/                  use_cases, modules, deployment, questionnaire
-  storage/json_store.py     JSON file persistence (one file per use case)
-  data/use_cases/           Persisted use case files
+    questionnaire_engine.py   Rule-based impact computation
+    module_registry.py        Static definitions of the 6 MAGICIAN modules
+    compute_runner.py         Subprocess runner for per-module compute scripts
+    schema.py                 Questionnaire schema (single source of truth)
+  models/
+    questionnaire.py          QuestionnaireAnswers Pydantic model
+    use_case.py               UseCase, ModuleState, ModuleImpact, Flag, etc.
+  ros/
+    mock_adapter.py           Mock ROS 2 adapter (logs commands, no ROS required)
+    ros2_adapter.py           Real ROS 2 adapter (subprocess ros2 param set / service call)
+  storage/
+    json_store.py             JSON file persistence (one folder per use case)
 
-frontend/
-  src/
-    pages/
-      Home.tsx              Use case list + create
-      UseCasePage.tsx       Questionnaire + Module Dashboard
-    components/
-      QuestionnaireForm.tsx Data-driven form (rendered from /questionnaire/schema)
-      ModuleGrid.tsx        Dashboard tile grid
-      ModuleTile.tsx        Module card with status + action badges
-      ModuleDetail.tsx      Modal — impacts, flags, validate/acknowledge
-      ConfidenceBar.tsx     7-category questionnaire completeness bar
-      DeployButton.tsx      Gated deploy button
+gui/
+  main_window.py              Top-level QMainWindow, navigation between pages
+  components/
+    questionnaire_form.py     Data-driven form rendered from schema.py
+    module_grid.py            Module Dashboard tile grid
+    module_detail.py          Detail dialog — impacts, flags, validate / compute
+    confidence_bar.py         Multi-category questionnaire completeness bar
+    compute_progress_dialog.py  Live log output during offline compute
+  pages/
+    home_page.py              Use case list + create new use case
+    use_case_page.py          Questionnaire tab + Module Dashboard tab
+
+modules/
+  grabber/                    Sensor driver compute & ROS interface
+  ergodic_control/            Trajectory planning compute & ROS interface
+  orienteering_solver/        Scheduling solver compute & ROS interface
+  localiser/                  Localisation compute & ROS interface
+  motion_planning/            Motion planning compute & ROS interface
+  tactile_sensor/             Tactile classifier compute & training
+  vision_classifier/          Vision classifier compute & training
+
+data/
+  use_cases/{id}/
+    use_case.json             Persisted use case (answers, module states, results)
+    compute_outputs/{module}/ Offline compute artefacts (configs + result.json)
 ```
 
 ---
@@ -76,16 +93,27 @@ frontend/
 
 | Env var | Default | Effect |
 |---------|---------|--------|
-| `ROS_MOCK` | `true` | Set to `false` to use a real ROS adapter (not yet implemented) |
+| `ROS_MOCK` | `true` | Set to `false` to use the real ROS 2 adapter (requires a live ROS 2 environment) |
 
 ---
 
 ## MAGICIAN modules
 
-| Module | ROS package |
-|--------|-------------|
-| Grabber | `magician_grabber` |
-| Orienteering Solver | `op_solver` |
-| Localiser | `localisation` |
-| Tactile Classifier | `tactile_classifier_system` |
-| Vision Classifier | `magician_vision_classifier` |
+| Module | ROS package | Action types |
+|--------|-------------|--------------|
+| Grabber | `magician_grabber` | reconfigure, review |
+| Orienteering Solver | `op_solver` | reconfigure |
+| Localiser | `localisation` | reconfigure, review |
+| Tactile Classifier | `tactile_classifier_system` | retrain, reconfigure |
+| Vision Classifier | `magician_vision_classifier` | retrain |
+| Ergodic Control | `magician_ergodic_control` | reconfigure |
+
+---
+
+## Module lifecycle
+
+```
+ok → needs_action → validated → computing → computed → deploying → deployed
+                                                 ↓                     ↓
+                                           compute_failed         deploy_failed
+```
