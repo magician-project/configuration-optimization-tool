@@ -794,3 +794,106 @@ GRABBER_CONFIG = [
         ],
     },
 ]
+
+LOCALISER_CONFIG = [
+    {
+        "id": "q_local_setup",
+        "title": "Calibration setup name",
+        "tooltip": "Name of the Setup entry in the Localiser's calibration database (calibration_data.yaml) that "
+                   "this use case targets. COT cannot read the live database, so this must match whatever name "
+                   "the operator used during Registration.",
+        "type": "text",
+        "placeholder": "cell_a",
+    },
+    {
+        "id": "q_local_setup_registered",
+        "title": "Has this setup already been registered?",
+        "tooltip": "\"No\" means Registration (CAD/TCP point-pair collection) is still needed for this setup, which "
+                   "requires a mesh. \"Yes\" means an existing calibrated transform is being reused and no mesh is "
+                   "needed.",
+        "type": "select",
+        "options": [
+            {"value": "no",  "label": "No \u2014 new setup, needs Registration"},
+            {"value": "yes", "label": "Yes \u2014 reuse existing setup"},
+        ],
+        "default": "no",
+    },
+    {
+        "id": "q_local_mesh_path",
+        "title": "Workpiece CAD mesh path",
+        "tooltip": "STL file used by the Registration UI to pick CAD/TCP point pairs. Only required when the "
+                   "setup above still needs to be registered.",
+        "type": "text",
+        "placeholder": "/data/meshes/fender.stl",
+    },
+    {
+        "id": "q_local_database_file",
+        "title": "Calibration database file",
+        "tooltip": "Path to the calibration_data.yaml the broadcaster reads at startup. Note: the current "
+                   "registrator implementation always writes to the package default regardless of this value.",
+        "type": "text",
+        "placeholder": "calibration_data.yaml",
+    },
+    {
+        "id": "q_local_robot_base_link",
+        "title": "Robot base link",
+        "tooltip": "Parent/output TF frame. Default: base_link.",
+        "type": "text",
+        "placeholder": "base_link",
+    },
+    {
+        "id": "q_local_robot_ee_link",
+        "title": "Robot end-effector link",
+        "tooltip": "TCP frame sampled during Registration. Default: tcp.",
+        "type": "text",
+        "placeholder": "tcp",
+    },
+    {
+        "id": "q_local_mesh_link",
+        "title": "Mesh TF frame",
+        "tooltip": "Child TF frame / workpiece identifier. Default: fender.",
+        "type": "text",
+        "placeholder": "fender",
+    },
+    {
+        "id": "q_local_motion_mode",
+        "title": "Broadcast mode",
+        "tooltip": "Static and dynamic broadcasting are mutually exclusive. Dynamic mode adds a live slider "
+                   "displacement to the calibrated transform.",
+        "type": "select",
+        "options": [
+            {"value": "static",  "label": "Static \u2014 republish the calibrated transform unchanged"},
+            {"value": "dynamic", "label": "Dynamic \u2014 apply a live slider offset"},
+        ],
+        "default": "static",
+    },
+    {
+        "id": "q_local_slider_topic",
+        "title": "Slider position topic",
+        "tooltip": "std_msgs/Float64 topic carrying the absolute slider position in metres. Default: "
+                   "/slider/position_y.",
+        "type": "text",
+        "placeholder": "/slider/position_y",
+        "condition": {"field": "q_local_motion_mode", "value": "dynamic"},
+    },
+    {
+        "id": "q_local_slider_bias",
+        "title": "Slider bias (m)",
+        "tooltip": "Slider value corresponding to the calibrated pose; the published offset is value - slider_bias.",
+        "type": "number",
+        "min": -10.0,
+        "max": 10.0,
+        "default": 0.0,
+        "condition": {"field": "q_local_motion_mode", "value": "dynamic"},
+    },
+    {
+        "id": "q_local_publish_rate_hz",
+        "title": "Dynamic TF publish rate (Hz)",
+        "tooltip": "Update rate for the slider-corrected dynamic TF broadcast.",
+        "type": "number",
+        "min": 1.0,
+        "max": 240.0,
+        "default": 30.0,
+        "condition": {"field": "q_local_motion_mode", "value": "dynamic"},
+    },
+]

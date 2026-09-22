@@ -251,9 +251,8 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             characteristic="Material Y",
             affects="Process",
             what_changes=(
-                f"Localization approach must be selected based on material: {mat_text}. "
-                "Approach 1 (model-free, no mesh), Approach 2 or 3 (model-based, requires mesh). "
-                "Selection depends on mesh availability (Q7)."
+                f"Surface material(s): {mat_text}. If a new Setup still needs registering for this "
+                "workpiece, mesh availability (Q7) determines whether Registration can proceed."
             ),
             action_type="reconfigure",
             reason="Q5: Material(s) selected",
@@ -337,8 +336,8 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             characteristic="Material Y",
             affects="Process",
             what_changes=(
-                "Mesh is available. Localiser can use model-based localization (Approach 2 or 3). "
-                "Provide the mesh file (.off / .stl / .obj) as input parameter to the Localiser."
+                "Mesh is available. If this workpiece's Setup still needs registering, provide the "
+                "mesh file (.stl) as `q_local_mesh_path` so Registration (CAD/TCP point pairs) can proceed."
             ),
             action_type="reconfigure",
             reason="Q7: Mesh available",
@@ -354,9 +353,8 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             characteristic="Material Y",
             affects="Process",
             what_changes=(
-                f"Mesh in preparation ({status_label}). Configuration is provisional — "
-                "use model-free Approach 1 as placeholder. Revisit and switch to "
-                "model-based approach once mesh is finalized."
+                f"Mesh in preparation ({status_label}). If this Setup isn't registered yet, Registration "
+                "is blocked until the mesh is finalized; an already-registered Setup is unaffected."
             ),
             action_type="review",
             reason="Q7: Mesh in preparation",
@@ -365,7 +363,7 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             id="flag_mesh_prep",
             type="warning",
             message=(
-                "Localisation module configuration is provisional until the mesh is available. "
+                "Registering a new Localiser Setup is blocked until the mesh is available. "
                 "Revisit this assessment when the mesh is ready."
             ),
             module_id="localiser",
@@ -376,9 +374,8 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             characteristic="Material Y",
             affects="Process",
             what_changes=(
-                "No mesh available. Only model-free localization (Approach 1) can be used. "
-                "Initiate 3D scanning or CAD model retrieval immediately — "
-                "this is a blocking prerequisite for model-based localization."
+                "No mesh available. Registering a new Localiser Setup cannot proceed — "
+                "initiate 3D scanning or CAD model retrieval. An already-registered Setup is unaffected."
             ),
             action_type="review",
             reason="Q7: Mesh not available",
@@ -387,7 +384,7 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             id="flag_mesh_missing",
             type="error",
             message=(
-                "Localisation approach cannot be finalised without a mesh. "
+                "A new Localiser Setup cannot be registered without a mesh. "
                 "Initiate 3D scanning or CAD retrieval before proceeding."
             ),
             module_id="localiser",
