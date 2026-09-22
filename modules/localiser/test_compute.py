@@ -85,7 +85,7 @@ def test_write_config_nests_params_under_ros_node_name(tmp_path):
     assert doc["localisation"]["ros__parameters"]["setup"] == "cell_a"
 
 
-def test_main_writes_result_json_for_both_paths(tmp_path, monkeypatch):
+def test_main_writes_result_json_for_new_setup_path(tmp_path, monkeypatch):
     use_case = {
         "name": "smoke",
         "answers": {"q7_mesh": "not_available"},
