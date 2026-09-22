@@ -226,6 +226,15 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
         total_characteristics += 1
 
     # ------------------------------------------------------------------
+    # Registration status: whether the targeted Setup still needs
+    # registering (used to gate the Q5 and Q7 localiser impacts/flags).
+    # ------------------------------------------------------------------
+    if (module_answers or {}).get("localiser", {}).get("q_local_setup_registered") != "yes":
+        registration_needed = True
+    else:
+        registration_needed = False
+
+    # ------------------------------------------------------------------
     # Q5: Surface materials
     # ------------------------------------------------------------------
     if answers.q5_materials:
@@ -247,16 +256,17 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             action_type="reconfigure",
             reason="Q5: Material(s) selected",
         ))
-        result["localiser"]["impacts"].append(_impact(
-            characteristic="Material Y",
-            affects="Process",
-            what_changes=(
-                f"Surface material(s): {mat_text}. If a new Setup still needs registering for this "
-                "workpiece, mesh availability (Q7) determines whether Registration can proceed."
-            ),
-            action_type="reconfigure",
-            reason="Q5: Material(s) selected",
-        ))
+        if registration_needed:
+            result["localiser"]["impacts"].append(_impact(
+                characteristic="Material Y",
+                affects="Process",
+                what_changes=(
+                    f"Surface material(s): {mat_text}. If a new Setup still needs registering for this "
+                    "workpiece, mesh availability (Q7) determines whether Registration can proceed."
+                ),
+                action_type="reconfigure",
+                reason="Q5: Material(s) selected",
+            ))
         result["tactile_sensor"]["impacts"].append(_impact(
             characteristic="Different materials, object sizes, dirt/dent types, and time constraints",
             affects="Input",
@@ -331,65 +341,66 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
     # ------------------------------------------------------------------
     # Q7: 3D mesh availability
     # ------------------------------------------------------------------
-    if answers.q7_mesh == "available":
-        result["localiser"]["impacts"].append(_impact(
-            characteristic="Material Y",
-            affects="Process",
-            what_changes=(
-                "Mesh is available. If this workpiece's Setup still needs registering, provide the "
-                "mesh file (.stl) as `q_local_mesh_path` so Registration (CAD/TCP point pairs) can proceed."
-            ),
-            action_type="reconfigure",
-            reason="Q7: Mesh available",
-        ))
-        total_characteristics += 1
-    elif answers.q7_mesh == "in_preparation":
-        status_label = {
-            "cad": "CAD model exists — mesh can be derived",
-            "scanning": "Needs 3D scanning",
-            "unknown": "Status unknown",
-        }.get(answers.q7_mesh_status or "", "")
-        result["localiser"]["impacts"].append(_impact(
-            characteristic="Material Y",
-            affects="Process",
-            what_changes=(
-                f"Mesh in preparation ({status_label}). If this Setup isn't registered yet, Registration "
-                "is blocked until the mesh is finalized; an already-registered Setup is unaffected."
-            ),
-            action_type="review",
-            reason="Q7: Mesh in preparation",
-        ))
-        result["localiser"]["flags"].append(_flag(
-            id="flag_mesh_prep",
-            type="warning",
-            message=(
-                "Registering a new Localiser Setup is blocked until the mesh is available. "
-                "Revisit this assessment when the mesh is ready."
-            ),
-            module_id="localiser",
-        ))
-        total_characteristics += 1
-    elif answers.q7_mesh == "not_available":
-        result["localiser"]["impacts"].append(_impact(
-            characteristic="Material Y",
-            affects="Process",
-            what_changes=(
-                "No mesh available. Registering a new Localiser Setup cannot proceed — "
-                "initiate 3D scanning or CAD model retrieval. An already-registered Setup is unaffected."
-            ),
-            action_type="review",
-            reason="Q7: Mesh not available",
-        ))
-        result["localiser"]["flags"].append(_flag(
-            id="flag_mesh_missing",
-            type="error",
-            message=(
-                "A new Localiser Setup cannot be registered without a mesh. "
-                "Initiate 3D scanning or CAD retrieval before proceeding."
-            ),
-            module_id="localiser",
-        ))
-        total_characteristics += 1
+    if registration_needed:
+        if answers.q7_mesh == "available":
+            result["localiser"]["impacts"].append(_impact(
+                characteristic="Material Y",
+                affects="Process",
+                what_changes=(
+                    "Mesh is available. If this workpiece's Setup still needs registering, provide the "
+                    "mesh file (.stl) as `q_local_mesh_path` so Registration (CAD/TCP point pairs) can proceed."
+                ),
+                action_type="reconfigure",
+                reason="Q7: Mesh available",
+            ))
+            total_characteristics += 1
+        elif answers.q7_mesh == "in_preparation":
+            status_label = {
+                "cad": "CAD model exists — mesh can be derived",
+                "scanning": "Needs 3D scanning",
+                "unknown": "Status unknown",
+            }.get(answers.q7_mesh_status or "", "")
+            result["localiser"]["impacts"].append(_impact(
+                characteristic="Material Y",
+                affects="Process",
+                what_changes=(
+                    f"Mesh in preparation ({status_label}). If this Setup isn't registered yet, Registration "
+                    "is blocked until the mesh is finalized; an already-registered Setup is unaffected."
+                ),
+                action_type="review",
+                reason="Q7: Mesh in preparation",
+            ))
+            result["localiser"]["flags"].append(_flag(
+                id="flag_mesh_prep",
+                type="warning",
+                message=(
+                    "Registering a new Localiser Setup is blocked until the mesh is available. "
+                    "Revisit this assessment when the mesh is ready."
+                ),
+                module_id="localiser",
+            ))
+            total_characteristics += 1
+        elif answers.q7_mesh == "not_available":
+            result["localiser"]["impacts"].append(_impact(
+                characteristic="Material Y",
+                affects="Process",
+                what_changes=(
+                    "No mesh available. Registering a new Localiser Setup cannot proceed — "
+                    "initiate 3D scanning or CAD model retrieval. An already-registered Setup is unaffected."
+                ),
+                action_type="review",
+                reason="Q7: Mesh not available",
+            ))
+            result["localiser"]["flags"].append(_flag(
+                id="flag_mesh_missing",
+                type="error",
+                message=(
+                    "A new Localiser Setup cannot be registered without a mesh. "
+                    "Initiate 3D scanning or CAD retrieval before proceeding."
+                ),
+                module_id="localiser",
+            ))
+            total_characteristics += 1
 
     # ------------------------------------------------------------------
     # Q8: Defect types
