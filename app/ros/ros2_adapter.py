@@ -35,6 +35,9 @@ class ROS2Adapter:
                     ok, out = self._param_set(cmd)
                 elif cmd.type == "service":
                     ok, out = self._service_call(cmd)
+                elif cmd.type == "note":
+                    ok, out = True, f"{cmd.param_name}: {cmd.value}"
+                    logger.info("[ROS2] [NOTE] %s", out)
                 else:
                     ok, out = False, f"Unknown command type: {cmd.type!r}"
 

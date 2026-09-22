@@ -23,6 +23,8 @@ class MockROS2Adapter:
                 logger.info(
                     "  ros2 service call %s %s %r", cmd.service, cmd.service_type, cmd.request_args
                 )
+            elif cmd.type == "note":
+                logger.info("  [NOTE] %s: %s", cmd.param_name, cmd.value)
         return {
             "success": True,
             "module_id": module_id,
