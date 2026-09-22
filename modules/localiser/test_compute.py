@@ -102,3 +102,4 @@ def test_main_writes_result_json_for_both_paths(tmp_path, monkeypatch):
     assert result["success"] is True
     assert result["outputs"]["mesh_required"] == 1
     assert os.path.exists(result["artifacts"]["params_yaml"])
+    assert result["outputs"]["params_yaml_path"] == result["artifacts"]["params_yaml"]

@@ -16,7 +16,7 @@ _NODE = "/localisation"
 def get_commands(outputs: dict) -> List[ROS2Command]:
     commands: List[ROS2Command] = []
 
-    params_yaml = outputs.get("artifacts", {}).get("params_yaml", "")
+    params_yaml = outputs.get("params_yaml_path", "")
     if params_yaml:
         commands.append(ROS2Command(
             type="note",

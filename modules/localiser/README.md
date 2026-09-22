@@ -67,6 +67,7 @@ needs the mesh again:
 | `robot_base_link`, `robot_ee_link`, `mesh_link` | `str` | TF frame names |
 | `motion_mode` | `str` | `"static"` or `"dynamic"` |
 | `slider_topic`, `slider_bias`, `publish_rate_hz` | `str`/`float` | Present only when `motion_mode == "dynamic"` |
+| `params_yaml_path` | `str` | Path to the generated `localiser_params.yaml` file |
 
 ## ROS 2 commands fired
 

@@ -87,6 +87,8 @@ def main() -> None:
     config_path = write_config(outputs, output_dir)
     print(f"[localiser] Params YAML written to {config_path}")
 
+    outputs["params_yaml_path"] = config_path
+
     result = {
         "module_id": "localiser",
         "success": True,
