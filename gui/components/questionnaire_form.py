@@ -274,6 +274,17 @@ class QuestionnaireForm(QScrollArea):
             w.valueChanged.connect(lambda v, _id=qid: self._on_field_changed(_id, v))
             return w, follow_up_widget
 
+        elif qtype == "number_float":
+            w = _NoScrollDoubleSpinBox()
+            w.setMinimum(q.get("min", 0.0))
+            w.setMaximum(q.get("max", 9999.0))
+            w.setValue(float(q.get("default", 0.0)))
+            w.setDecimals(2)
+            w.setSingleStep(0.01)
+            self._widgets[qid] = w
+            w.valueChanged.connect(lambda v, _id=qid: self._on_field_changed(_id, v))
+            return w, follow_up_widget
+
         elif qtype == "number_with_unit":
             container = QWidget()
             container.setStyleSheet("background: transparent;")
