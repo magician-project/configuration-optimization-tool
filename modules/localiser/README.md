@@ -59,6 +59,7 @@ needs the mesh again:
 | Key | Type | Description |
 |---|---|---|
 | `setup` | `str` | Target calibration setup name |
+| `setup_missing` | `int` (0/1) | Blocking flag — `1` when `setup` is blank/whitespace-only |
 | `setup_registered` | `int` (0/1) | Whether this setup was already registered |
 | `mesh_path` | `str` | CAD mesh path, if provided |
 | `mesh_required` | `int` (0/1) | Blocking flag — see table above |
@@ -73,6 +74,8 @@ The node has no registration service/action and reads its parameters at
 startup, so `ros_interface.py` emits `note` commands rather than live
 `ros2 param set` calls:
 - `params_yaml_path` — where the generated `localiser_params.yaml` was written
+- `setup_missing` — only when `setup_missing == 1` (no setup name provided); fires
+  regardless of `setup_registered`
 - `setup_registration_reminder` — only when `setup_registered != "yes"`
 - `mesh_required` — only when blocking (see table above)
 - `database_file_caveat` — always; the current registrator implementation

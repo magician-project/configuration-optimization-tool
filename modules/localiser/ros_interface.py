@@ -25,6 +25,17 @@ def get_commands(outputs: dict) -> List[ROS2Command]:
             value=params_yaml,
         ))
 
+    if outputs.get("setup_missing"):
+        commands.append(ROS2Command(
+            type="note",
+            node=_NODE,
+            param_name="setup_missing",
+            value=(
+                "No setup name was provided, so the broadcaster has no calibration entry "
+                "to select. q_local_setup must be filled in before deploy."
+            ),
+        ))
+
     setup = str(outputs.get("setup", "")).strip()
     if setup and not outputs.get("setup_registered"):
         commands.append(ROS2Command(

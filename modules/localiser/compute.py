@@ -34,6 +34,7 @@ def run(answers: dict) -> dict:
     outputs: dict = {}
 
     outputs["setup"] = str(answers.get("q_local_setup") or "").strip()
+    outputs["setup_missing"] = int(not outputs["setup"])
 
     setup_registered = answers.get("q_local_setup_registered", "no") == "yes"
     outputs["setup_registered"] = int(setup_registered)

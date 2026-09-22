@@ -21,6 +21,17 @@ def test_new_setup_without_mesh_is_blocked():
     assert outputs["mesh_path"] == ""
 
 
+def test_missing_setup_is_blocked():
+    outputs = run({})
+    assert outputs["setup_missing"] == 1
+
+    outputs = run({"q_local_setup": "   "})
+    assert outputs["setup_missing"] == 1
+
+    outputs = run({"q_local_setup": "cell_a"})
+    assert outputs["setup_missing"] == 0
+
+
 def test_new_setup_with_mesh_is_not_blocked():
     outputs = run({
         "q_local_setup": "cell_a",
