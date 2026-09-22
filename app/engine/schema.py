@@ -880,7 +880,7 @@ LOCALISER_CONFIG = [
         "id": "q_local_slider_bias",
         "title": "Slider bias (m)",
         "tooltip": "Slider value corresponding to the calibrated pose; the published offset is value - slider_bias.",
-        "type": "number",
+        "type": "number_float",
         "min": -10.0,
         "max": 10.0,
         "default": 0.0,
