@@ -226,6 +226,32 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
         total_characteristics += 1
 
     # ------------------------------------------------------------------
+    # Localiser configuration (module_answers["localiser"])
+    # ------------------------------------------------------------------
+    loc = module_answers.get("localiser", {}) if module_answers else {}
+    if loc.get("q_local_setup") or loc.get("q_local_motion_mode") or loc.get("q_local_setup_registered"):
+        setup_name = loc.get("q_local_setup") or "(unnamed setup)"
+        registered_label = (
+            "already registered" if loc.get("q_local_setup_registered") == "yes"
+            else "still needs Registration"
+        )
+        motion_label = {
+            "static": "static (republish the calibrated transform unchanged)",
+            "dynamic": "dynamic (apply a live slider offset)",
+        }.get(loc.get("q_local_motion_mode"), loc.get("q_local_motion_mode") or "static")
+        result["localiser"]["impacts"].append(_impact(
+            characteristic="Localiser setup configuration",
+            affects="Process",
+            what_changes=(
+                f"Setup '{setup_name}' — {registered_label}. Broadcast mode: {motion_label}. "
+                "Compute needs to be (re)run to regenerate localiser_params.yaml for this configuration."
+            ),
+            action_type="reconfigure",
+            reason="Localiser setup/motion mode configured",
+        ))
+        total_characteristics += 1
+
+    # ------------------------------------------------------------------
     # Registration status: whether the targeted Setup still needs
     # registering (used to gate the Q5 and Q7 localiser impacts/flags).
     # ------------------------------------------------------------------
