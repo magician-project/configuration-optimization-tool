@@ -874,7 +874,7 @@ def _compute_confidence(answers: QuestionnaireAnswers, module_answers: dict = No
     # Cat 2: Camera / Sensors (original + new grabber camera questions)
     if (answers.q2_camera_type or answers.q3_additional_sensors
             or answers.q2_camera_resolution or answers.q2_camera_framerate
-            or answers.q2_camera_exposure or answers.q2_stream_shm):
+            or answers.q2_stream_shm):
         score += 1
 
     # Cat 3: Lighting

@@ -303,8 +303,9 @@ class ModuleDetail(QDialog):
                 btn.clicked.connect(lambda: self.action_requested.emit(self._module.module_id, "validate"))
                 hbox.addWidget(btn)
 
-        elif status == "validated":
-            btn = QPushButton("Run Compute")
+        elif status in ("validated", "compute_failed"):
+            label = "Retry Compute" if status == "compute_failed" else "Run Compute"
+            btn = QPushButton(label)
             btn.setStyleSheet("background: #2563eb; color: white; padding: 6px 14px; border-radius: 4px;")
             btn.clicked.connect(lambda: self.action_requested.emit(self._module.module_id, "compute"))
             hbox.addWidget(btn)

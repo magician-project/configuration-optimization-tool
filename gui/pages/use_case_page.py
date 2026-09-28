@@ -36,6 +36,8 @@ logger = logging.getLogger(__name__)
 
 class UseCasePage(QWidget):
     navigate_home = Signal()
+    _compute_line_received = Signal(str)
+    _compute_finished = Signal(str, bool, object)
 
     def __init__(self, use_case_id: str, parent=None) -> None:
         super().__init__(parent)
@@ -44,6 +46,9 @@ class UseCasePage(QWidget):
         self._pending_answers: Optional[dict] = None
         self._dirty = False
         self._active_detail_dlg = None   # currently open ModuleDetail dialog
+        self._compute_progress_dlg: Optional[ComputeProgressDialog] = None
+        self._compute_line_received.connect(self._append_compute_line)
+        self._compute_finished.connect(self._finish_compute)
         self._build_ui()
         self._load()
 
@@ -343,35 +348,57 @@ class UseCasePage(QWidget):
         from app.engine.module_registry import MODULES
         module_name = MODULES.get(module_id, {}).get("name", module_id)
         dlg = ComputeProgressDialog(module_name, parent=self)
+        self._compute_progress_dlg = dlg
         dlg.show()
 
         def on_line(line: str) -> None:
-            dlg.append_line(line)
+            self._compute_line_received.emit(line)
 
         def on_done(success: bool, result_path: str | None) -> None:
-            dlg.on_done(success, result_path)
-            if success and result_path:
-                try:
-                    with open(result_path, encoding="utf-8") as f:
-                        data = json.load(f)
-                    result = ComputeResult(**data)
-                    json_store.save_compute_result(uc.id, result)
-                    ms.status = "computed"
-                    ms.compute_result = result
-                    ms.computed_at = datetime.now(timezone.utc).isoformat()
-                except Exception:
-                    logger.exception("Failed to load compute result")
-                    ms.status = "compute_failed"
-            else:
-                ms.status = "compute_failed"
-            uc.updated_at = datetime.now(timezone.utc).isoformat()
-            json_store.save(uc)
-            self._module_grid.update_modules(uc.modules)
-            if self._active_detail_dlg:
-                self._active_detail_dlg.refresh(ms)
+            self._compute_finished.emit(module_id, success, result_path)
 
         runner = ComputeRunner(uc, module_id, on_line, on_done)
         runner.start()
+
+    @Slot(str)
+    def _append_compute_line(self, line: str) -> None:
+        if self._compute_progress_dlg is not None:
+            self._compute_progress_dlg.append_line(line)
+
+    @Slot(str, bool, object)
+    def _finish_compute(
+        self, module_id: str, success: bool, result_path: str | None
+    ) -> None:
+        uc = self._use_case
+        if uc is None:
+            return
+        ms = uc.modules.get(module_id)
+        if ms is None:
+            return
+
+        if self._compute_progress_dlg is not None:
+            self._compute_progress_dlg.on_done(success, result_path)
+
+        if success and result_path:
+            try:
+                with open(result_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                result = ComputeResult(**data)
+                json_store.save_compute_result(uc.id, result)
+                ms.status = "computed"
+                ms.compute_result = result
+                ms.computed_at = datetime.now(timezone.utc).isoformat()
+            except Exception:
+                logger.exception("Failed to load compute result")
+                ms.status = "compute_failed"
+        else:
+            ms.status = "compute_failed"
+
+        uc.updated_at = datetime.now(timezone.utc).isoformat()
+        json_store.save(uc)
+        self._module_grid.update_modules(uc.modules)
+        if self._active_detail_dlg:
+            self._active_detail_dlg.refresh(ms)
 
     def _deploy_module(self, module_id: str) -> None:
         uc = self._use_case
@@ -394,7 +421,7 @@ class UseCasePage(QWidget):
                 f"modules.{module_id}.ros_interface",
                 fromlist=["get_commands"],
             )
-            commands = ros_interface_module.get_commands(ms.compute_result.outputs)
+            commands = ros_interface_module.get_commands(ms.compute_result.interface_outputs())
         except Exception as exc:
             logger.exception("Failed to load ros_interface for %s", module_id)
             QMessageBox.critical(self, "Deploy error", f"Could not load ROS interface: {exc}")

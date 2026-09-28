@@ -12,7 +12,7 @@ Usage from the GUI (PySide6):
     def on_done(success: bool, result_path: str | None): ...
 
     runner = ComputeRunner(use_case, "vision_classifier", on_line, on_done)
-    runner.start()   # non-blocking — runs in a QThread internally
+    runner.start()   # non-blocking — runs in a background thread
 
 The runner writes result.json to:
     data/use_cases/{use_case_id}/compute_outputs/{module_id}/result.json
