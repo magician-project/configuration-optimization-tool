@@ -310,11 +310,6 @@ class ModuleDetail(QDialog):
             btn.clicked.connect(lambda: self.action_requested.emit(self._module.module_id, "compute"))
             hbox.addWidget(btn)
 
-        elif status == "compute_failed":
-            btn = QPushButton("Retry Compute")
-            btn.setStyleSheet("background: #2563eb; color: white; padding: 6px 14px; border-radius: 4px;")
-            btn.clicked.connect(lambda: self.action_requested.emit(self._module.module_id, "compute"))
-            hbox.addWidget(btn)
 
         elif status in ("computed", "deploy_failed"):
             btn = QPushButton("Deploy to ROS 2")
