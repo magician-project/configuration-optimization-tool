@@ -292,12 +292,19 @@ class UseCasePage(QWidget):
         ms = uc.modules.get(module_id)
         if ms is None:
             return
+        newly_acked = sum(1 for f in ms.flags if not f.acknowledged)
         for f in ms.flags:
             f.acknowledged = True
         json_store.save(uc)
         self._module_grid.update_modules(uc.modules)
         if self._active_detail_dlg:
             self._active_detail_dlg.refresh(ms)
+        if newly_acked:
+            flag_word = "flag" if newly_acked == 1 else "flags"
+            self._show_banner(
+                f"{newly_acked} {flag_word} acknowledged for {ms.module_name}. "
+                "You can now mark the module as validated."
+            )
 
     def _validate_module(self, module_id: str) -> None:
         uc = self._use_case

@@ -3,12 +3,13 @@ ModuleDetail — modal dialog showing a single module's impacts, flags,
 and action buttons (Acknowledge, Validate, Compute, Deploy).
 
 Lifecycle buttons shown based on module status:
-  needs_action  → Acknowledge flags → Mark Validated
-  validated     → Compute
-  computed      → Deploy
-  computing     → (progress, no buttons)
-  deployed      → Re-deploy
-  deploy_failed → Re-deploy
+  needs_action    → Acknowledge flags → Mark Validated
+  validated       → Compute
+  computed        → Deploy
+  computing       → (progress, no buttons)
+  compute_failed  → Retry Compute
+  deployed        → Re-deploy
+  deploy_failed   → Re-deploy
 """
 
 from __future__ import annotations
@@ -304,6 +305,12 @@ class ModuleDetail(QDialog):
 
         elif status == "validated":
             btn = QPushButton("Run Compute")
+            btn.setStyleSheet("background: #2563eb; color: white; padding: 6px 14px; border-radius: 4px;")
+            btn.clicked.connect(lambda: self.action_requested.emit(self._module.module_id, "compute"))
+            hbox.addWidget(btn)
+
+        elif status == "compute_failed":
+            btn = QPushButton("Retry Compute")
             btn.setStyleSheet("background: #2563eb; color: white; padding: 6px 14px; border-radius: 4px;")
             btn.clicked.connect(lambda: self.action_requested.emit(self._module.module_id, "compute"))
             hbox.addWidget(btn)
