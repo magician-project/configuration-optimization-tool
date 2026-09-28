@@ -254,7 +254,7 @@
       "module_id": "vision_classifier",
       "module_name": "Vision Classifier",
       "description": "Visual defect detection and classification using camera images. Implicitly affected when new materials are introduced \u2014 model must be retrained and the Vision Model Name parameter in the Configuration Module must be updated.",
-      "status": "computing",
+      "status": "validated",
       "impacts": [
         {
           "characteristic": "(implicit) Retrain vision model on new material data",
