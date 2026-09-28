@@ -1,7 +1,10 @@
 """
 Localiser — ros_interface.py
 
-Translates ComputeResult outputs into ROS 2 commands for the localisation node.
+Translates compute.py outputs into ROS 2 commands for the /localisation
+broadcaster. Per COT_LOCALISER.md the node has no registration service or
+reload action, so most entries here are operator-facing notes rather than
+live `ros2 param set` calls.
 """
 
 from typing import List
@@ -13,41 +16,57 @@ _NODE = "/localisation"
 def get_commands(outputs: dict) -> List[ROS2Command]:
     commands: List[ROS2Command] = []
 
-    commands.append(ROS2Command(
-        type="param",
-        node=_NODE,
-        param_name="localisation_approach",
-        value=int(outputs.get("localisation_approach", 1)),
-    ))
-    commands.append(ROS2Command(
-        type="param",
-        node=_NODE,
-        param_name="relaxed_pipeline",
-        value=int(outputs.get("relaxed_pipeline", 0)),
-    ))
-    commands.append(ROS2Command(
-        type="param",
-        node=_NODE,
-        param_name="material_list",
-        value=str(outputs.get("material_list", "unspecified")),
-    ))
-
-    # Only set mesh_file_path param if a real path was provided
-    mesh_path = str(outputs.get("mesh_file_path", "")).strip()
-    if mesh_path:
+    params_yaml = outputs.get("params_yaml_path", "")
+    if params_yaml:
         commands.append(ROS2Command(
-            type="param",
+            type="note",
             node=_NODE,
-            param_name="mesh_file_path",
-            value=mesh_path,
+            param_name="params_yaml_path",
+            value=params_yaml,
         ))
 
-    # Trigger reload after params are set
-    commands.append(ROS2Command(
-        type="service",
-        service="/localisation/reload_config",
-        service_type="std_srvs/srv/Trigger",
-        request_args={},
-    ))
+    if outputs.get("setup_missing"):
+        commands.append(ROS2Command(
+            type="note",
+            node=_NODE,
+            param_name="setup_missing",
+            value=(
+                "No setup name was provided, so the broadcaster has no calibration entry "
+                "to select. q_local_setup must be filled in before deploy."
+            ),
+        ))
+
+    setup = str(outputs.get("setup", "")).strip()
+    if setup and not outputs.get("setup_registered"):
+        commands.append(ROS2Command(
+            type="note",
+            node=_NODE,
+            param_name="setup_registration_reminder",
+            value=(
+                f"Confirm setup '{setup}' has been registered (CAD/TCP point pairs "
+                "collected, transform saved) before deploy — COT cannot verify this."
+            ),
+        ))
+
+    if outputs.get("mesh_required"):
+        commands.append(ROS2Command(
+            type="note",
+            node=_NODE,
+            param_name="mesh_required",
+            value="A mesh path is required to register a new setup, but none was provided.",
+        ))
+
+    database_file = outputs.get("database_file", "")
+    if database_file:
+        commands.append(ROS2Command(
+            type="note",
+            node=_NODE,
+            param_name="database_file_caveat",
+            value=(
+                f"database_file={database_file} is included in the generated config, but the "
+                "current registrator implementation always writes to the package-default "
+                "database regardless of this value."
+            ),
+        ))
 
     return commands

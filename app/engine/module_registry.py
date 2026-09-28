@@ -40,13 +40,14 @@ MODULES: Dict[str, dict] = {
         "name": "Localiser",
         "ros_name": "localisation",
         "description": (
-            "Provides localization of entities relative to the robot in the ROS2 TF2 framework. "
-            "Foundational for motion planning. Supports model-free (approach 1) and "
-            "model-based localization (approaches 2 & 3, require a 3D mesh)."
+            "Publishes the pose of a workpiece mesh relative to the robot base in the ROS2 TF2 "
+            "framework. Foundational for motion planning. A calibrated Setup is registered once "
+            "(operator + robot, requires a mesh) and then republished at runtime as static or "
+            "slider-corrected dynamic TF — no mesh is needed once a Setup is registered."
         ),
         "characteristics": [
-            "No time constraint (relaxed processing pipeline)",
-            "Material Y (localization approach selection)",
+            "3D mesh availability (blocks registering a new Setup)",
+            "Moving fixture / conveyor (static vs dynamic broadcast mode)",
         ],
         "compute_module": "modules.localiser.compute",
     },

@@ -26,7 +26,15 @@ class ComputeResult(BaseModel):
     module_id: str
     success: bool
     outputs: Dict[str, object] = {}   # str/int/float values only at leaf nodes
+    artifacts: Dict[str, str] = {}
     error: Optional[str] = None
+
+    def interface_outputs(self) -> Dict[str, object]:
+        """Return outputs plus artifact paths in the shape ROS interfaces expect."""
+        outputs = dict(self.outputs)
+        if self.artifacts:
+            outputs["artifacts"] = self.artifacts
+        return outputs
 
 
 class ROS2Command(BaseModel):

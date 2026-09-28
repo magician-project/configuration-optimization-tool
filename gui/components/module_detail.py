@@ -3,12 +3,13 @@ ModuleDetail — modal dialog showing a single module's impacts, flags,
 and action buttons (Acknowledge, Validate, Compute, Deploy).
 
 Lifecycle buttons shown based on module status:
-  needs_action  → Acknowledge flags → Mark Validated
-  validated     → Compute
-  computed      → Deploy
-  computing     → (progress, no buttons)
-  deployed      → Re-deploy
-  deploy_failed → Re-deploy
+  needs_action    → Acknowledge flags → Mark Validated
+  validated       → Compute
+  computed        → Deploy
+  computing       → (progress, no buttons)
+  compute_failed  → Retry Compute
+  deployed        → Re-deploy
+  deploy_failed   → Re-deploy
 """
 
 from __future__ import annotations
@@ -64,13 +65,14 @@ class ModuleDetail(QDialog):
 
     def _build_tabbed_ui(self, root: QVBoxLayout) -> None:
         """Two-tab layout: Impacts/Flags | Module Configuration."""
-        from app.engine.schema import VISION_CLASSIFIER_CONFIG, ERGODIC_CONTROL_CONFIG, GRABBER_CONFIG
+        from app.engine.schema import VISION_CLASSIFIER_CONFIG, ERGODIC_CONTROL_CONFIG, GRABBER_CONFIG, LOCALISER_CONFIG
         from gui.components.questionnaire_form import QuestionnaireForm
 
         _MODULE_CONFIGS = {
             "vision_classifier": VISION_CLASSIFIER_CONFIG,
             "ergodic_control":   ERGODIC_CONTROL_CONFIG,
             "grabber":           GRABBER_CONFIG,
+            "localiser":         LOCALISER_CONFIG,
         }
         config_questions = _MODULE_CONFIGS.get(self._module.module_id, [])
 
@@ -135,7 +137,7 @@ class ModuleDetail(QDialog):
         self._module = module
         root = self.layout()
 
-        _TABBED_MODULES = {"vision_classifier", "ergodic_control"}
+        _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser"}
         if self._module.module_id in _TABBED_MODULES:
             # Tabbed layout: items are 0=header(layout), 1=desc, 2=tabs, 3=footer
             # Remove tabs + footer, rebuild
@@ -173,7 +175,7 @@ class ModuleDetail(QDialog):
         root.addWidget(desc)
 
         # Modules with their own config schema get a tabbed layout
-        _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber"}
+        _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser"}
         if self._module.module_id in _TABBED_MODULES:
             self._build_tabbed_ui(root)
         else:
@@ -301,11 +303,13 @@ class ModuleDetail(QDialog):
                 btn.clicked.connect(lambda: self.action_requested.emit(self._module.module_id, "validate"))
                 hbox.addWidget(btn)
 
-        elif status == "validated":
-            btn = QPushButton("Run Compute")
+        elif status in ("validated", "compute_failed"):
+            label = "Retry Compute" if status == "compute_failed" else "Run Compute"
+            btn = QPushButton(label)
             btn.setStyleSheet("background: #2563eb; color: white; padding: 6px 14px; border-radius: 4px;")
             btn.clicked.connect(lambda: self.action_requested.emit(self._module.module_id, "compute"))
             hbox.addWidget(btn)
+
 
         elif status in ("computed", "deploy_failed"):
             btn = QPushButton("Deploy to ROS 2")

@@ -43,7 +43,7 @@ def run(answers: dict, output_dir: str) -> dict:
         # For now we emit a placeholder path so the rest of the pipeline can proceed.
         model_path = os.path.join(output_dir, "tactile_model_placeholder.pth")
         outputs["model_path"] = model_path
-        print(f"[tactile_sensor] Retraining required — model placeholder: {model_path}")
+        print(f"[tactile_sensor] Retraining required - model placeholder: {model_path}")
         print("  NOTE: Replace with real training call once training pipeline is ready.")
     else:
         outputs["model_path"] = ""
