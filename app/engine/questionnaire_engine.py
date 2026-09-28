@@ -229,7 +229,7 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
     # Localiser configuration (module_answers["localiser"])
     # ------------------------------------------------------------------
     loc = module_answers.get("localiser", {}) if module_answers else {}
-    if loc.get("q_local_setup") or loc.get("q_local_motion_mode") or loc.get("q_local_setup_registered"):
+    if any(key.startswith("q_local_") for key in loc):
         setup_name = loc.get("q_local_setup") or "(unnamed setup)"
         registered_label = (
             "already registered" if loc.get("q_local_setup_registered") == "yes"
