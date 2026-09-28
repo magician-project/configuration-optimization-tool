@@ -87,7 +87,7 @@ def run(answers: dict, output_dir: str) -> dict:
         stem = f"{answers.get('q_clf_model', 'resnet18')}_{outputs['tile_size']}px"
         outputs["model_path"] = os.path.join(dataset_dir, f"{stem}.pth")
         outputs["model_name"] = stem
-        print(f"[vision_classifier] Retraining required — dataset: {dataset_dir}")
+        print(f"[vision_classifier] Retraining required - dataset: {dataset_dir}")
         print("  Run:  python trainMagicianVisionClassifierTorch.py training_config.json")
     else:
         outputs["retrain_required"] = 0

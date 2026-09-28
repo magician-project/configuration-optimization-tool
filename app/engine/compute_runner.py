@@ -12,7 +12,7 @@ Usage from the GUI (PySide6):
     def on_done(success: bool, result_path: str | None): ...
 
     runner = ComputeRunner(use_case, "vision_classifier", on_line, on_done)
-    runner.start()   # non-blocking — runs in a QThread internally
+    runner.start()   # non-blocking — runs in a background thread
 
 The runner writes result.json to:
     data/use_cases/{use_case_id}/compute_outputs/{module_id}/result.json
@@ -92,6 +92,15 @@ class ComputeRunner:
 
         self._on_line(f"[compute_runner] Starting: {' '.join(cmd)}")
 
+        # Force the child process to write UTF-8 to stdout/stderr regardless of the
+        # platform's default console codepage (e.g. cp1252 on Windows). Without this,
+        # non-ASCII characters printed by a module's compute.py (em dashes, accented
+        # characters, etc.) can be encoded in a way that isn't valid UTF-8, which then
+        # raises a UnicodeDecodeError when we read the pipe below and crashes the run.
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
+
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -100,6 +109,8 @@ class ComputeRunner:
                 stderr=subprocess.STDOUT,
                 text=True,
                 encoding="utf-8",
+                errors="replace",
+                env=env,
             )
 
             for line in proc.stdout:  # type: ignore[union-attr]
