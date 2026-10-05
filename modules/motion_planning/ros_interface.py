@@ -67,11 +67,11 @@ def get_commands(outputs: dict) -> List[ROS2Command]:
     ))
     commands.append(ROS2Command(
         type="param", node=_NODE, param_name="debug_prints",
-        value=int(bool(outputs.get("debug_prints", False))),
+        value=bool(outputs.get("debug_prints", False)),
     ))
     commands.append(ROS2Command(
         type="param", node=_NODE, param_name="debug_lib",
-        value=int(bool(outputs.get("debug_lib", False))),
+        value=bool(outputs.get("debug_lib", False)),
     ))
 
     # ── Operator-facing notes ────────────────────────────────────────────────

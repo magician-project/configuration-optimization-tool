@@ -7,6 +7,7 @@ must not be silently replaced by the nonzero default.
 """
 
 from modules.motion_planning.compute import run
+from modules.motion_planning.ros_interface import get_commands
 
 
 def test_defaults_match_documented_section_4_values():
@@ -45,3 +46,16 @@ def test_missing_gains_and_bounds_fall_back_to_defaults():
 def test_ft_link_defaults_to_ee_link_when_blank():
     outputs = run({"q_mp_ee_link": "custom_tcp"})
     assert outputs["ft_link"] == "custom_tcp"
+
+
+def test_debug_flags_are_fired_as_real_booleans_not_ints():
+    # ROS 2 rejects an int value for a parameter declared as bool — the
+    # adapter's isinstance(value, bool) check must see an actual bool.
+    outputs = run({"q_mp_debug_prints": "yes", "q_mp_debug_lib": "yes"})
+    commands = get_commands(outputs)
+    params = {c.param_name: c.value for c in commands if c.type == "param"}
+
+    assert params["debug_prints"] is True
+    assert params["debug_lib"] is True
+    assert type(params["debug_prints"]) is bool
+    assert type(params["debug_lib"]) is bool
