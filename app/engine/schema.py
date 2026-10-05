@@ -940,6 +940,8 @@ MOTION_PLANNER_CONFIG = [
         "type": "number_float",
         "min": 0.0001,
         "max": 1.0,
+        "decimals": 6,
+        "step": 0.0001,
         "default": 0.001,
     },
     # ─ Z-admittance control tuning ──────────────────────────────────────────
@@ -949,6 +951,8 @@ MOTION_PLANNER_CONFIG = [
         "tooltip": "Proportional gain of the Z-axis admittance PI controller. Default: 1/3600 (\u2248 0.000278).",
         "type": "number_float",
         "min": 0.0,
+        "decimals": 6,
+        "step": 0.0001,
         "default": 0.000278,
     },
     {
