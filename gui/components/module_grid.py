@@ -36,7 +36,7 @@ _ACTION_TYPE_COLOURS = {
     "review":      ("#374151", "#f3f4f6"),
 }
 
-MODULE_ORDER = ["grabber", "orienteering_solver", "localiser", "tactile_sensor", "vision_classifier", "ergodic_control"]
+MODULE_ORDER = ["grabber", "orienteering_solver", "localiser", "tactile_sensor", "vision_classifier", "ergodic_control", "motion_planning"]
 
 
 class ModuleGrid(QWidget):

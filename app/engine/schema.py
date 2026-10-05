@@ -897,3 +897,132 @@ LOCALISER_CONFIG = [
         "condition": {"field": "q_local_motion_mode", "value": "dynamic"},
     },
 ]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Motion Planner module-specific configuration schema.
+# These fields live in module_answers["motion_planning"], NOT in the general
+# questionnaire answers. Rendered in the Motion Planner module detail panel.
+#
+# All fields map 1:1 to the "COT configuration parameters" table in section 4
+# of COT_MOTION_PLANNER.md — real /motion_planner ROS 2 node parameters.
+# ─────────────────────────────────────────────────────────────────────────────
+
+MOTION_PLANNER_CONFIG = [
+    # ─ Reference frames ─────────────────────────────────────────────────────
+    {
+        "id": "q_mp_base_link",
+        "title": "Robot base link",
+        "tooltip": "Robot reference frame the planner transforms poses into. Default: base_link.",
+        "type": "text",
+        "placeholder": "base_link",
+    },
+    {
+        "id": "q_mp_ee_link",
+        "title": "End-effector link",
+        "tooltip": "Controlled TCP frame. Default: tcp.",
+        "type": "text",
+        "placeholder": "tcp",
+    },
+    {
+        "id": "q_mp_ft_link",
+        "title": "Force/torque sensor frame",
+        "tooltip": "Frame the force/torque sensor is mounted at. Defaults to the end-effector link if left blank.",
+        "type": "text",
+        "placeholder": "tcp",
+    },
+    # ─ Planner sampling ─────────────────────────────────────────────────────
+    {
+        "id": "q_mp_integration_dt",
+        "title": "Planner sampling period (s)",
+        "tooltip": "Planner/output sampling period (integration_dt). Default: 0.001 s. Note: an external/legacy "
+                   "params file may still call this `integration_timestep` \u2014 COT's generated file always uses "
+                   "the correct `integration_dt` name.",
+        "type": "number_float",
+        "min": 0.0001,
+        "max": 1.0,
+        "default": 0.001,
+    },
+    # ─ Z-admittance control tuning ──────────────────────────────────────────
+    {
+        "id": "q_mp_proportional_gain",
+        "title": "Z-admittance proportional gain",
+        "tooltip": "Proportional gain of the Z-axis admittance PI controller. Default: 1/3600 (\u2248 0.000278).",
+        "type": "number_float",
+        "min": 0.0,
+        "default": 0.000278,
+    },
+    {
+        "id": "q_mp_integral_gain",
+        "title": "Z-admittance integral gain",
+        "tooltip": "Integral gain of the Z-axis admittance PI controller. Default: 4.6.",
+        "type": "number_float",
+        "min": 0.0,
+        "default": 4.6,
+    },
+    {
+        "id": "q_mp_integral_bound",
+        "title": "Integral displacement bound (m)",
+        "tooltip": "Maximum integral displacement for the admittance controller. Default: 0.02 m.",
+        "type": "number_float",
+        "min": 0.0,
+        "default": 0.02,
+    },
+    {
+        "id": "q_mp_integral_velocity_bound",
+        "title": "Integral correction rate bound (m/s)",
+        "tooltip": "Maximum integral correction rate for the admittance controller. Default: 0.01 m/s.",
+        "type": "number_float",
+        "min": 0.0,
+        "default": 0.01,
+    },
+    # ─ Force/torque sensor sources ──────────────────────────────────────────
+    {
+        "id": "q_mp_mini58_topic",
+        "title": "Mini58 force sensor topic",
+        "tooltip": "std_msgs/Float64 wrench topic for the ATI Mini58 sensor. Default: /ati_ft_sensor/wrench_sensed.",
+        "type": "text",
+        "placeholder": "/ati_ft_sensor/wrench_sensed",
+    },
+    {
+        "id": "q_mp_nano17_topic",
+        "title": "Nano17 force sensor topic",
+        "tooltip": "Wrench topic for the ATI Nano17 sensor. Default: /magician_grabber/wrench_sensed.",
+        "type": "text",
+        "placeholder": "/magician_grabber/wrench_sensed",
+    },
+    {
+        "id": "q_mp_impedance_sensor",
+        "title": "Impedance/admittance force source",
+        "tooltip": "Which force source feeds impedance/admittance control.",
+        "type": "select",
+        "options": [
+            {"value": "force_estimate", "label": "Force estimate (default)"},
+            {"value": "mini58",         "label": "ATI Mini58 sensor"},
+            {"value": "nano17",         "label": "ATI Nano17 sensor"},
+        ],
+        "default": "force_estimate",
+    },
+    # ─ Diagnostics ───────────────────────────────────────────────────────────
+    {
+        "id": "q_mp_debug_prints",
+        "title": "Enable debug prints",
+        "tooltip": "Diagnostic logging to stdout (debug_prints). Default: false.",
+        "type": "select",
+        "options": [
+            {"value": "no",  "label": "No"},
+            {"value": "yes", "label": "Yes"},
+        ],
+        "default": "no",
+    },
+    {
+        "id": "q_mp_debug_lib",
+        "title": "Enable library debug logging",
+        "tooltip": "Diagnostic logging from the underlying motion library (debug_lib). Default: false.",
+        "type": "select",
+        "options": [
+            {"value": "no",  "label": "No"},
+            {"value": "yes", "label": "Yes"},
+        ],
+        "default": "no",
+    },
+]

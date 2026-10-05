@@ -13,6 +13,7 @@ import sys
 
 from modules.localiser.compute import run, main
 from modules.localiser.generate_config import write_config
+from modules.localiser.ros_interface import get_commands
 
 
 def test_new_setup_without_mesh_is_blocked():
@@ -103,3 +104,39 @@ def test_main_writes_result_json_for_new_setup_path(tmp_path, monkeypatch):
     assert result["outputs"]["mesh_required"] == 1
     assert os.path.exists(result["artifacts"]["params_yaml"])
     assert result["outputs"]["params_yaml_path"] == result["artifacts"]["params_yaml"]
+
+
+def test_ros_interface_fires_live_param_commands_for_static_setup():
+    outputs = run({"q_local_setup": "cell_a", "q_local_setup_registered": "yes"})
+    outputs["params_yaml_path"] = "x/localiser_params.yaml"
+
+    commands = get_commands(outputs)
+    params = {c.param_name: c.value for c in commands if c.type == "param"}
+    notes = {c.param_name: c.value for c in commands if c.type == "note"}
+
+    assert params["setup"] == "cell_a"
+    assert params["robot_base_link"] == "base_link"
+    assert params["robot_ee_link"] == "tcp"
+    assert params["mesh_link"] == "fender"
+    # Static mode — no slider params should be fired
+    assert "slider_topic" not in params
+
+    assert notes["params_yaml_path"] == "x/localiser_params.yaml"
+    assert "database_file_caveat" in notes
+    assert "setup_missing" not in notes
+    assert "mesh_required" not in notes
+
+
+def test_ros_interface_fires_slider_params_in_dynamic_mode():
+    outputs = run({
+        "q_local_setup": "cell_a",
+        "q_local_setup_registered": "yes",
+        "q_local_motion_mode": "dynamic",
+    })
+
+    commands = get_commands(outputs)
+    params = {c.param_name: c.value for c in commands if c.type == "param"}
+
+    assert params["slider_topic"] == "/slider/position_y"
+    assert params["slider_bias"] == 0.0
+    assert params["publish_rate_hz"] == 30.0

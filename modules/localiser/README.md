@@ -13,9 +13,9 @@ node either republishes that transform unchanged as static TF, or adds a
 live slider displacement and publishes dynamic TF. Static and dynamic modes
 are mutually exclusive. See [`CONTEXT.md`](../../CONTEXT.md) for these terms.
 
-COT's job is **not** to perform Registration — it selects and generates the
-runtime parameter file the broadcaster loads at startup, and flags when a
-new Setup still needs to be registered.
+COT's job is **not** to perform Registration — it selects the runtime
+configuration and pushes it to the broadcaster via live `ros2 param set`
+commands, and flags when a new Setup still needs to be registered.
 
 ## File overview
 
@@ -23,7 +23,7 @@ new Setup still needs to be registered.
 |---|---|
 | `compute.py` | Reads questionnaire answers → resolves runtime params + blocking conditions → writes `result.json` |
 | `generate_config.py` | Writes `localiser_params.yaml`, the ROS 2 parameter file the node reads at startup |
-| `ros_interface.py` | Translates `result.json` outputs into `ROS2Command` objects (mostly operator-facing notes) |
+| `ros_interface.py` | Translates `result.json` outputs into `ROS2Command` objects (live `param` sets + operator-facing notes) |
 | `README.md` | This file |
 
 ## Inputs (`module_answers["localiser"]`)
@@ -71,9 +71,19 @@ needs the mesh again:
 
 ## ROS 2 commands fired
 
-The node has no registration service/action and reads its parameters at
-startup, so `ros_interface.py` emits `note` commands rather than live
-`ros2 param set` calls:
+### Parameter settings (via `ros2 param set` on `/localisation`)
+
+- `setup`, `database_file`, `mesh_path`
+- `robot_base_link`, `robot_ee_link`, `mesh_link`
+- `slider_topic`, `slider_bias`, `publish_rate_hz` — only when `motion_mode == "dynamic"`
+
+`COT_LOCALISER.md` does not document these as startup-only/read-only, so
+they are fired as live parameter sets, consistent with the contract in
+[`modules/README.md`](../README.md). `ROS_MOCK=true` (the default) logs
+these commands instead of executing them.
+
+### Notes (metadata, no command fired)
+
 - `params_yaml_path` — where the generated `localiser_params.yaml` was written
 - `setup_missing` — only when `setup_missing == 1` (no setup name provided); fires
   regardless of `setup_registered`

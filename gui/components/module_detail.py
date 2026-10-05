@@ -65,7 +65,7 @@ class ModuleDetail(QDialog):
 
     def _build_tabbed_ui(self, root: QVBoxLayout) -> None:
         """Two-tab layout: Impacts/Flags | Module Configuration."""
-        from app.engine.schema import VISION_CLASSIFIER_CONFIG, ERGODIC_CONTROL_CONFIG, GRABBER_CONFIG, LOCALISER_CONFIG
+        from app.engine.schema import VISION_CLASSIFIER_CONFIG, ERGODIC_CONTROL_CONFIG, GRABBER_CONFIG, LOCALISER_CONFIG, MOTION_PLANNER_CONFIG
         from gui.components.questionnaire_form import QuestionnaireForm
 
         _MODULE_CONFIGS = {
@@ -73,6 +73,7 @@ class ModuleDetail(QDialog):
             "ergodic_control":   ERGODIC_CONTROL_CONFIG,
             "grabber":           GRABBER_CONFIG,
             "localiser":         LOCALISER_CONFIG,
+            "motion_planning":   MOTION_PLANNER_CONFIG,
         }
         config_questions = _MODULE_CONFIGS.get(self._module.module_id, [])
 
@@ -137,7 +138,7 @@ class ModuleDetail(QDialog):
         self._module = module
         root = self.layout()
 
-        _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser"}
+        _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser", "motion_planning"}
         if self._module.module_id in _TABBED_MODULES:
             # Tabbed layout: items are 0=header(layout), 1=desc, 2=tabs, 3=footer
             # Remove tabs + footer, rebuild
@@ -175,7 +176,7 @@ class ModuleDetail(QDialog):
         root.addWidget(desc)
 
         # Modules with their own config schema get a tabbed layout
-        _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser"}
+        _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser", "motion_planning"}
         if self._module.module_id in _TABBED_MODULES:
             self._build_tabbed_ui(root)
         else:
