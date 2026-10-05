@@ -75,6 +75,8 @@ needs the mesh again:
 
 - `setup`, `database_file`, `mesh_path`
 - `robot_base_link`, `robot_ee_link`, `mesh_link`
+- `mode` — always set explicitly (`"static"` or `"dynamic"`), so switching
+  modes actually reaches the node instead of leaving its previous mode intact
 - `slider_topic`, `slider_bias`, `publish_rate_hz` — only when `motion_mode == "dynamic"`
 
 `COT_LOCALISER.md` does not document these as startup-only/read-only, so

@@ -48,6 +48,12 @@ def get_commands(outputs: dict) -> List[ROS2Command]:
     ))
 
     motion_mode = str(outputs.get("motion_mode", "static"))
+    # Must be set explicitly — otherwise switching static<->dynamic never
+    # reaches the node, it would just silently keep its previous mode.
+    commands.append(ROS2Command(
+        type="param", node=_NODE, param_name="mode",
+        value=motion_mode,
+    ))
     if motion_mode == "dynamic":
         commands.append(ROS2Command(
             type="param", node=_NODE, param_name="slider_topic",

@@ -118,6 +118,9 @@ def test_ros_interface_fires_live_param_commands_for_static_setup():
     assert params["robot_base_link"] == "base_link"
     assert params["robot_ee_link"] == "tcp"
     assert params["mesh_link"] == "fender"
+    # Mode must always be set explicitly, so switching static<->dynamic
+    # actually reaches the node instead of leaving its previous mode intact
+    assert params["mode"] == "static"
     # Static mode — no slider params should be fired
     assert "slider_topic" not in params
 
@@ -137,6 +140,7 @@ def test_ros_interface_fires_slider_params_in_dynamic_mode():
     commands = get_commands(outputs)
     params = {c.param_name: c.value for c in commands if c.type == "param"}
 
+    assert params["mode"] == "dynamic"
     assert params["slider_topic"] == "/slider/position_y"
     assert params["slider_bias"] == 0.0
     assert params["publish_rate_hz"] == 30.0
