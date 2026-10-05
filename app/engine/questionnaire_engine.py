@@ -831,6 +831,18 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
         total_characteristics += 1
 
     if answers.q1_robot_arms == "multiple":
+        result["motion_planning"]["impacts"].append(_impact(
+            characteristic="Multiple robot arms",
+            affects="Process",
+            what_changes=(
+                "Each arm needs its own base_link/ee_link pair and, in practice, its own "
+                "motion planner instance — a single shared instance cannot track per-arm "
+                "trajectories independently. Review the Module Configuration tab and confirm "
+                "the frame names match the arm this use case targets."
+            ),
+            action_type="reconfigure",
+            reason="Q1: Multiple robot arms selected",
+        ))
         result["motion_planning"]["flags"].append(_flag(
             id="flag_mp_multi_arm",
             type="human_oversight",
@@ -840,6 +852,7 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             ),
             module_id="motion_planning",
         ))
+        total_characteristics += 1
 
     # ------------------------------------------------------------------
     # Cross-cutting flag: >= 5 characteristics triggered

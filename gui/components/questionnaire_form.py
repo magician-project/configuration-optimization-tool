@@ -276,10 +276,13 @@ class QuestionnaireForm(QScrollArea):
 
         elif qtype == "number_float":
             w = _NoScrollDoubleSpinBox()
-            w.setMinimum(q.get("min", 0.0))
-            w.setMaximum(q.get("max", 9999.0))
+            # Decimals/step must be set before min/max/value: QDoubleSpinBox
+            # rounds setMinimum()/setMaximum() to its *current* precision, so
+            # setting them first would silently clamp e.g. min=0.0001 to 0.00.
             w.setDecimals(q.get("decimals", 2))
             w.setSingleStep(q.get("step", 0.01))
+            w.setMinimum(q.get("min", 0.0))
+            w.setMaximum(q.get("max", 9999.0))
             w.setValue(float(q.get("default", 0.0)))
             self._widgets[qid] = w
             w.valueChanged.connect(lambda v, _id=qid: self._on_field_changed(_id, v))
