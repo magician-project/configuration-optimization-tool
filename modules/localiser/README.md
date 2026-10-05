@@ -68,6 +68,7 @@ needs the mesh again:
 | `motion_mode` | `str` | `"static"` or `"dynamic"` |
 | `slider_topic`, `slider_bias`, `publish_rate_hz` | `str`/`float` | Present only when `motion_mode == "dynamic"` |
 | `params_yaml_path` | `str` | Path to the generated `localiser_params.yaml` file |
+| `deploy_blockers` | `list[str]` | Human-readable reasons this configuration must not be deployed yet (empty when none). Checked by `use_case_page.py::_deploy_module()` *before* `ros_interface.get_commands()` runs, so a blank `setup` can never be sent to the live node. |
 
 ## ROS 2 commands fired
 

@@ -411,6 +411,18 @@ class UseCasePage(QWidget):
             QMessageBox.warning(self, "Cannot deploy", "Run Compute first.")
             return
 
+        # Generic hook: any module can mark its own configuration as not
+        # deployable yet by listing human-readable reasons under
+        # outputs["deploy_blockers"] (see modules/localiser/compute.py).
+        blockers = ms.compute_result.outputs.get("deploy_blockers") or []
+        if blockers:
+            QMessageBox.warning(
+                self, "Deployment blocked",
+                f"{ms.module_name} configuration is not ready to deploy:\n- "
+                + "\n- ".join(blockers),
+            )
+            return
+
         ms.status = "deploying"
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)

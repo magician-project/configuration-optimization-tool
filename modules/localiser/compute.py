@@ -59,6 +59,16 @@ def run(answers: dict) -> dict:
         outputs["slider_bias"] = float(answers.get("q_local_slider_bias") or _DEFAULT_SLIDER_BIAS)
         outputs["publish_rate_hz"] = float(answers.get("q_local_publish_rate_hz") or _DEFAULT_PUBLISH_RATE_HZ)
 
+    # Human-readable reasons this configuration must not be deployed yet.
+    # Checked by the GUI before calling ros_interface.get_commands() — see
+    # gui/pages/use_case_page.py::_deploy_module().
+    blockers = []
+    if outputs["setup_missing"]:
+        blockers.append("a setup name is required")
+    if outputs["mesh_required"]:
+        blockers.append("a mesh path is required to register this setup")
+    outputs["deploy_blockers"] = blockers
+
     return outputs
 
 

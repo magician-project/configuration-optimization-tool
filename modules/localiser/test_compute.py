@@ -20,17 +20,24 @@ def test_new_setup_without_mesh_is_blocked():
     outputs = run({"q_local_setup": "cell_a", "q_local_setup_registered": "no"})
     assert outputs["mesh_required"] == 1
     assert outputs["mesh_path"] == ""
+    assert "a mesh path is required to register this setup" in outputs["deploy_blockers"]
 
 
 def test_missing_setup_is_blocked():
     outputs = run({})
     assert outputs["setup_missing"] == 1
+    assert "a setup name is required" in outputs["deploy_blockers"]
 
     outputs = run({"q_local_setup": "   "})
     assert outputs["setup_missing"] == 1
 
     outputs = run({"q_local_setup": "cell_a"})
     assert outputs["setup_missing"] == 0
+
+
+def test_valid_setup_has_no_deploy_blockers():
+    outputs = run({"q_local_setup": "cell_a", "q_local_setup_registered": "yes"})
+    assert outputs["deploy_blockers"] == []
 
 
 def test_new_setup_with_mesh_is_not_blocked():
