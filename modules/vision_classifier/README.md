@@ -79,4 +79,4 @@ def run_training(materials: list, output_dir: str) -> str:
    ```
 4. Verify `result.json` contains a valid `model_path`.
 
-> All values passed to ROS 2 must be `str`, `int`, or `float`.
+> All values passed to ROS 2 must be `str`, `int`, `float`, or `bool`.

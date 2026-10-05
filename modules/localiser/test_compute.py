@@ -154,3 +154,20 @@ def test_ros_interface_fires_slider_params_in_dynamic_mode():
     assert params["slider_topic"] == "/slider/position_y"
     assert params["slider_bias"] == 0.0
     assert params["publish_rate_hz"] == 30.0
+
+
+def test_slider_params_are_fired_before_the_mode_switch():
+    # Commands execute one ros2 param set at a time, so slider dependencies
+    # must land before "mode" flips the node into dynamic — otherwise it
+    # would briefly publish with stale/default slider settings.
+    outputs = run({
+        "q_local_setup": "cell_a",
+        "q_local_setup_registered": "yes",
+        "q_local_motion_mode": "dynamic",
+    })
+
+    param_order = [c.param_name for c in get_commands(outputs) if c.type == "param"]
+    mode_index = param_order.index("mode")
+
+    for dependency in ("slider_topic", "slider_bias", "publish_rate_hz"):
+        assert param_order.index(dependency) < mode_index

@@ -48,12 +48,10 @@ def get_commands(outputs: dict) -> List[ROS2Command]:
     ))
 
     motion_mode = str(outputs.get("motion_mode", "static"))
-    # Must be set explicitly — otherwise switching static<->dynamic never
-    # reaches the node, it would just silently keep its previous mode.
-    commands.append(ROS2Command(
-        type="param", node=_NODE, param_name="mode",
-        value=motion_mode,
-    ))
+    # Dynamic-mode dependencies must land before the mode switch itself --
+    # commands execute one ros2 param set at a time, so firing `mode` first
+    # would let the node briefly publish dynamic TF with stale/default
+    # slider settings until the following commands catch up.
     if motion_mode == "dynamic":
         commands.append(ROS2Command(
             type="param", node=_NODE, param_name="slider_topic",
@@ -67,6 +65,13 @@ def get_commands(outputs: dict) -> List[ROS2Command]:
             type="param", node=_NODE, param_name="publish_rate_hz",
             value=float(outputs.get("publish_rate_hz", 30.0)),
         ))
+
+    # Must be set explicitly — otherwise switching static<->dynamic never
+    # reaches the node, it would just silently keep its previous mode.
+    commands.append(ROS2Command(
+        type="param", node=_NODE, param_name="mode",
+        value=motion_mode,
+    ))
 
     # ── Operator-facing notes (process caveats — see module docstring) ──────
     params_yaml = outputs.get("params_yaml_path", "")

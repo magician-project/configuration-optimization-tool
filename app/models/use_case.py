@@ -49,11 +49,11 @@ class ROS2Command(BaseModel):
     # param set
     node: Optional[str] = None
     param_name: Optional[str] = None
-    value: Optional[object] = None    # str | int | float only
+    value: Optional[object] = None    # str | int | float | bool only
     # service call
     service: Optional[str] = None
     service_type: Optional[str] = None
-    request_args: Optional[Dict[str, object]] = None  # leaf values: str/int/float
+    request_args: Optional[Dict[str, object]] = None  # leaf values: str/int/float/bool
 
 
 class ModuleState(BaseModel):

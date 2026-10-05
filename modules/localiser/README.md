@@ -128,4 +128,4 @@ these commands instead of executing them.
    pytest modules/localiser/test_compute.py
    ```
 
-> All values passed to ROS 2 must be `str`, `int`, or `float`.
+> All values passed to ROS 2 must be `str`, `int`, `float`, or `bool`.

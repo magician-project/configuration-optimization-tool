@@ -67,4 +67,4 @@ Followed by a `/op_solver/reload_config` service call.
    ```
 4. Check the generated `result.json`.
 
-> All values passed to ROS 2 must be `str`, `int`, or `float`.
+> All values passed to ROS 2 must be `str`, `int`, `float`, or `bool`.

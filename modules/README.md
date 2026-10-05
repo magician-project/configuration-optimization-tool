@@ -66,7 +66,10 @@ implementation.
 The `get_commands(outputs: dict) -> List[ROS2Command]` function must:
 - Accept the flat outputs dict from `result.json`.
 - Return an ordered list of `ROS2Command` objects (param sets first, service calls last).
-- Only use `str`, `int`, or `float` as command values.
+- Only use `str`, `int`, `float`, or `bool` as command values. Commands execute
+  one at a time in list order, so if a parameter depends on others already
+  being set on the node (e.g. a mode switch depending on related settings),
+  list those dependencies first.
 
 ## Testing your module locally
 
