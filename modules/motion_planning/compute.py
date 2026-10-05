@@ -46,12 +46,20 @@ def run(answers: dict) -> dict:
     outputs["integration_dt_rename_pending"] = True
 
     # ── Z-admittance control tuning ──────────────────────────────────────────
-    outputs["proportional_gain"] = float(answers.get("q_mp_proportional_gain") or _DEFAULT_PROPORTIONAL_GAIN)
-    outputs["integral_gain"] = float(answers.get("q_mp_integral_gain") or _DEFAULT_INTEGRAL_GAIN)
-    outputs["integral_bound"] = float(answers.get("q_mp_integral_bound") or _DEFAULT_INTEGRAL_BOUND)
-    outputs["integral_velocity_bound"] = float(
-        answers.get("q_mp_integral_velocity_bound") or _DEFAULT_INTEGRAL_VELOCITY_BOUND
-    )
+    # 0.0 is a valid, meaningful value here (disables that term/bound), so a
+    # missing answer must be distinguished via `is None`, not `or`/truthiness.
+    pg = answers.get("q_mp_proportional_gain")
+    outputs["proportional_gain"] = float(pg) if pg is not None else _DEFAULT_PROPORTIONAL_GAIN
+
+    ig = answers.get("q_mp_integral_gain")
+    outputs["integral_gain"] = float(ig) if ig is not None else _DEFAULT_INTEGRAL_GAIN
+
+    ib = answers.get("q_mp_integral_bound")
+    outputs["integral_bound"] = float(ib) if ib is not None else _DEFAULT_INTEGRAL_BOUND
+
+    ivb = answers.get("q_mp_integral_velocity_bound")
+    outputs["integral_velocity_bound"] = float(ivb) if ivb is not None else _DEFAULT_INTEGRAL_VELOCITY_BOUND
+
 
     # ── Force/torque sensor sources ──────────────────────────────────────────
     outputs["mini58_topic"] = str(answers.get("q_mp_mini58_topic") or _DEFAULT_MINI58_TOPIC)
