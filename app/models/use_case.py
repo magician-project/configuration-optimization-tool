@@ -27,6 +27,12 @@ class ComputeResult(BaseModel):
     success: bool
     outputs: Dict[str, object] = {}   # str/int/float values only at leaf nodes
     artifacts: Dict[str, str] = {}
+    # Human-readable reasons this configuration must not be deployed yet.
+    # None = this module never evaluated blockers (incl. results computed
+    # before this field existed); [] = evaluated, nothing blocking. Kept as
+    # its own typed field rather than an outputs[] entry so `outputs` stays
+    # a flat str/int/float dict per the module contract in modules/README.md.
+    deploy_blockers: Optional[List[str]] = None
     error: Optional[str] = None
 
     def interface_outputs(self) -> Dict[str, object]:

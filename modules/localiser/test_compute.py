@@ -11,7 +11,7 @@ import json
 import os
 import sys
 
-from modules.localiser.compute import run, main
+from modules.localiser.compute import run, main, deploy_blockers
 from modules.localiser.generate_config import write_config
 from modules.localiser.ros_interface import get_commands
 
@@ -20,13 +20,13 @@ def test_new_setup_without_mesh_is_blocked():
     outputs = run({"q_local_setup": "cell_a", "q_local_setup_registered": "no"})
     assert outputs["mesh_required"] == 1
     assert outputs["mesh_path"] == ""
-    assert "a mesh path is required to register this setup" in outputs["deploy_blockers"]
+    assert "a mesh path is required to register this setup" in deploy_blockers(outputs)
 
 
 def test_missing_setup_is_blocked():
     outputs = run({})
     assert outputs["setup_missing"] == 1
-    assert "a setup name is required" in outputs["deploy_blockers"]
+    assert "a setup name is required" in deploy_blockers(outputs)
 
     outputs = run({"q_local_setup": "   "})
     assert outputs["setup_missing"] == 1
@@ -37,7 +37,7 @@ def test_missing_setup_is_blocked():
 
 def test_valid_setup_has_no_deploy_blockers():
     outputs = run({"q_local_setup": "cell_a", "q_local_setup_registered": "yes"})
-    assert outputs["deploy_blockers"] == []
+    assert deploy_blockers(outputs) == []
 
 
 def test_new_setup_with_mesh_is_not_blocked():
@@ -111,6 +111,9 @@ def test_main_writes_result_json_for_new_setup_path(tmp_path, monkeypatch):
     assert result["outputs"]["mesh_required"] == 1
     assert os.path.exists(result["artifacts"]["params_yaml"])
     assert result["outputs"]["params_yaml_path"] == result["artifacts"]["params_yaml"]
+    # deploy_blockers is a top-level result.json field, not an outputs[] entry
+    assert "deploy_blockers" not in result["outputs"]
+    assert "a mesh path is required to register this setup" in result["deploy_blockers"]
 
 
 def test_ros_interface_fires_live_param_commands_for_static_setup():

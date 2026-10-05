@@ -49,6 +49,18 @@ The `run(answers)` function (or `run(answers, output_dir)` for ML modules) must:
 
 The `main()` function writes the result dict to `<output_dir>/result.json`.
 
+### Optional: blocking an invalid configuration from being deployed
+
+If a module's configuration can be incomplete in a way that must never reach
+the live node (e.g. a required field was left blank), write a top-level
+`deploy_blockers: list[str]` key in the result dict (sibling to `outputs`),
+*not* inside `outputs` itself — `outputs` must stay flat `str`/`int`/`float`.
+`gui/pages/use_case_page.py::_deploy_module()` checks this field before
+calling `ros_interface.get_commands()` and refuses to deploy while it is
+non-empty. Leave it unset (or `[]`) if your module has nothing to block on.
+See `modules/localiser/compute.py::deploy_blockers()` for a reference
+implementation.
+
 ## Contract for `ros_interface.py`
 
 The `get_commands(outputs: dict) -> List[ROS2Command]` function must:

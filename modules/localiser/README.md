@@ -68,7 +68,21 @@ needs the mesh again:
 | `motion_mode` | `str` | `"static"` or `"dynamic"` |
 | `slider_topic`, `slider_bias`, `publish_rate_hz` | `str`/`float` | Present only when `motion_mode == "dynamic"` |
 | `params_yaml_path` | `str` | Path to the generated `localiser_params.yaml` file |
-| `deploy_blockers` | `list[str]` | Human-readable reasons this configuration must not be deployed yet (empty when none). Checked by `use_case_page.py::_deploy_module()` *before* `ros_interface.get_commands()` runs, so a blank `setup` can never be sent to the live node. |
+
+## Deployment blockers (`ComputeResult.deploy_blockers`, not an `outputs` key)
+
+`outputs` stays a flat `str`/`int`/`float` dict per the module contract in
+[`modules/README.md`](../README.md); the `compute.py::deploy_blockers(outputs)`
+helper derives a separate `list[str]` from it, which `main()` writes to its
+own top-level `result.json` field (sibling to `outputs`/`artifacts`), not
+inside `outputs`. `gui/pages/use_case_page.py::_deploy_module()` checks this
+field *before* calling `ros_interface.get_commands()`, so a blank `setup` can
+never be sent to the live node:
+
+- `None` (missing from `result.json`) — a result computed before this field
+  existed; the GUI forces a recompute rather than treating it as "no blockers"
+- `[]` — evaluated, nothing blocking
+- non-empty — deploy is refused with these reasons shown to the operator
 
 ## ROS 2 commands fired
 
