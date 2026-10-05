@@ -62,6 +62,22 @@ def run(answers: dict) -> dict:
     return outputs
 
 
+def deploy_blockers(outputs: dict) -> list:
+    """
+    Human-readable reasons this configuration must not be deployed yet.
+    Derived from the (flat, scalar) outputs dict rather than stored inside
+    it, so `outputs` keeps matching the str/int/float module contract.
+    Checked by the GUI before calling ros_interface.get_commands() — see
+    gui/pages/use_case_page.py::_deploy_module().
+    """
+    blockers = []
+    if outputs["setup_missing"]:
+        blockers.append("a setup name is required")
+    if outputs["mesh_required"]:
+        blockers.append("a mesh path is required to register this setup")
+    return blockers
+
+
 def main() -> None:
     if len(sys.argv) < 3:
         print(
@@ -81,6 +97,7 @@ def main() -> None:
 
     print(f"[localiser] Computing configuration for use case: {use_case.get('name', '?')}")
     outputs = run(answers)
+    blockers = deploy_blockers(outputs)
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -98,6 +115,7 @@ def main() -> None:
         "artifacts": {
             "params_yaml": config_path,
         },
+        "deploy_blockers": blockers,
     }
 
     out_path = os.path.join(output_dir, "result.json")
@@ -105,6 +123,7 @@ def main() -> None:
         json.dump(result, f, indent=2)
 
     print(f"[localiser] Result written to {out_path}")
+    print(f"[localiser] Deploy blockers: {blockers or 'none'}")
     for k, v in outputs.items():
         print(f"  {k}: {v}")
 

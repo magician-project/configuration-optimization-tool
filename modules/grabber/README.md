@@ -86,4 +86,4 @@ Followed by a `/magician_grabber/reload_config` service call.
    ```
 4. Check the generated `result.json` in `<output_dir>`.
 
-> All values passed to ROS 2 must be `str`, `int`, or `float`. No lists or dicts.
+> All values passed to ROS 2 must be `str`, `int`, `float`, or `bool`. No lists or dicts.

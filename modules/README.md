@@ -10,7 +10,7 @@ Module owners work exclusively inside their own folder.
 | `grabber/` | Grabber | `/magician_grabber` | Reconfiguration |
 | `orienteering_solver/` | Orienteering Solver | `/op_solver` | Reconfiguration |
 | `localiser/` | Localiser | `/localisation` | Reconfiguration |
-| `motion_planning/` | Motion Planning | `/motion_planning` | Reconfiguration |
+| `motion_planning/` | Motion Planner | `/motion_planner` | Reconfiguration |
 | `tactile_sensor/` | Tactile Sensor | `/tactile_classifier_system` | Retrain + Reconfigure |
 | `vision_classifier/` | Vision Classifier | `/magician_vision_classifier` | Retrain + Reconfigure |
 
@@ -49,12 +49,27 @@ The `run(answers)` function (or `run(answers, output_dir)` for ML modules) must:
 
 The `main()` function writes the result dict to `<output_dir>/result.json`.
 
+### Optional: blocking an invalid configuration from being deployed
+
+If a module's configuration can be incomplete in a way that must never reach
+the live node (e.g. a required field was left blank), write a top-level
+`deploy_blockers: list[str]` key in the result dict (sibling to `outputs`),
+*not* inside `outputs` itself — `outputs` must stay flat `str`/`int`/`float`.
+`gui/pages/use_case_page.py::_deploy_module()` checks this field before
+calling `ros_interface.get_commands()` and refuses to deploy while it is
+non-empty. Leave it unset (or `[]`) if your module has nothing to block on.
+See `modules/localiser/compute.py::deploy_blockers()` for a reference
+implementation.
+
 ## Contract for `ros_interface.py`
 
 The `get_commands(outputs: dict) -> List[ROS2Command]` function must:
 - Accept the flat outputs dict from `result.json`.
 - Return an ordered list of `ROS2Command` objects (param sets first, service calls last).
-- Only use `str`, `int`, or `float` as command values.
+- Only use `str`, `int`, `float`, or `bool` as command values. Commands execute
+  one at a time in list order, so if a parameter depends on others already
+  being set on the node (e.g. a mode switch depending on related settings),
+  list those dependencies first.
 
 ## Testing your module locally
 

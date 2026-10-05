@@ -33,6 +33,12 @@ from app.engine.compute_runner import ComputeRunner
 
 logger = logging.getLogger(__name__)
 
+# Modules whose compute.py always populates ComputeResult.deploy_blockers
+# (as [] when there's nothing blocking). A stored result with
+# deploy_blockers is None for one of these predates the convention and
+# must be recomputed before deploy can trust it — see _deploy_module().
+_MODULES_WITH_DEPLOY_BLOCKERS = {"localiser"}
+
 
 class UseCasePage(QWidget):
     navigate_home = Signal()
@@ -409,6 +415,28 @@ class UseCasePage(QWidget):
             return
         if ms.compute_result is None:
             QMessageBox.warning(self, "Cannot deploy", "Run Compute first.")
+            return
+
+        # Generic hook: any module can mark its own configuration as not
+        # deployable yet via ComputeResult.deploy_blockers (see
+        # modules/localiser/compute.py). None means "never evaluated" --
+        # for modules known to populate it, that means a stale pre-upgrade
+        # result, so force a recompute instead of silently allowing deploy.
+        blockers = ms.compute_result.deploy_blockers
+        if blockers is None and module_id in _MODULES_WITH_DEPLOY_BLOCKERS:
+            QMessageBox.warning(
+                self, "Cannot deploy",
+                f"This {ms.module_name} result predates deployment validation. "
+                "Run Compute again.",
+            )
+            return
+        blockers = blockers or []
+        if blockers:
+            QMessageBox.warning(
+                self, "Deployment blocked",
+                f"{ms.module_name} configuration is not ready to deploy:\n- "
+                + "\n- ".join(blockers),
+            )
             return
 
         ms.status = "deploying"

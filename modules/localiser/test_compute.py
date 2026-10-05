@@ -11,25 +11,33 @@ import json
 import os
 import sys
 
-from modules.localiser.compute import run, main
+from modules.localiser.compute import run, main, deploy_blockers
 from modules.localiser.generate_config import write_config
+from modules.localiser.ros_interface import get_commands
 
 
 def test_new_setup_without_mesh_is_blocked():
     outputs = run({"q_local_setup": "cell_a", "q_local_setup_registered": "no"})
     assert outputs["mesh_required"] == 1
     assert outputs["mesh_path"] == ""
+    assert "a mesh path is required to register this setup" in deploy_blockers(outputs)
 
 
 def test_missing_setup_is_blocked():
     outputs = run({})
     assert outputs["setup_missing"] == 1
+    assert "a setup name is required" in deploy_blockers(outputs)
 
     outputs = run({"q_local_setup": "   "})
     assert outputs["setup_missing"] == 1
 
     outputs = run({"q_local_setup": "cell_a"})
     assert outputs["setup_missing"] == 0
+
+
+def test_valid_setup_has_no_deploy_blockers():
+    outputs = run({"q_local_setup": "cell_a", "q_local_setup_registered": "yes"})
+    assert deploy_blockers(outputs) == []
 
 
 def test_new_setup_with_mesh_is_not_blocked():
@@ -103,3 +111,63 @@ def test_main_writes_result_json_for_new_setup_path(tmp_path, monkeypatch):
     assert result["outputs"]["mesh_required"] == 1
     assert os.path.exists(result["artifacts"]["params_yaml"])
     assert result["outputs"]["params_yaml_path"] == result["artifacts"]["params_yaml"]
+    # deploy_blockers is a top-level result.json field, not an outputs[] entry
+    assert "deploy_blockers" not in result["outputs"]
+    assert "a mesh path is required to register this setup" in result["deploy_blockers"]
+
+
+def test_ros_interface_fires_live_param_commands_for_static_setup():
+    outputs = run({"q_local_setup": "cell_a", "q_local_setup_registered": "yes"})
+    outputs["params_yaml_path"] = "x/localiser_params.yaml"
+
+    commands = get_commands(outputs)
+    params = {c.param_name: c.value for c in commands if c.type == "param"}
+    notes = {c.param_name: c.value for c in commands if c.type == "note"}
+
+    assert params["setup"] == "cell_a"
+    assert params["robot_base_link"] == "base_link"
+    assert params["robot_ee_link"] == "tcp"
+    assert params["mesh_link"] == "fender"
+    # Mode must always be set explicitly, so switching static<->dynamic
+    # actually reaches the node instead of leaving its previous mode intact
+    assert params["mode"] == "static"
+    # Static mode — no slider params should be fired
+    assert "slider_topic" not in params
+
+    assert notes["params_yaml_path"] == "x/localiser_params.yaml"
+    assert "database_file_caveat" in notes
+    assert "setup_missing" not in notes
+    assert "mesh_required" not in notes
+
+
+def test_ros_interface_fires_slider_params_in_dynamic_mode():
+    outputs = run({
+        "q_local_setup": "cell_a",
+        "q_local_setup_registered": "yes",
+        "q_local_motion_mode": "dynamic",
+    })
+
+    commands = get_commands(outputs)
+    params = {c.param_name: c.value for c in commands if c.type == "param"}
+
+    assert params["mode"] == "dynamic"
+    assert params["slider_topic"] == "/slider/position_y"
+    assert params["slider_bias"] == 0.0
+    assert params["publish_rate_hz"] == 30.0
+
+
+def test_slider_params_are_fired_before_the_mode_switch():
+    # Commands execute one ros2 param set at a time, so slider dependencies
+    # must land before "mode" flips the node into dynamic — otherwise it
+    # would briefly publish with stale/default slider settings.
+    outputs = run({
+        "q_local_setup": "cell_a",
+        "q_local_setup_registered": "yes",
+        "q_local_motion_mode": "dynamic",
+    })
+
+    param_order = [c.param_name for c in get_commands(outputs) if c.type == "param"]
+    mode_index = param_order.index("mode")
+
+    for dependency in ("slider_topic", "slider_bias", "publish_rate_hz"):
+        assert param_order.index(dependency) < mode_index

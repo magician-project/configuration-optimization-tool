@@ -1,10 +1,15 @@
 """
 Localiser — ros_interface.py
 
-Translates compute.py outputs into ROS 2 commands for the /localisation
-broadcaster. Per COT_LOCALISER.md the node has no registration service or
-reload action, so most entries here are operator-facing notes rather than
-live `ros2 param set` calls.
+The /localisation node's section-4 settings (setup, database_file, mesh_path,
+robot_base_link, robot_ee_link, mesh_link, and the dynamic-mode slider
+settings) are regular ROS 2 node parameters — COT_LOCALISER.md does not
+document them as startup-only/read-only, so they are fired as live
+`ros2 param set` commands, matching the contract in modules/README.md.
+Per COT_LOCALISER.md section 3 there is currently no registration
+service/action, so the remaining process caveats (missing setup, mesh
+requirement, registration reminder, database_file quirk) are still
+surfaced as operator-facing notes rather than commands.
 """
 
 from typing import List
@@ -16,6 +21,59 @@ _NODE = "/localisation"
 def get_commands(outputs: dict) -> List[ROS2Command]:
     commands: List[ROS2Command] = []
 
+    # ── Live ros2 param set commands (section 4 of COT_LOCALISER.md) ────────
+    commands.append(ROS2Command(
+        type="param", node=_NODE, param_name="setup",
+        value=str(outputs.get("setup", "")),
+    ))
+    commands.append(ROS2Command(
+        type="param", node=_NODE, param_name="database_file",
+        value=str(outputs.get("database_file", "")),
+    ))
+    commands.append(ROS2Command(
+        type="param", node=_NODE, param_name="mesh_path",
+        value=str(outputs.get("mesh_path", "")),
+    ))
+    commands.append(ROS2Command(
+        type="param", node=_NODE, param_name="robot_base_link",
+        value=str(outputs.get("robot_base_link", "base_link")),
+    ))
+    commands.append(ROS2Command(
+        type="param", node=_NODE, param_name="robot_ee_link",
+        value=str(outputs.get("robot_ee_link", "tcp")),
+    ))
+    commands.append(ROS2Command(
+        type="param", node=_NODE, param_name="mesh_link",
+        value=str(outputs.get("mesh_link", "fender")),
+    ))
+
+    motion_mode = str(outputs.get("motion_mode", "static"))
+    # Dynamic-mode dependencies must land before the mode switch itself --
+    # commands execute one ros2 param set at a time, so firing `mode` first
+    # would let the node briefly publish dynamic TF with stale/default
+    # slider settings until the following commands catch up.
+    if motion_mode == "dynamic":
+        commands.append(ROS2Command(
+            type="param", node=_NODE, param_name="slider_topic",
+            value=str(outputs.get("slider_topic", "/slider/position_y")),
+        ))
+        commands.append(ROS2Command(
+            type="param", node=_NODE, param_name="slider_bias",
+            value=float(outputs.get("slider_bias", 0.0)),
+        ))
+        commands.append(ROS2Command(
+            type="param", node=_NODE, param_name="publish_rate_hz",
+            value=float(outputs.get("publish_rate_hz", 30.0)),
+        ))
+
+    # Must be set explicitly — otherwise switching static<->dynamic never
+    # reaches the node, it would just silently keep its previous mode.
+    commands.append(ROS2Command(
+        type="param", node=_NODE, param_name="mode",
+        value=motion_mode,
+    ))
+
+    # ── Operator-facing notes (process caveats — see module docstring) ──────
     params_yaml = outputs.get("params_yaml_path", "")
     if params_yaml:
         commands.append(ROS2Command(

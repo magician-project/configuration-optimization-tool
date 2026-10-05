@@ -93,4 +93,21 @@ MODULES: Dict[str, dict] = {
         ],
         "compute_module": "modules.ergodic_control.compute",
     },
+    "motion_planning": {
+        "name": "Motion Planner",
+        "ros_name": "motion_planner",
+        "description": (
+            "Converts target poses or Cartesian paths into time-sampled end-effector "
+            "references. Transforms poses through TF, optionally projects paths onto "
+            "workpiece meshes, assigns surface-normal orientations, applies velocity "
+            "limits, and selects impedance/admittance control and sander state."
+        ),
+        "characteristics": [
+            "Different robot/tool (reference frames, velocity limits, controller mode)",
+            "Different workpiece shape/size (mesh, path, offset, approach velocity)",
+            "Contact tasks (admittance force source and PI limits)",
+            "Tighter time limits (path density/frequency, max_vel)",
+        ],
+        "compute_module": "modules.motion_planning.compute",
+    },
 }

@@ -1,4 +1,4 @@
-﻿# COT 12-Month Development Roadmap
+# COT 12-Month Development Roadmap
 **Period:** July 2026 – June 2027  
 **Capacity:** ~16 hours / month (solo developer) · ~48 h per quarter  
 **Total budget:** ~192 hours  

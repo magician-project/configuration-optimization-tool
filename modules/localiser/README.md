@@ -13,9 +13,9 @@ node either republishes that transform unchanged as static TF, or adds a
 live slider displacement and publishes dynamic TF. Static and dynamic modes
 are mutually exclusive. See [`CONTEXT.md`](../../CONTEXT.md) for these terms.
 
-COT's job is **not** to perform Registration — it selects and generates the
-runtime parameter file the broadcaster loads at startup, and flags when a
-new Setup still needs to be registered.
+COT's job is **not** to perform Registration — it selects the runtime
+configuration and pushes it to the broadcaster via live `ros2 param set`
+commands, and flags when a new Setup still needs to be registered.
 
 ## File overview
 
@@ -23,7 +23,7 @@ new Setup still needs to be registered.
 |---|---|
 | `compute.py` | Reads questionnaire answers → resolves runtime params + blocking conditions → writes `result.json` |
 | `generate_config.py` | Writes `localiser_params.yaml`, the ROS 2 parameter file the node reads at startup |
-| `ros_interface.py` | Translates `result.json` outputs into `ROS2Command` objects (mostly operator-facing notes) |
+| `ros_interface.py` | Translates `result.json` outputs into `ROS2Command` objects (live `param` sets + operator-facing notes) |
 | `README.md` | This file |
 
 ## Inputs (`module_answers["localiser"]`)
@@ -69,11 +69,38 @@ needs the mesh again:
 | `slider_topic`, `slider_bias`, `publish_rate_hz` | `str`/`float` | Present only when `motion_mode == "dynamic"` |
 | `params_yaml_path` | `str` | Path to the generated `localiser_params.yaml` file |
 
+## Deployment blockers (`ComputeResult.deploy_blockers`, not an `outputs` key)
+
+`outputs` stays a flat `str`/`int`/`float` dict per the module contract in
+[`modules/README.md`](../README.md); the `compute.py::deploy_blockers(outputs)`
+helper derives a separate `list[str]` from it, which `main()` writes to its
+own top-level `result.json` field (sibling to `outputs`/`artifacts`), not
+inside `outputs`. `gui/pages/use_case_page.py::_deploy_module()` checks this
+field *before* calling `ros_interface.get_commands()`, so a blank `setup` can
+never be sent to the live node:
+
+- `None` (missing from `result.json`) — a result computed before this field
+  existed; the GUI forces a recompute rather than treating it as "no blockers"
+- `[]` — evaluated, nothing blocking
+- non-empty — deploy is refused with these reasons shown to the operator
+
 ## ROS 2 commands fired
 
-The node has no registration service/action and reads its parameters at
-startup, so `ros_interface.py` emits `note` commands rather than live
-`ros2 param set` calls:
+### Parameter settings (via `ros2 param set` on `/localisation`)
+
+- `setup`, `database_file`, `mesh_path`
+- `robot_base_link`, `robot_ee_link`, `mesh_link`
+- `mode` — always set explicitly (`"static"` or `"dynamic"`), so switching
+  modes actually reaches the node instead of leaving its previous mode intact
+- `slider_topic`, `slider_bias`, `publish_rate_hz` — only when `motion_mode == "dynamic"`
+
+`COT_LOCALISER.md` does not document these as startup-only/read-only, so
+they are fired as live parameter sets, consistent with the contract in
+[`modules/README.md`](../README.md). `ROS_MOCK=true` (the default) logs
+these commands instead of executing them.
+
+### Notes (metadata, no command fired)
+
 - `params_yaml_path` — where the generated `localiser_params.yaml` was written
 - `setup_missing` — only when `setup_missing == 1` (no setup name provided); fires
   regardless of `setup_registered`
@@ -101,4 +128,4 @@ startup, so `ros_interface.py` emits `note` commands rather than live
    pytest modules/localiser/test_compute.py
    ```
 
-> All values passed to ROS 2 must be `str`, `int`, or `float`.
+> All values passed to ROS 2 must be `str`, `int`, `float`, or `bool`.

@@ -232,4 +232,4 @@ Typical approach: Fourier basis representation
 - **Kalman filter**: Process and measurement noise can be tuned per use case via questionnaire
 - **Performance**: For large meshes and high PDF resolution, computation may take seconds; optimize with spatial indexing if needed
 
-> All values passed to ROS 2 must be `str`, `int`, or `float`.
+> All values passed to ROS 2 must be `str`, `int`, `float`, or `bool`.
