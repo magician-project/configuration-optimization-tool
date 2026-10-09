@@ -222,6 +222,10 @@ class QuestionnaireForm(QScrollArea):
                     lambda _, _w=w, _fu=follow_up_widget, _q=q:
                     self._on_select_changed(_w, _fu, _q)
                 )
+                # Also register for _update_conditional_visibility so reloaded
+                # answers (set with blocked signals) still show this follow-up.
+                follow_up_widget.setProperty("question_condition", q["follow_up"]["condition"])
+                self._conditional_widgets.append(follow_up_widget)
 
             w.currentIndexChanged.connect(
                 lambda _, _w=w, _id=qid: self._on_field_changed(_id, _w.currentData())
@@ -250,6 +254,10 @@ class QuestionnaireForm(QScrollArea):
                         lambda _, _cbs=checkboxes, _fu=follow_up_widget, _q=q:
                         self._on_checkbox_changed(_cbs, _fu, _q)
                     )
+                # Also register for _update_conditional_visibility so reloaded
+                # answers (set with blocked signals) still show this follow-up.
+                follow_up_widget.setProperty("question_condition", q["follow_up"]["condition"])
+                self._conditional_widgets.append(follow_up_widget)
 
             for cb in checkboxes:
                 cb.stateChanged.connect(
@@ -338,7 +346,7 @@ class QuestionnaireForm(QScrollArea):
                 spin.setMinimum(0.0)
                 spin.setMaximum(9999.0)
                 spin.setDecimals(2)
-                spin.setFixedWidth(80)
+                spin.setFixedWidth(110)
                 field_key = f"{qid}_{field['id']}"
                 dims_dict[field['id']] = spin
                 self._widgets[field_key] = spin
@@ -348,7 +356,7 @@ class QuestionnaireForm(QScrollArea):
                 hbox.addWidget(spin)
 
             unit_cb = _NoScrollComboBox()
-            unit_cb.setFixedWidth(70)
+            unit_cb.setFixedWidth(80)
             for u in q.get("units", ["m"]):
                 unit_cb.addItem(u, u)
             unit_key = f"{qid}_unit"
@@ -454,7 +462,7 @@ class QuestionnaireForm(QScrollArea):
                 spin.setMinimum(0.0)
                 spin.setMaximum(9999.0)
                 spin.setDecimals(2)
-                spin.setFixedWidth(80)
+                spin.setFixedWidth(110)
                 self._widgets[f"{fid}_{field['id']}"] = spin
                 spin.valueChanged.connect(
                     lambda _, _spin=spin, _fid=field["id"], _qid=fid:
@@ -462,7 +470,7 @@ class QuestionnaireForm(QScrollArea):
                 )
                 grid.addWidget(spin)
             unit_cb = QComboBox()
-            unit_cb.setFixedWidth(70)
+            unit_cb.setFixedWidth(80)
             for u in fq.get("units", ["m"]):
                 unit_cb.addItem(u, u)
             self._widgets[f"{fid}_unit"] = unit_cb

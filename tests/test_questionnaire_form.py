@@ -98,3 +98,30 @@ def test_dimensions_answers_round_trip_through_load_answers(qapp):
 
     assert form._widgets["q_test_resolution_width"].value() == pytest.approx(2464)
     assert form._widgets["q_test_resolution_height"].value() == pytest.approx(2056)
+
+
+def test_select_follow_up_is_visible_after_reload(qapp):
+    """Regression test: reopening a use case restores combo-box values with
+    blocked signals (to avoid feedback loops), so _on_select_changed never
+    runs and a follow-up like q2_camera_spec stayed hidden even though its
+    value was loaded. load_answers must re-show it via _update_conditional_visibility."""
+    questions = [{
+        "id": "q_test_camera_type",
+        "title": "test",
+        "type": "select",
+        "options": [
+            {"value": "standard", "label": "Standard"},
+            {"value": "gige", "label": "GiGE"},
+        ],
+        "follow_up": {
+            "condition": {"field": "q_test_camera_type", "operator": "in", "values": ["gige"]},
+            "question": {"id": "q_test_camera_spec", "type": "text", "label": "Model:"},
+        },
+    }]
+    form = QuestionnaireForm(questions=questions)
+    follow_up_widget = form._widgets["q_test_camera_spec"].parent()
+
+    form.load_answers({"q_test_camera_type": "gige", "q_test_camera_spec": "Sony XCG-CP510"})
+
+    assert form._widgets["q_test_camera_spec"].text() == "Sony XCG-CP510"
+    assert not follow_up_widget.isHidden()
