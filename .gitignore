@@ -36,6 +36,9 @@ Thumbs.db
 docs/
 .obsidian/
 
+# Partner-provided specs (local reference only, not for publication)
+**/COT_*.md
+
 # Compute outputs (generated at runtime, not source)
 data/use_cases/*/compute_outputs/
 

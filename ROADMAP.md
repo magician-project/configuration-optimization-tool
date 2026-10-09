@@ -2,8 +2,18 @@
 **Period:** July 2026 – June 2027  
 **Capacity:** ~16 hours / month (solo developer) · ~48 h per quarter  
 **Total budget:** ~192 hours  
-**Top priority:** Feature completeness — all modules covered, artifacts generated correctly  
-**Deployment target:** Local machine (no server/auth required this year)
+**Deployment target:** A locally deployable tool, independently installable by a new MAGICIAN developer or consortium partner — not a centrally hosted, multi-user service. No auth/RBAC/multi-user this year.
+
+**Leading priority per quarter** (feature completeness is the Q1 priority, not the whole roadmap's):
+
+| Quarter | Leading priority |
+|---|---|
+| Q1 | Completeness — cover all relevant modules, produce real configuration output |
+| Q2 | Reliability & usability — make existing functionality trustworthy, usable, executable |
+| Q3 | System integration / MVP — bring modules together, surface cross-module conflicts, integrated workflow |
+| Q4 | Transferability & release readiness — packaging, documentation, handover toward v1.0 |
+
+Feature completeness remains a standing constraint after Q1 (missing module functionality still needs fixing), but "add more features/modules" is no longer the leading priority once Q1 ends.
 
 ---
 
@@ -17,7 +27,7 @@
 | New modules may be added | Keep module code easy to copy (template-based), not plug-in framework |
 | GUI = existing React app | Improve what exists; no platform switch |
 | Light testing | Smoke tests + schema validation only; full unit test coverage only for critical helpers |
-| ROS adapter = file-based | Generate `params.yaml` / config JSONs; no direct ROS connection this year |
+| ROS adapter = Implemented, not yet Verified | `app/ros/ros2_adapter.py` already fires real `ros2 param set` / `service call` commands; Q2-E verifies it against live nodes rather than building it from scratch |
 
 ---
 
@@ -90,7 +100,7 @@ Q4  Apr – Jun 2027   Production-ready — Docker, contributor guide, hardening
 - Validate that the generated `params.yaml` files are accepted by `ros2 run --params-file` without errors for grabber and localiser
 - Validate that `ros2 service call` commands emitted by each `ros_interface.py` use the correct service names and message types against the actual running nodes
 - Document the manual verification steps (node name, topic, expected response) in each module's `README.md`
-- Update the Constraints & Principles table: ROS adapter moves from "file-based only" to "file-based + verified against live nodes"
+- Update the Constraints & Principles table: ROS adapter moves from "Implemented, not yet Verified" to "Verified" (see `CONTEXT.md` for the maturity ladder)
 - **Done when:** A developer can take the generated artifacts from any module and launch the corresponding ROS 2 node without manual parameter editing
 
 ---
@@ -170,7 +180,7 @@ Q4  Apr – Jun 2027   Production-ready — Docker, contributor guide, hardening
 ## Backlog (deferred, not scheduled)
 
 - **Multi-user / auth** — use case ownership, login, shared access
-- **Real ROS 2 adapter** — direct ros2 service call / param set connection (requires hardware)
+- **Verified / Supported ROS 2 adapter** — `app/ros/ros2_adapter.py` is already *Implemented* (it fires real `ros2 param set` / `service call` subprocess commands); it is not yet *Verified* against a live ROS 2 environment or *Supported* as a release capability. Q2-E is the work that moves it up the maturity ladder — see `CONTEXT.md` for the Implemented/Verified/Supported terms.
 - **Cloud hosting** — make the tool accessible outside the local machine
 - **Automated retraining trigger** — invoke `trainMagicianVisionClassifierTorch.py` from COT compute
 - **Database backend** — replace JSON file storage with SQLite or PostgreSQL

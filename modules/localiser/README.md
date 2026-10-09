@@ -6,7 +6,7 @@
 ## What this module does
 
 The Localiser publishes the pose of a workpiece mesh relative to the robot
-base, per the partner's `COT_LOCALISER.md` spec. A named **Setup** stores a
+base, per the partner-provided configuration spec. A named **Setup** stores a
 calibration transform produced by a manual **Registration** procedure
 (operator + robot; not automatable by COT). At runtime the `/localisation`
 node either republishes that transform unchanged as static TF, or adds a
@@ -94,7 +94,7 @@ never be sent to the live node:
   modes actually reaches the node instead of leaving its previous mode intact
 - `slider_topic`, `slider_bias`, `publish_rate_hz` — only when `motion_mode == "dynamic"`
 
-`COT_LOCALISER.md` does not document these as startup-only/read-only, so
+The partner spec does not document these as startup-only/read-only, so
 they are fired as live parameter sets, consistent with the contract in
 [`modules/README.md`](../README.md). `ROS_MOCK=true` (the default) logs
 these commands instead of executing them.

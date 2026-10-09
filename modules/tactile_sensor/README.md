@@ -8,7 +8,7 @@
 The Tactile Sensor module determines whether the CNN-LSTM tactile classifier
 needs to be retrained for the new use case (different materials, defect types,
 or object sizes) and, once trained, passes the path of the new model checkpoint
-to the ROS 2 node.
+to the ROS 2 node, per the partner-provided configuration spec.
 
 ## File overview
 
@@ -26,6 +26,26 @@ to the ROS 2 node.
 | `q5_materials` | List of material types the sensor will encounter |
 | `q6_object_size` | Object size category (affects training data selection) |
 | `q8_defects` | List of defect types to detect |
+
+## Partner parameter inventory
+
+Full partner-side parameter inventory; status reflects what this module
+currently reads/writes versus what is still pending:
+
+| Parameter | Type | Startup/runtime | Status |
+|---|---|---|---|
+| `material_list` | `string[]` | Startup | Implemented — `q5_materials` → `materials` output |
+| `defect_types` | `string[]` | Startup | Implemented — `q8_defects` → `defect_types` output |
+| `model_path` | `string` | Startup | Implemented — set after (placeholder) training |
+| `retrain_required` | `bool` | COT decision flag | Implemented — derived from materials/defects presence |
+| `force_level` | `float[2]` (`min_force_N`, `max_force_N`) | Startup; not runtime-tunable | Not yet implemented — no question/output wired up |
+| `scan_speed_range` | `float[2]` (`min_speed_cm_s`, `max_speed_cm_s`) | Startup; not runtime-tunable | Not yet implemented — no question/output wired up |
+| `sensor_to_ee_transformation` | `float[7]` (`x,y,z,qx,qy,qz,qw`) | Startup; update on mounting change | Not yet implemented — no question/output wired up |
+| `validation_required` | `bool` | COT decision flag | Not yet implemented — no question/output wired up |
+
+`object_size` (`q6_object_size`) is passed through as an output but is not a
+partner-spec parameter in its own right — per the spec it mainly affects
+inspection strategy/trajectory planning rather than classifier parameters.
 
 ## Outputs (written to `result.json`)
 
