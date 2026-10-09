@@ -53,3 +53,48 @@ def test_default_precision_is_unchanged_for_fields_without_overrides(qapp):
 
     assert widget.decimals() == 2
     assert widget.singleStep() == pytest.approx(0.01)
+
+
+def test_top_level_dimensions_question_does_not_crash_on_input(qapp):
+    """Regression test: a top-level (non-follow-up) "dimensions" question, like
+    q2_camera_resolution, used to crash with "takes 3 positional arguments but 4
+    were given" because _on_dimension_changed was hardcoded for the q6_dimensions
+    follow-up's 2-arg signature while this widget called it with 3 args."""
+    questions = [{
+        "id": "q_test_resolution",
+        "title": "test",
+        "type": "dimensions",
+        "fields": [
+            {"id": "width", "label": "Width (px)"},
+            {"id": "height", "label": "Height (px)"},
+        ],
+        "units": ["px"],
+        "default_unit": "px",
+    }]
+    form = QuestionnaireForm(questions=questions)
+
+    form._widgets["q_test_resolution_width"].setValue(2464)
+    form._widgets["q_test_resolution_height"].setValue(2056)
+
+    assert form.get_answers()["q_test_resolution"] == {"width": 2464, "height": 2056}
+
+
+def test_dimensions_answers_round_trip_through_load_answers(qapp):
+    """Saved dict-valued dimensions answers must repopulate their sub-widgets."""
+    questions = [{
+        "id": "q_test_resolution",
+        "title": "test",
+        "type": "dimensions",
+        "fields": [
+            {"id": "width", "label": "Width (px)"},
+            {"id": "height", "label": "Height (px)"},
+        ],
+        "units": ["px"],
+        "default_unit": "px",
+    }]
+    form = QuestionnaireForm(questions=questions)
+
+    form.load_answers({"q_test_resolution": {"width": 2464, "height": 2056}})
+
+    assert form._widgets["q_test_resolution_width"].value() == pytest.approx(2464)
+    assert form._widgets["q_test_resolution_height"].value() == pytest.approx(2056)
