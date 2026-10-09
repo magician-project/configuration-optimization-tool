@@ -6,7 +6,7 @@
 ## What this module does
 
 The Motion Planner converts target poses or Cartesian paths into time-sampled
-end-effector references, per the partner's `COT_MOTION_PLANNER.md` spec. It
+end-effector references, per the partner-provided configuration spec. It
 transforms poses through TF, optionally projects paths onto workpiece meshes,
 assigns surface-normal orientations, applies velocity limits, and queues the
 resulting motions. It can also select impedance/admittance control and
@@ -18,7 +18,7 @@ flags) via live `ros2 param set` commands. The planner's motion services
 (`reach_position`, `execute_trajectory`, etc.) take per-call arguments such
 as `control_mode`, `sander`, mesh, offset, and velocity — those are not
 configured here; they are supplied by whichever module or operator issues
-the request (see `COT_MOTION_PLANNER.md` interface reference below).
+the request (see the interface reference below).
 
 ## File overview
 
@@ -31,8 +31,7 @@ the request (see `COT_MOTION_PLANNER.md` interface reference below).
 
 ## Inputs (`module_answers["motion_planning"]`)
 
-All fields map 1:1 to the "COT configuration parameters" table in section 4
-of `COT_MOTION_PLANNER.md`.
+All fields map 1:1 to the partner's "COT configuration parameters" table.
 
 | Question key | Default | Description |
 |---|---|---|
@@ -50,7 +49,7 @@ of `COT_MOTION_PLANNER.md`.
 | `q_mp_debug_prints` | `"no"` | Diagnostic logging |
 | `q_mp_debug_lib` | `"no"` | Diagnostic logging |
 
-## COT_MOTION_PLANNER.md interface reference
+## Interface reference
 
 All services are under `/motion_planner`; unless noted, the response is
 `bool success` (request accepted/queued, not physical completion). These
@@ -103,8 +102,8 @@ that point rather than speculatively ahead of time.
 - `mini58_topic`, `nano17_topic`, `impedance_sensor`
 - `debug_prints`, `debug_lib`
 
-`COT_MOTION_PLANNER.md` does not document these as startup-only/read-only,
-so they are fired as live parameter sets, consistent with the contract in
+The partner spec does not document these as startup-only/read-only, so they
+are fired as live parameter sets, consistent with the contract in
 [`modules/README.md`](../README.md). `ROS_MOCK=true` (the default) logs these
 commands instead of executing them.
 
