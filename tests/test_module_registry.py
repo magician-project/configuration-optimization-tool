@@ -5,7 +5,7 @@ unanswered task_type (None) falls back to "grinding" for backward compatibility
 with use cases saved before this question existed.
 """
 
-from app.engine.module_registry import compute_default_modules
+from app.engine.module_registry import MODULES, compute_default_modules, resolve_effective_overrides
 
 
 def test_inspection_only_excludes_grinding_modules():
@@ -32,3 +32,27 @@ def test_tactile_sensor_added_only_when_selected():
 
 def test_unanswered_task_type_falls_back_to_grinding():
     assert compute_default_modules(None) == compute_default_modules("grinding")
+
+
+def test_resolve_effective_overrides_follows_default_set_without_explicit_override():
+    default_modules = compute_default_modules("inspection")
+
+    effective = resolve_effective_overrides({}, default_modules)
+
+    assert effective["grabber"] is True  # in the inspection default
+    assert effective["orienteering_solver"] is False  # not in the inspection default
+
+
+def test_resolve_effective_overrides_explicit_choice_always_wins():
+    default_modules = compute_default_modules("inspection")
+    module_overrides = {"grabber": False, "orienteering_solver": True}
+
+    effective = resolve_effective_overrides(module_overrides, default_modules)
+
+    assert effective["grabber"] is False  # explicitly off despite being in default
+    assert effective["orienteering_solver"] is True  # explicitly on despite being out of default
+
+
+def test_resolve_effective_overrides_covers_every_registered_module():
+    effective = resolve_effective_overrides({}, [])
+    assert set(effective) == set(MODULES)

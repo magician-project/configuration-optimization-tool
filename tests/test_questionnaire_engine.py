@@ -130,3 +130,46 @@ def test_resetting_an_override_makes_the_module_follow_the_default_again():
 
     assert "orienteering_solver" not in uc.module_overrides
     assert uc.modules["orienteering_solver"].status == "needs_action"
+
+
+def test_module_outside_default_is_disabled_with_no_explicit_override():
+    """Ticket-2 follow-up: a module outside the task-type default is now a hard
+    filter by itself, not just an informational badge — see resolve_effective_overrides."""
+    uc = _new_use_case()
+    uc.answers = QuestionnaireAnswers(q_task_type="inspection", q1_robot_arms="multiple")
+
+    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
+
+    # orienteering_solver isn't in the "inspection" default set, so even though
+    # q1_robot_arms="multiple" would normally trigger an impact, it's disabled.
+    assert uc.modules["orienteering_solver"].status == "disabled"
+    assert uc.modules["orienteering_solver"].impacts == []
+    # grabber IS in the default set, so the same answer still triggers normally
+    assert uc.modules["grabber"].status == "needs_action"
+
+
+def test_explicit_override_on_overrules_default_exclusion():
+    uc = _new_use_case()
+    uc.answers = QuestionnaireAnswers(q_task_type="inspection", q1_robot_arms="multiple")
+    uc.module_overrides["orienteering_solver"] = True
+
+    apply_impacts_to_modules(
+        uc, compute_impacts(uc.answers, module_answers={}, module_overrides=uc.module_overrides)
+    )
+
+    assert uc.modules["orienteering_solver"].status == "needs_action"
+    assert uc.modules["orienteering_solver"].impacts
+
+
+def test_switching_task_type_automatically_follows_new_default_without_override():
+    """No explicit override ever existed for orienteering_solver, so switching
+    task type alone (no override bookkeeping) changes whether it's active."""
+    uc = _new_use_case()
+    uc.answers = QuestionnaireAnswers(q_task_type="inspection", q1_robot_arms="multiple")
+    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
+    assert uc.modules["orienteering_solver"].status == "disabled"
+
+    uc.answers = QuestionnaireAnswers(q_task_type="grinding", q1_robot_arms="multiple")
+    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
+
+    assert uc.modules["orienteering_solver"].status == "needs_action"

@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 from app.models.questionnaire import QuestionnaireAnswers
 from app.models.use_case import ModuleImpact, Flag, ModuleState, ConfidenceScore, UseCase
-from app.engine.module_registry import MODULES, compute_default_modules
+from app.engine.module_registry import MODULES, compute_default_modules, resolve_effective_overrides
 
 
 # ---------------------------------------------------------------------------
@@ -22,14 +22,17 @@ def compute_impacts(
       }
     module_answers: dict keyed by module_id, e.g.
       {"vision_classifier": {"q_clf_model": "resnet18", ...}}
-    module_overrides: dict keyed by module_id, e.g. {"tactile_sensor": False} —
-      a module overridden off (False) never surfaces impacts or flags here,
-      regardless of what the questionnaire answers would otherwise trigger.
+    module_overrides: explicit per-module on/off choices, e.g. {"tactile_sensor": False}.
+      A module with no explicit entry here simply follows the task-type default module
+      set instead (see module_registry.resolve_effective_overrides) — so a module outside
+      the default set never surfaces impacts or flags unless it's explicitly turned on.
     """
     if module_answers is None:
         module_answers = {}
     if module_overrides is None:
         module_overrides = {}
+    default_modules = compute_default_modules(answers.q_task_type, answers.q3_additional_sensors)
+    effective_overrides = resolve_effective_overrides(module_overrides, default_modules)
     result: Dict[str, Dict] = {mid: {"impacts": [], "flags": []} for mid in MODULES}
     total_characteristics = 0
 
@@ -864,11 +867,12 @@ def compute_impacts(
         total_characteristics += 1
 
     # ------------------------------------------------------------------
-    # Overridden-off modules: hard filter — no impacts, no flags, regardless
-    # of what the questionnaire answers above would otherwise have triggered.
+    # Effectively-disabled modules (explicit override off, or no override
+    # and outside the default module set): hard filter — no impacts, no
+    # flags, regardless of what the questionnaire answers above triggered.
     # ------------------------------------------------------------------
     for mid in MODULES:
-        if module_overrides.get(mid) is False:
+        if effective_overrides.get(mid) is False:
             result[mid]["impacts"] = []
             result[mid]["flags"] = []
 
@@ -897,12 +901,17 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
     """
     Mutates use_case.modules in-place with fresh impacts and flags.
     Preserves flag acknowledged state where flag IDs match.
-    Resets module status to 'ok' or 'needs_action' based on new impacts,
-    or to 'disabled' for modules overridden off in use_case.module_overrides.
+    Resets module status to 'ok' or 'needs_action' based on new impacts, or to
+    'disabled' when a module is effectively off: either explicitly overridden
+    off, or left to follow the default module set and it falls outside it.
     """
     module_impacts = result["module_impacts"]
     use_case.confidence = ConfidenceScore(**result["confidence"])
-    overrides = use_case.module_overrides
+
+    use_case.default_modules = compute_default_modules(
+        use_case.answers.q_task_type, use_case.answers.q3_additional_sensors
+    )
+    effective_overrides = resolve_effective_overrides(use_case.module_overrides, use_case.default_modules)
 
     for mid, info in MODULES.items():
         data = module_impacts[mid]
@@ -924,7 +933,7 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
                 flag.acknowledged = prev_acked.get(flag.id, False)
                 new_flags.append(flag)
 
-        if overrides.get(mid) is False:
+        if effective_overrides.get(mid) is False:
             new_status = "disabled"
         else:
             new_status = "needs_action" if new_impacts else "ok"
@@ -940,10 +949,6 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
             impacts=new_impacts,
             flags=new_flags,
         )
-
-    use_case.default_modules = compute_default_modules(
-        use_case.answers.q_task_type, use_case.answers.q3_additional_sensors
-    )
 
 
 # ---------------------------------------------------------------------------

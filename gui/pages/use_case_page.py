@@ -324,8 +324,9 @@ class UseCasePage(QWidget):
         ms = uc.modules.get(module_id)
         if ms is None or ms.status in ("computing", "deploying"):
             return
-        currently_enabled = uc.module_overrides.get(module_id, True)
-        uc.module_overrides[module_id] = not currently_enabled
+        # ms.status already reflects the *effective* state (explicit override,
+        # or else default-module-set membership) — flip that, not a stale guess.
+        uc.module_overrides[module_id] = ms.status == "disabled"
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         result = compute_impacts(
             uc.answers, module_answers=uc.module_answers, module_overrides=uc.module_overrides

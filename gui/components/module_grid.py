@@ -294,23 +294,18 @@ class _ModuleTile(QFrame):
             )
             self._override_btn.setToolTip("Module is disabled — click to re-enable it.")
 
-        # Default-scope badge: purely informational, "disabled" always wins
-        if ms.status != "disabled" and not in_default:
-            if override is True:
-                text, fg, bg = "ENABLED (OVERRIDE)", "#1d4ed8", "#dbeafe"
-                tip = "Manually enabled even though it isn't in the default module set for this task type."
-            else:
-                text, fg, bg = "NOT IN DEFAULT SCOPE", "#6b7280", "#f3f4f6"
-                tip = (
-                    "Not part of the default module set for this task type, but still fully "
-                    "usable — any impacts triggered by your answers still show here."
-                )
-            self._scope_badge.setText(text)
+        # Scope badge: a module outside the default set is "disabled" by
+        # default (see resolve_effective_overrides), so the only way to see
+        # this badge is an explicit override forcing it on anyway.
+        if ms.status != "disabled" and not in_default and override is True:
+            self._scope_badge.setText("ENABLED (OVERRIDE)")
             self._scope_badge.setStyleSheet(
-                f"background: {bg}; color: {fg}; border-radius: 4px; "
+                "background: #dbeafe; color: #1d4ed8; border-radius: 4px; "
                 "padding: 1px 7px; font-size: 10px; font-weight: bold;"
             )
-            self._scope_badge.setToolTip(tip)
+            self._scope_badge.setToolTip(
+                "Manually enabled even though it isn't in the default module set for this task type."
+            )
             self._scope_badge.show()
         else:
             self._scope_badge.hide()

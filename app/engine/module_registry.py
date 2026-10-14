@@ -135,3 +135,18 @@ def compute_default_modules(task_type: Optional[str], additional_sensors: Option
     if additional_sensors and "tactile" in additional_sensors:
         modules.append("tactile_sensor")
     return modules
+
+
+def resolve_effective_overrides(
+    module_overrides: Dict[str, bool], default_modules: List[str]
+) -> Dict[str, bool]:
+    """Merge explicit per-module overrides with the default module set.
+
+    An explicit override always wins and persists regardless of task type. A
+    module with no explicit override simply follows the default module set —
+    active if it's in scope, disabled (hard filter) if it isn't. This is what
+    makes "Reset to default" meaningful: clearing an override lets a module
+    resume tracking the default set automatically, including across later
+    task-type changes.
+    """
+    return {mid: module_overrides.get(mid, mid in default_modules) for mid in MODULES}

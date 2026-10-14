@@ -35,13 +35,13 @@ A use case's answer to whether its robot arm only inspects, or also grinds/rewor
 _Avoid_: task mode, workflow type
 
 **Default module set**:
-The module ids relevant to a use case, derived from its task type (plus the tactile classifier when tactile sensing is selected). Recomputed from scratch on every save — never a frozen snapshot edited directly, and distinct from a per-module override a user applies on top of it. Advisory only: it never gates computation — a module outside it can still receive impacts and flags if the questionnaire answers trigger them.
+The module ids relevant to a use case, derived from its task type (plus the tactile classifier when tactile sensing is selected). Recomputed from scratch on every save — never a frozen snapshot edited directly. Acts as the *implicit* per-module state: a module with no explicit override is active if it's in this set and disabled (hard filter) if it isn't, so it's automatically re-evaluated whenever task type changes.
 _Avoid_: active modules (ambiguous with `ModuleState.status`), enabled modules
 
 **Module override**:
-A partner's explicit, per-module choice to force a module on or off, independent of the default module set. Persists on the use case across save/reload — including across later changes to task type or other answers, since it's a deliberate choice that must never be silently undone. Overriding a module off is a hard filter — it suppresses impacts, flags, and blocks compute/deploy entirely; overriding one on has no special computational effect since only override-off changes behaviour. A partner clears an override with an explicit "Reset to default" action, which removes the override entirely rather than flipping it — the module then goes back to following the default module set and ordinary impact computation.
+A partner's explicit, per-module choice to force a module on or off, independent of the default module set. An explicit override always wins over the default module set and persists across later changes to task type or other answers, since it's a deliberate choice that must never be silently undone — only a module with *no* explicit override tracks the default set automatically. Overriding a module off (or being outside the default set with no override) is a hard filter — it suppresses impacts, flags, and blocks compute/deploy entirely. A partner clears an override with an explicit "Reset to default" action, which removes the override entirely rather than flipping it — the module then goes back to tracking the default module set.
 _Avoid_: toggle (the UI control, not the domain concept), enable/disable (ambiguous with `ModuleState.status`)
 
 **Disabled** (module status):
-The `ModuleState.status` value a module gets once overridden off. Distinct from merely being absent from the default module set, which leaves a module's status untouched.
+The `ModuleState.status` value a module gets when it's effectively off: either explicitly overridden off, or left to follow the default module set and it falls outside it.
 _Avoid_: inactive, off
