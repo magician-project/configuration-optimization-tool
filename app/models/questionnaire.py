@@ -14,7 +14,8 @@ class QuestionnaireAnswers(BaseModel):
     q1_robot_arms: Optional[str] = None       # "single" | "multiple"
     q1_num_arms: Optional[int] = None
     # None = not yet answered; treated as "grinding" (full module set) for backward compatibility.
-    task_type: Optional[str] = None           # "inspection" | "grinding"
+    # Named to match the q_task_type schema question id (see gui/components/questionnaire_form.py).
+    q_task_type: Optional[str] = None         # "inspection" | "grinding"
 
     # Section B: Sensors & Perception
     q2_camera_type: Optional[str] = None      # "standard" | "gige" | "other"

@@ -39,7 +39,7 @@ def _new_use_case() -> UseCase:
 
 def test_apply_impacts_recomputes_default_modules_from_task_type():
     uc = _new_use_case()
-    uc.answers = QuestionnaireAnswers(task_type="inspection")
+    uc.answers = QuestionnaireAnswers(q_task_type="inspection")
 
     apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
 
@@ -47,7 +47,7 @@ def test_apply_impacts_recomputes_default_modules_from_task_type():
 
 
 def test_apply_impacts_falls_back_to_grinding_when_task_type_unanswered():
-    uc = _new_use_case()  # task_type left at its default (None) — backward compatibility
+    uc = _new_use_case()  # q_task_type left at its default (None) — backward compatibility
 
     apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
 

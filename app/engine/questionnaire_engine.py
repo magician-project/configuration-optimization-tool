@@ -919,7 +919,7 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
         )
 
     use_case.default_modules = compute_default_modules(
-        use_case.answers.task_type, use_case.answers.q3_additional_sensors
+        use_case.answers.q_task_type, use_case.answers.q3_additional_sensors
     )
 
 
