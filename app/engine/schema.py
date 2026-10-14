@@ -55,6 +55,22 @@ SCHEMA = {
             },
         },
         {
+            "id": "q_task_type",
+            "section": "A",
+            "title": "Task type",
+            "tooltip": (
+                "Does the robot arm only inspect, or also grind/rework detected defects? This "
+                "determines the default set of relevant modules: grinding also activates the "
+                "Orienteering Solver and Motion Planner on top of the inspection modules "
+                "(Grabber, Localiser, Vision Classifier, Ergodic Control)."
+            ),
+            "type": "select",
+            "options": [
+                {"value": "inspection", "label": "Inspection only"},
+                {"value": "grinding",   "label": "Inspection + grinding/rework"},
+            ],
+        },
+        {
             "id": "q2_camera_type",
             "section": "B",
             "title": "Camera type",

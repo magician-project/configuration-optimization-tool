@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 from app.models.questionnaire import QuestionnaireAnswers
 from app.models.use_case import ModuleImpact, Flag, ModuleState, ConfidenceScore, UseCase
-from app.engine.module_registry import MODULES
+from app.engine.module_registry import MODULES, compute_default_modules
 
 
 # ---------------------------------------------------------------------------
@@ -917,6 +917,10 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
             impacts=new_impacts,
             flags=new_flags,
         )
+
+    use_case.default_modules = compute_default_modules(
+        use_case.answers.task_type, use_case.answers.q3_additional_sensors
+    )
 
 
 # ---------------------------------------------------------------------------

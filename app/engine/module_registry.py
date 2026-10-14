@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List, Optional
 
 # Each module: id -> {name, ros_name, description, characteristics, compute_module}
 MODULES: Dict[str, dict] = {
@@ -111,3 +111,27 @@ MODULES: Dict[str, dict] = {
         "compute_module": "modules.motion_planning.compute",
     },
 }
+
+# Default module set per task type. "grinding" already implies inspection — there is no
+# grind-only scenario — so it's a superset of "inspection", not a separate branch.
+DEFAULT_MODULES_BY_TASK_TYPE: Dict[str, List[str]] = {
+    "inspection": ["grabber", "localiser", "vision_classifier", "ergodic_control"],
+    "grinding": [
+        "grabber", "localiser", "vision_classifier", "ergodic_control",
+        "orienteering_solver", "motion_planning",
+    ],
+}
+
+
+def compute_default_modules(task_type: Optional[str], additional_sensors: Optional[List[str]] = None) -> List[str]:
+    """Pure function: default module set for a task type.
+
+    task_type=None (not yet answered) falls back to "grinding" (the full set) for backward
+    compatibility with use cases saved before this question existed. tactile_sensor is added
+    only when tactile sensing was selected (Q3), regardless of task type.
+    """
+    base = DEFAULT_MODULES_BY_TASK_TYPE.get(task_type, DEFAULT_MODULES_BY_TASK_TYPE["grinding"])
+    modules = list(base)
+    if additional_sensors and "tactile" in additional_sensors:
+        modules.append("tactile_sensor")
+    return modules
