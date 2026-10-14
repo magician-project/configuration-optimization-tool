@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 
 from PySide6.QtWidgets import (
     QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
-    QLabel, QFrame, QSizePolicy, QGraphicsDropShadowEffect, QCheckBox,
+    QLabel, QFrame, QSizePolicy, QGraphicsDropShadowEffect, QPushButton,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
@@ -189,10 +189,12 @@ class _ModuleTile(QFrame):
         self._flag_badge.hide()
         header.addWidget(self._flag_badge)
 
-        self._override_checkbox = QCheckBox()
-        self._override_checkbox.setStyleSheet("background: transparent;")
-        self._override_checkbox.toggled.connect(self._on_override_toggled)
-        header.addWidget(self._override_checkbox)
+        self._override_btn = QPushButton()
+        self._override_btn.setCheckable(True)
+        self._override_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._override_btn.setFixedWidth(40)
+        self._override_btn.clicked.connect(self._on_override_toggled)
+        header.addWidget(self._override_btn)
         vbox.addLayout(header)
 
         # Status label
@@ -244,16 +246,32 @@ class _ModuleTile(QFrame):
             f"font-size: 11px; font-weight: 600; color: {accent}; background: transparent;"
         )
 
-        # Override toggle — reflects current state, blocked while a job is in flight
-        self._override_checkbox.blockSignals(True)
-        self._override_checkbox.setChecked(ms.status != "disabled")
-        self._override_checkbox.setEnabled(ms.status not in ("computing", "deploying"))
-        self._override_checkbox.setToolTip(
-            "Untick to exclude this module — no impacts, flags, compute or deploy."
-            if ms.status != "disabled"
-            else "Tick to re-enable this module."
-        )
-        self._override_checkbox.blockSignals(False)
+        # Override toggle — reflects current state, blocked while a job is in flight.
+        # Colour + text coded (ON = green, OFF = grey) rather than a native
+        # checkbox glyph, which was too subtle to read at a glance.
+        is_enabled = ms.status != "disabled"
+        self._override_btn.blockSignals(True)
+        self._override_btn.setChecked(is_enabled)
+        self._override_btn.blockSignals(False)
+        self._override_btn.setEnabled(ms.status not in ("computing", "deploying"))
+        if is_enabled:
+            self._override_btn.setText("ON")
+            self._override_btn.setStyleSheet(
+                "QPushButton { background: #16a34a; color: white; border: none; "
+                "border-radius: 9px; padding: 2px 0; font-size: 10px; font-weight: bold; }"
+                "QPushButton:disabled { background: #86efac; color: #f0fdf4; }"
+            )
+            self._override_btn.setToolTip(
+                "Module is enabled — click to disable it (no impacts, flags, compute or deploy)."
+            )
+        else:
+            self._override_btn.setText("OFF")
+            self._override_btn.setStyleSheet(
+                "QPushButton { background: #9ca3af; color: white; border: none; "
+                "border-radius: 9px; padding: 2px 0; font-size: 10px; font-weight: bold; }"
+                "QPushButton:disabled { background: #d1d5db; color: #f9fafb; }"
+            )
+            self._override_btn.setToolTip("Module is disabled — click to re-enable it.")
 
         # Default-scope badge: purely informational, "disabled" always wins
         if ms.status != "disabled" and not in_default:
@@ -336,5 +354,5 @@ class _ModuleTile(QFrame):
 
     def _on_override_toggled(self, _checked: bool) -> None:
         # The parent derives the actual new value from the authoritative
-        # use case state, not from this checkbox's transient UI state.
+        # use case state, not from this button's transient UI state.
         self.toggle_requested.emit()

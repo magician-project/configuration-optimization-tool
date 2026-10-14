@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QWidget, QFrame, QTabWidget, QCheckBox,
+    QScrollArea, QWidget, QFrame, QTabWidget,
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -130,6 +130,30 @@ class ModuleDetail(QDialog):
     def _on_config_changed(self, config: dict) -> None:
         self._module_config = config
 
+    def _sync_override_button(self) -> None:
+        """Colour + text coded (ON = green, OFF = grey) toggle button, kept in
+        sync with the module's status — a native checkbox proved too subtle."""
+        is_enabled = self._module.status != "disabled"
+        self._override_btn.blockSignals(True)
+        self._override_btn.setChecked(is_enabled)
+        self._override_btn.blockSignals(False)
+        if is_enabled:
+            self._override_btn.setText("ON")
+            self._override_btn.setStyleSheet(
+                "QPushButton { background: #16a34a; color: white; border: none; "
+                "border-radius: 4px; padding: 5px 0; font-weight: bold; }"
+            )
+            self._override_btn.setToolTip(
+                "Module is enabled — click to disable it (no impacts, flags, compute or deploy)."
+            )
+        else:
+            self._override_btn.setText("OFF")
+            self._override_btn.setStyleSheet(
+                "QPushButton { background: #9ca3af; color: white; border: none; "
+                "border-radius: 4px; padding: 5px 0; font-weight: bold; }"
+            )
+            self._override_btn.setToolTip("Module is disabled — click to re-enable it.")
+
     def _save_config(self) -> None:
         self.module_config_changed.emit(self._module.module_id, self._module_config)
         # Brief visual feedback via window title flash
@@ -143,9 +167,7 @@ class ModuleDetail(QDialog):
         self._module = module
         root = self.layout()
 
-        self._override_checkbox.blockSignals(True)
-        self._override_checkbox.setChecked(self._module.status != "disabled")
-        self._override_checkbox.blockSignals(False)
+        self._sync_override_button()
 
         _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser", "motion_planning"}
         if self._module.module_id in _TABBED_MODULES:
@@ -168,7 +190,7 @@ class ModuleDetail(QDialog):
         root = QVBoxLayout(self)
         root.setSpacing(10)
 
-        # Header (static — never changes; the enabled checkbox's checked
+        # Header (static — never changes; the toggle button's text/colour/checked
         # state is refreshed separately, see refresh())
         header = QHBoxLayout()
         title = QLabel(self._module.module_name)
@@ -178,16 +200,19 @@ class ModuleDetail(QDialog):
         sub.setTextFormat(Qt.TextFormat.RichText)
         header.addWidget(sub)
         header.addStretch()
-        self._override_checkbox = QCheckBox("Module enabled")
-        self._override_checkbox.setChecked(self._module.status != "disabled")
-        self._override_checkbox.setToolTip(
-            "Untick to exclude this module from impacts, compute and deploy."
-        )
-        self._override_checkbox.toggled.connect(
+        module_lbl = QLabel("Module:")
+        module_lbl.setStyleSheet("color: #6b7280; font-size: 12px;")
+        header.addWidget(module_lbl)
+        self._override_btn = QPushButton()
+        self._override_btn.setCheckable(True)
+        self._override_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._override_btn.setFixedWidth(90)
+        self._override_btn.clicked.connect(
             lambda _checked: self.override_toggled.emit(self._module.module_id)
         )
-        header.addWidget(self._override_checkbox)
+        header.addWidget(self._override_btn)
         root.addLayout(header)
+        self._sync_override_button()
 
         desc = QLabel(self._module.description)
         desc.setWordWrap(True)
