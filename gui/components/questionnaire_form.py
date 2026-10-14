@@ -57,6 +57,7 @@ class QuestionnaireForm(QScrollArea):
         self._answers: dict = {}
         self._widgets: dict = {}   # field_id -> widget
         self._conditional_widgets: list = []  # widgets with conditions
+        self._dimension_fields: dict = {}  # qid -> subfield ids (incl. "unit") for dimensions-type questions
 
         container = QWidget()
         container.setStyleSheet("background: transparent;")
@@ -221,6 +222,10 @@ class QuestionnaireForm(QScrollArea):
                     lambda _, _w=w, _fu=follow_up_widget, _q=q:
                     self._on_select_changed(_w, _fu, _q)
                 )
+                # Also register for _update_conditional_visibility so reloaded
+                # answers (set with blocked signals) still show this follow-up.
+                follow_up_widget.setProperty("question_condition", q["follow_up"]["condition"])
+                self._conditional_widgets.append(follow_up_widget)
 
             w.currentIndexChanged.connect(
                 lambda _, _w=w, _id=qid: self._on_field_changed(_id, _w.currentData())
@@ -249,6 +254,10 @@ class QuestionnaireForm(QScrollArea):
                         lambda _, _cbs=checkboxes, _fu=follow_up_widget, _q=q:
                         self._on_checkbox_changed(_cbs, _fu, _q)
                     )
+                # Also register for _update_conditional_visibility so reloaded
+                # answers (set with blocked signals) still show this follow-up.
+                follow_up_widget.setProperty("question_condition", q["follow_up"]["condition"])
+                self._conditional_widgets.append(follow_up_widget)
 
             for cb in checkboxes:
                 cb.stateChanged.connect(
@@ -337,7 +346,7 @@ class QuestionnaireForm(QScrollArea):
                 spin.setMinimum(0.0)
                 spin.setMaximum(9999.0)
                 spin.setDecimals(2)
-                spin.setFixedWidth(80)
+                spin.setFixedWidth(110)
                 field_key = f"{qid}_{field['id']}"
                 dims_dict[field['id']] = spin
                 self._widgets[field_key] = spin
@@ -347,7 +356,7 @@ class QuestionnaireForm(QScrollArea):
                 hbox.addWidget(spin)
 
             unit_cb = _NoScrollComboBox()
-            unit_cb.setFixedWidth(70)
+            unit_cb.setFixedWidth(80)
             for u in q.get("units", ["m"]):
                 unit_cb.addItem(u, u)
             unit_key = f"{qid}_unit"
@@ -358,6 +367,7 @@ class QuestionnaireForm(QScrollArea):
             hbox.addWidget(unit_cb)
             hbox.addStretch()
             container.setLayout(hbox)
+            self._dimension_fields[qid] = [f["id"] for f in q.get("fields", [])] + ["unit"]
             return container, follow_up_widget
 
         return QWidget(), None
@@ -452,23 +462,25 @@ class QuestionnaireForm(QScrollArea):
                 spin.setMinimum(0.0)
                 spin.setMaximum(9999.0)
                 spin.setDecimals(2)
-                spin.setFixedWidth(80)
-                self._widgets[f"q6_dimensions_{field['id']}"] = spin
+                spin.setFixedWidth(110)
+                self._widgets[f"{fid}_{field['id']}"] = spin
                 spin.valueChanged.connect(
-                    lambda _, _spin=spin, _fid=field["id"]: self._on_dimension_changed(_fid, _spin.value())
+                    lambda _, _spin=spin, _fid=field["id"], _qid=fid:
+                    self._on_dimension_changed(_qid, _fid, _spin.value())
                 )
                 grid.addWidget(spin)
             unit_cb = QComboBox()
-            unit_cb.setFixedWidth(70)
+            unit_cb.setFixedWidth(80)
             for u in fq.get("units", ["m"]):
                 unit_cb.addItem(u, u)
-            self._widgets["q6_dimensions_unit"] = unit_cb
+            self._widgets[f"{fid}_unit"] = unit_cb
             unit_cb.currentIndexChanged.connect(
-                lambda _, _uc=unit_cb: self._on_dimension_changed("unit", _uc.currentData())
+                lambda _, _uc=unit_cb, _qid=fid: self._on_dimension_changed(_qid, "unit", _uc.currentData())
             )
             grid.addWidget(unit_cb)
             grid.addStretch()
             vbox.addLayout(grid)
+            self._dimension_fields[fid] = [f["id"] for f in fq.get("fields", [])] + ["unit"]
 
         return frame
 
@@ -498,12 +510,12 @@ class QuestionnaireForm(QScrollArea):
             visible = self._condition_met(cond, current_value)
             widget.setVisible(visible)
 
-    def _on_dimension_changed(self, subfield: str, value) -> None:
-        dims = self._answers.get("q6_dimensions", {})
+    def _on_dimension_changed(self, qid: str, subfield: str, value) -> None:
+        dims = self._answers.get(qid, {})
         if not isinstance(dims, dict):
             dims = {}
         dims[subfield] = value
-        self._answers["q6_dimensions"] = dims
+        self._answers[qid] = dims
         self.answers_changed.emit(self._answers)
 
     def _on_select_changed(self, combo: QComboBox, follow_up_widget: QWidget, q: dict) -> None:
@@ -561,4 +573,26 @@ class QuestionnaireForm(QScrollArea):
             elif isinstance(widget, QLineEdit):
                 widget.blockSignals(True)
                 widget.setText(str(value))
+                widget.blockSignals(False)
+
+        # Dimensions-type questions store a dict answer (e.g. {"width": .., "height": ..}),
+        # keyed separately from their per-subfield widgets, so they need their own pass.
+        for qid, subfields in self._dimension_fields.items():
+            dims = self._answers.get(qid)
+            if not isinstance(dims, dict):
+                continue
+            for subfield in subfields:
+                value = dims.get(subfield)
+                if value is None:
+                    continue
+                widget = self._widgets.get(f"{qid}_{subfield}")
+                if widget is None:
+                    continue
+                widget.blockSignals(True)
+                if isinstance(widget, QComboBox):
+                    idx = widget.findData(value)
+                    if idx >= 0:
+                        widget.setCurrentIndex(idx)
+                elif isinstance(widget, QDoubleSpinBox):
+                    widget.setValue(float(value))
                 widget.blockSignals(False)
