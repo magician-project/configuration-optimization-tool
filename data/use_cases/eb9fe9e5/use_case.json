@@ -1,0 +1,392 @@
+{
+  "id": "eb9fe9e5",
+  "name": "WELDDeR",
+  "created_at": "2026-10-09T11:56:53.970263+00:00",
+  "updated_at": "2026-10-12T08:30:54.678350+00:00",
+  "answers": {
+    "q1_robot_arms": "single",
+    "q1_num_arms": null,
+    "q2_camera_type": "gige",
+    "q2_camera_spec": "Sony XCG-CP510",
+    "q2_camera_resolution": {
+      "height": 2056.0,
+      "width": 2464.0
+    },
+    "q2_camera_framerate": 23.0,
+    "q2_stream_shm": "yes",
+    "q2_stream_shm_name": "stream1",
+    "q3_additional_sensors": [],
+    "q4_lighting": "additional",
+    "q5_materials": [
+      "metal"
+    ],
+    "q5_other_material": null,
+    "q6_object_size": "variable",
+    "q6_dimensions": {
+      "length": 12.0,
+      "width": 3.0,
+      "height": null,
+      "unit": "m"
+    },
+    "q7_mesh": "in_preparation",
+    "q7_mesh_status": "unknown",
+    "q8_defects": [
+      "surface_damage"
+    ],
+    "q9_time": "none",
+    "q9_time_value": null,
+    "q9_time_unit": "minutes",
+    "q10_profit": "standard"
+  },
+  "module_answers": {},
+  "modules": {
+    "grabber": {
+      "module_id": "grabber",
+      "module_name": "Grabber",
+      "description": "Core sensor driver. Provides software access to all physical sensors on the Sensing Robot: GiGE Camera, ATI F/T Sensor, Teensy Accelerometer, Camera Light Controller, buttons, and ToF range finders.",
+      "status": "computed",
+      "impacts": [
+        {
+          "characteristic": "Usage of a different GiGE camera",
+          "affects": "Input",
+          "what_changes": "Camera (Sony XCG-CP510) selected. ARAVIS SDK is compatible with all GigE Vision cameras so no software change is required for standard GiGE swaps. For non-standard types (thermal, hyperspectral) additional investigation may be needed outside this characteristic.",
+          "action_type": "review",
+          "reason": "Q2: Non-default camera type selected"
+        },
+        {
+          "characteristic": "Camera resolution",
+          "affects": "Input",
+          "what_changes": "Capture resolution set to 2464.0\u00d72056.0 px. Update --size flag and params.yaml width/height accordingly. Higher resolutions increase storage and processing load.",
+          "action_type": "reconfigure",
+          "reason": "Q2: Camera resolution specified"
+        },
+        {
+          "characteristic": "Camera frame rate",
+          "affects": "Input",
+          "what_changes": "Target frame rate: 23.0 Hz. RAM-backed storage (--ram) is required at this frame rate. Update --fps flag and params.yaml frame_rate.",
+          "action_type": "reconfigure",
+          "reason": "Q2: Camera frame rate specified"
+        },
+        {
+          "characteristic": "Shared memory streaming",
+          "affects": "Output",
+          "what_changes": "Camera frames will be published to POSIX shared memory stream 'stream1' (--stream flag). File output is disabled when streaming. Required for the live vision classifier.",
+          "action_type": "reconfigure",
+          "reason": "Q2: Shared memory streaming enabled"
+        },
+        {
+          "characteristic": "Addition of more lights for better illumination",
+          "affects": "Process",
+          "what_changes": "Extra LED units can be connected to spare channels on the existing Camera Light Controller. Minor update to Arduino_Thread process to activate additional channels. Camera exposure must be recalibrated for the new lighting conditions.",
+          "action_type": "reconfigure",
+          "reason": "Q4: Additional lighting required"
+        }
+      ],
+      "flags": [
+        {
+          "id": "flag_framerate_ram",
+          "type": "warning",
+          "message": "Frame rate 23.0 Hz > 10 Hz requires RAM-backed storage. Ensure --ram flag is set in launch args.",
+          "module_id": "grabber",
+          "acknowledged": true
+        },
+        {
+          "id": "flag_cross_cutting",
+          "type": "warning",
+          "message": "Changes span 6 module(s). Phased integration and cross-module testing is strongly recommended.",
+          "module_id": "grabber",
+          "acknowledged": true
+        }
+      ],
+      "compute_result": {
+        "module_id": "grabber",
+        "success": true,
+        "outputs": {
+          "multi_arm_mode": 0,
+          "num_arms": 1,
+          "camera_type": "gige",
+          "camera_spec": "Sony XCG-CP510",
+          "use_camera": true,
+          "width": 2464,
+          "height": 2056,
+          "frame_rate": 23.0,
+          "use_ram": true,
+          "stream_data": true,
+          "camera_stream_name": "stream1",
+          "use_ati_force": false,
+          "use_teensy": false,
+          "use_arduino": false,
+          "extra_sensor_mask": 0,
+          "tactile_stream_name": "stream_tactile",
+          "extra_lighting": 1,
+          "lighting_mode": "none",
+          "manual_trigger_light": false,
+          "run_forever": true,
+          "countdown": 0,
+          "compress": false,
+          "silent": false,
+          "unixtime": false,
+          "simulate": false
+        },
+        "artifacts": {
+          "params_yaml": "C:\\Users\\BenteBruurs\\PythonProjects\\configuration-optimization-tool\\data\\use_cases\\eb9fe9e5\\compute_outputs\\grabber\\params.yaml",
+          "launch_args": "C:\\Users\\BenteBruurs\\PythonProjects\\configuration-optimization-tool\\data\\use_cases\\eb9fe9e5\\compute_outputs\\grabber\\launch_args.txt"
+        },
+        "deploy_blockers": null,
+        "error": null
+      },
+      "validated_at": "2026-10-12T08:30:48.525775+00:00",
+      "computed_at": "2026-10-12T08:30:54.678350+00:00",
+      "deployed_at": null
+    },
+    "orienteering_solver": {
+      "module_id": "orienteering_solver",
+      "module_name": "Orienteering Solver",
+      "description": "Generates optimal schedules for cleaning robots to address defects. Determines the sequence of defects to visit and service time to spend on each. Problem variants: OP (default), TSP, TOP (multi-arm), OPTW (time windows), OPVP (variable profit).",
+      "status": "needs_action",
+      "impacts": [
+        {
+          "characteristic": "Material",
+          "affects": "DefectProfitCalculator, Defect Information",
+          "what_changes": "Material(s): metal. Profit model and service time lookup must be calibrated for these materials. Partners must supply material-specific profit and service time specifications.",
+          "action_type": "reconfigure",
+          "reason": "Q5: Material(s) selected"
+        },
+        {
+          "characteristic": "Type defect",
+          "affects": "DefectProfitCalculator, Defect Information",
+          "what_changes": "Defect types: Surface damage. Profit function and service time model must be calibrated per defect type. Partners must supply defect-type-specific economic and operational parameters.",
+          "action_type": "reconfigure",
+          "reason": "Q8: Defect types selected"
+        },
+        {
+          "characteristic": "No time constraint",
+          "affects": "Problem Description",
+          "what_changes": "No time budget \u2014 problem reformulates from Orienteering Problem (OP) to Travelling Salesman Problem (TSP): all defects visited in optimal sequence. Algorithm process must switch to a TSP solver; time_restriction input is ignored.",
+          "action_type": "reconfigure",
+          "reason": "Q9: No time constraints"
+        }
+      ],
+      "flags": [
+        {
+          "id": "flag_cross_cutting",
+          "type": "warning",
+          "message": "Changes span 6 module(s). Phased integration and cross-module testing is strongly recommended.",
+          "module_id": "orienteering_solver",
+          "acknowledged": false
+        }
+      ],
+      "compute_result": null,
+      "validated_at": null,
+      "computed_at": null,
+      "deployed_at": null
+    },
+    "localiser": {
+      "module_id": "localiser",
+      "module_name": "Localiser",
+      "description": "Publishes the pose of a workpiece mesh relative to the robot base in the ROS2 TF2 framework. Foundational for motion planning. A calibrated Setup is registered once (operator + robot, requires a mesh) and then republished at runtime as static or slider-corrected dynamic TF \u2014 no mesh is needed once a Setup is registered.",
+      "status": "needs_action",
+      "impacts": [
+        {
+          "characteristic": "Material Y",
+          "affects": "Process",
+          "what_changes": "Surface material(s): metal. If a new Setup still needs registering for this workpiece, mesh availability (Q7) determines whether Registration can proceed.",
+          "action_type": "reconfigure",
+          "reason": "Q5: Material(s) selected"
+        },
+        {
+          "characteristic": "Material Y",
+          "affects": "Process",
+          "what_changes": "Mesh in preparation (Status unknown). If this Setup isn't registered yet, Registration is blocked until the mesh is finalized; an already-registered Setup is unaffected.",
+          "action_type": "review",
+          "reason": "Q7: Mesh in preparation"
+        },
+        {
+          "characteristic": "No time constraint",
+          "affects": "Process",
+          "what_changes": "Localiser can run more exhaustive search and refinement cycles. Time deadline check within the Localiser can be removed or relaxed, potentially improving localization accuracy.",
+          "action_type": "reconfigure",
+          "reason": "Q9: No time constraints"
+        }
+      ],
+      "flags": [
+        {
+          "id": "flag_mesh_prep",
+          "type": "warning",
+          "message": "Registering a new Localiser Setup is blocked until the mesh is available. Revisit this assessment when the mesh is ready.",
+          "module_id": "localiser",
+          "acknowledged": false
+        },
+        {
+          "id": "flag_cross_cutting",
+          "type": "warning",
+          "message": "Changes span 6 module(s). Phased integration and cross-module testing is strongly recommended.",
+          "module_id": "localiser",
+          "acknowledged": false
+        }
+      ],
+      "compute_result": null,
+      "validated_at": null,
+      "computed_at": null,
+      "deployed_at": null
+    },
+    "tactile_sensor": {
+      "module_id": "tactile_sensor",
+      "module_name": "Tactile Classifier",
+      "description": "Detects and classifies surface defects using tactile probe data (force, acceleration). CNN-LSTM / LSTM-CNN ensemble model. Must be retrained whenever materials, object sizes, or defect types change.",
+      "status": "needs_action",
+      "impacts": [
+        {
+          "characteristic": "Different materials, object sizes, dirt/dent types, and time constraints",
+          "affects": "Input",
+          "what_changes": "Tactile Classifier ML model must be retrained on labeled data for: metal. Retraining pipeline: Pre_calculations \u2192 Neural_network (CNN-LSTM) \u2192 Ensemble. Collect new material-specific tactile data before retraining.",
+          "action_type": "retrain",
+          "reason": "Q5: New material(s) selected"
+        },
+        {
+          "characteristic": "Different materials, object sizes, dirt/dent types, and time constraints",
+          "affects": "Input",
+          "what_changes": "Object size: variable sizes. Size affects how training data is collected and how the tactile model is trained. Data collection protocols must reflect the contact dynamics appropriate for this size.",
+          "action_type": "review",
+          "reason": "Q6: Object size specified"
+        },
+        {
+          "characteristic": "Different materials, object sizes, dirt/dent types, and time constraints",
+          "affects": "Input",
+          "what_changes": "Tactile Classifier must have training data for defect types: Surface damage. Classes in the CNN-LSTM output layer must match the selected types. Re-label and retrain if any type is new.",
+          "action_type": "retrain",
+          "reason": "Q8: Defect types selected"
+        }
+      ],
+      "flags": [
+        {
+          "id": "flag_retrain",
+          "type": "error",
+          "message": "New material selected \u2014 vision and tactile classifiers must be retrained on data covering this material.",
+          "module_id": "tactile_sensor",
+          "acknowledged": false
+        },
+        {
+          "id": "flag_geometric_defects",
+          "type": "warning",
+          "message": "Dents and surface damage require 3D or depth-aware data. Verify labelled examples exist before training.",
+          "module_id": "tactile_sensor",
+          "acknowledged": false
+        },
+        {
+          "id": "flag_cross_cutting",
+          "type": "warning",
+          "message": "Changes span 6 module(s). Phased integration and cross-module testing is strongly recommended.",
+          "module_id": "tactile_sensor",
+          "acknowledged": false
+        }
+      ],
+      "compute_result": null,
+      "validated_at": null,
+      "computed_at": null,
+      "deployed_at": null
+    },
+    "vision_classifier": {
+      "module_id": "vision_classifier",
+      "module_name": "Vision Classifier",
+      "description": "Visual defect detection and classification using camera images. Implicitly affected when new materials are introduced \u2014 model must be retrained and the Vision Model Name parameter in the Configuration Module must be updated.",
+      "status": "needs_action",
+      "impacts": [
+        {
+          "characteristic": "(implicit) Retrain vision model on new material data",
+          "affects": "Input",
+          "what_changes": "Vision Classifier model must be retrained on images of: metal. Update Vision Model Name parameter in the Configuration Module after retraining.",
+          "action_type": "retrain",
+          "reason": "Q5: New material(s) selected \u2014 vision retraining required"
+        }
+      ],
+      "flags": [
+        {
+          "id": "flag_retrain_vision",
+          "type": "error",
+          "message": "New material selected \u2014 vision classifier must be retrained on data covering this material.",
+          "module_id": "vision_classifier",
+          "acknowledged": false
+        },
+        {
+          "id": "flag_cross_cutting",
+          "type": "warning",
+          "message": "Changes span 6 module(s). Phased integration and cross-module testing is strongly recommended.",
+          "module_id": "vision_classifier",
+          "acknowledged": false
+        }
+      ],
+      "compute_result": null,
+      "validated_at": null,
+      "computed_at": null,
+      "deployed_at": null
+    },
+    "ergodic_control": {
+      "module_id": "ergodic_control",
+      "module_name": "Ergodic Control",
+      "description": "Plans inspection trajectories that prioritise high-risk surface regions. Uses a Kalman filter to maintain a belief over defect distributions, combines historical data and welding process priors, then solves an ergodic control optimisation to generate end-effector waypoints on the 3D mesh.",
+      "status": "needs_action",
+      "impacts": [
+        {
+          "characteristic": "3D mesh in preparation",
+          "affects": "Input",
+          "what_changes": "Mesh is not yet available. Configure the mesh path in the Ergodic Control module config tab once the mesh is ready.",
+          "action_type": "review",
+          "reason": "Q7: 3D mesh in preparation"
+        },
+        {
+          "characteristic": "No time constraint",
+          "affects": "Process",
+          "what_changes": "No time budget specified \u2014 dense trajectory mode is available. Consider setting a high time budget in the Ergodic Control configuration to maximise surface coverage.",
+          "action_type": "reconfigure",
+          "reason": "Q9: No time constraints"
+        },
+        {
+          "characteristic": "Material / defect context updated",
+          "affects": "Input",
+          "what_changes": "Target materials: metal. Defect types: surface_damage. The Ergodic Control prior distribution is seeded from this context \u2014 re-run compute to regenerate trajectory and Kalman configs.",
+          "action_type": "reconfigure",
+          "reason": "Q5/Q8: Material or defect types specified"
+        }
+      ],
+      "flags": [
+        {
+          "id": "flag_ergodic_mesh_pending",
+          "type": "human_oversight",
+          "message": "3D mesh is in preparation \u2014 configure the mesh path before running compute.",
+          "module_id": "ergodic_control",
+          "acknowledged": false
+        },
+        {
+          "id": "flag_cross_cutting",
+          "type": "warning",
+          "message": "Changes span 6 module(s). Phased integration and cross-module testing is strongly recommended.",
+          "module_id": "ergodic_control",
+          "acknowledged": false
+        }
+      ],
+      "compute_result": null,
+      "validated_at": null,
+      "computed_at": null,
+      "deployed_at": null
+    },
+    "motion_planning": {
+      "module_id": "motion_planning",
+      "module_name": "Motion Planner",
+      "description": "Converts target poses or Cartesian paths into time-sampled end-effector references. Transforms poses through TF, optionally projects paths onto workpiece meshes, assigns surface-normal orientations, applies velocity limits, and selects impedance/admittance control and sander state.",
+      "status": "ok",
+      "impacts": [],
+      "flags": [],
+      "compute_result": null,
+      "validated_at": null,
+      "computed_at": null,
+      "deployed_at": null
+    }
+  },
+  "confidence": {
+    "score": 8,
+    "max": 9,
+    "percentage": 88.9,
+    "level": "high"
+  }
+}
