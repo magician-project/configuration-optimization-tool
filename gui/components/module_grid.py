@@ -45,6 +45,7 @@ MODULE_ORDER = ["grabber", "orienteering_solver", "localiser", "tactile_sensor",
 class ModuleGrid(QWidget):
     module_selected = Signal(str)   # module_id
     override_toggle_requested = Signal(str)   # module_id
+    override_reset_requested = Signal(str)   # module_id
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -80,6 +81,7 @@ class ModuleGrid(QWidget):
             tile = _ModuleTile(mid, info["name"], info["description"])
             tile.clicked.connect(lambda _mid=mid: self.module_selected.emit(_mid))
             tile.toggle_requested.connect(lambda _mid=mid: self.override_toggle_requested.emit(_mid))
+            tile.reset_requested.connect(lambda _mid=mid: self.override_reset_requested.emit(_mid))
             self._tiles[mid] = tile
             grid.addWidget(tile, i // 3, i % 3)
 
@@ -122,6 +124,7 @@ class ModuleGrid(QWidget):
 class _ModuleTile(QFrame):
     clicked = Signal()
     toggle_requested = Signal()
+    reset_requested = Signal()
 
     _NORMAL_BORDER = "#e5e7eb"
 
@@ -197,10 +200,27 @@ class _ModuleTile(QFrame):
         header.addWidget(self._override_btn)
         vbox.addLayout(header)
 
-        # Status label
+        # Status label + reset-override link (link only shown when an
+        # explicit override exists for this module)
+        status_row = QHBoxLayout()
+        status_row.setSpacing(6)
         self._status_lbl = QLabel("ok")
         self._status_lbl.setStyleSheet("font-size: 11px; color: #6b7280; background: transparent;")
-        vbox.addWidget(self._status_lbl)
+        status_row.addWidget(self._status_lbl)
+        self._reset_link = QPushButton("Reset")
+        self._reset_link.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._reset_link.setStyleSheet(
+            "QPushButton { border: none; background: transparent; color: #2563eb; "
+            "font-size: 10px; text-decoration: underline; padding: 0; }"
+        )
+        self._reset_link.setToolTip(
+            "Clear this manual override — the module will follow the task-type default again."
+        )
+        self._reset_link.clicked.connect(lambda: self.reset_requested.emit())
+        self._reset_link.hide()
+        status_row.addWidget(self._reset_link)
+        status_row.addStretch()
+        vbox.addLayout(status_row)
 
         # Default-scope badge (shown only when the module is outside the
         # task-type default set, or explicitly enabled despite that)
@@ -245,6 +265,7 @@ class _ModuleTile(QFrame):
         self._status_lbl.setStyleSheet(
             f"font-size: 11px; font-weight: 600; color: {accent}; background: transparent;"
         )
+        self._reset_link.setVisible(override is not None)
 
         # Override toggle — reflects current state, blocked while a job is in flight.
         # Colour + text coded (ON = green, OFF = grey) rather than a native

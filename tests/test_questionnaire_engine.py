@@ -110,3 +110,23 @@ def test_re_enabling_a_module_recomputes_its_status_from_current_answers():
 
     assert uc.modules["orienteering_solver"].status == "needs_action"
     assert uc.modules["orienteering_solver"].impacts
+
+
+def test_resetting_an_override_makes_the_module_follow_the_default_again():
+    """Clearing the module_overrides key (not just flipping it) is how the GUI's
+    "Reset to default" action un-sticks an override — see use_case_page._reset_module_override."""
+    uc = _new_use_case()
+    uc.answers = QuestionnaireAnswers(q1_robot_arms="multiple")
+    uc.module_overrides["orienteering_solver"] = False
+    apply_impacts_to_modules(
+        uc, compute_impacts(uc.answers, module_answers={}, module_overrides=uc.module_overrides)
+    )
+    assert uc.modules["orienteering_solver"].status == "disabled"
+
+    del uc.module_overrides["orienteering_solver"]
+    apply_impacts_to_modules(
+        uc, compute_impacts(uc.answers, module_answers={}, module_overrides=uc.module_overrides)
+    )
+
+    assert "orienteering_solver" not in uc.module_overrides
+    assert uc.modules["orienteering_solver"].status == "needs_action"

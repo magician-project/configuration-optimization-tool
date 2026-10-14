@@ -39,7 +39,7 @@ The module ids relevant to a use case, derived from its task type (plus the tact
 _Avoid_: active modules (ambiguous with `ModuleState.status`), enabled modules
 
 **Module override**:
-A partner's explicit, per-module choice to force a module on or off, independent of the default module set. Persists on the use case across save/reload. Overriding a module off is a hard filter — it suppresses impacts, flags, and blocks compute/deploy entirely; overriding one on has no special computational effect since only override-off changes behaviour.
+A partner's explicit, per-module choice to force a module on or off, independent of the default module set. Persists on the use case across save/reload — including across later changes to task type or other answers, since it's a deliberate choice that must never be silently undone. Overriding a module off is a hard filter — it suppresses impacts, flags, and blocks compute/deploy entirely; overriding one on has no special computational effect since only override-off changes behaviour. A partner clears an override with an explicit "Reset to default" action, which removes the override entirely rather than flipping it — the module then goes back to following the default module set and ordinary impact computation.
 _Avoid_: toggle (the UI control, not the domain concept), enable/disable (ambiguous with `ModuleState.status`)
 
 **Disabled** (module status):

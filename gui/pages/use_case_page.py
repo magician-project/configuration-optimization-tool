@@ -143,6 +143,7 @@ class UseCasePage(QWidget):
         self._module_grid = ModuleGrid()
         self._module_grid.module_selected.connect(self._open_module_detail)
         self._module_grid.override_toggle_requested.connect(self._toggle_module_override)
+        self._module_grid.override_reset_requested.connect(self._reset_module_override)
         dash_vbox.addWidget(self._module_grid, stretch=1)
         self._tabs.addTab(dash_tab, "Module Dashboard")
 
@@ -184,6 +185,14 @@ class UseCasePage(QWidget):
             default_modules=uc.default_modules,
             module_overrides=uc.module_overrides,
         )
+
+    def _refresh_open_dialog(self, module_id: str) -> None:
+        """Push the latest ModuleState + override value into the open detail dialog, if any."""
+        if self._use_case is None or self._active_detail_dlg is None:
+            return
+        ms = self._use_case.modules.get(module_id)
+        if ms:
+            self._active_detail_dlg.refresh(ms, override=self._use_case.module_overrides.get(module_id))
 
     # ------------------------------------------------------------------
     # Questionnaire save / dirty tracking
@@ -274,10 +283,14 @@ class UseCasePage(QWidget):
         if ms is None:
             return
         module_config = self._use_case.module_answers.get(module_id, {})
-        dlg = ModuleDetail(ms, module_config=module_config, parent=self)
+        dlg = ModuleDetail(
+            ms, module_config=module_config,
+            override=self._use_case.module_overrides.get(module_id), parent=self,
+        )
         dlg.action_requested.connect(self._handle_module_action)
         dlg.module_config_changed.connect(self._on_module_config_changed)
         dlg.override_toggled.connect(self._toggle_module_override)
+        dlg.override_reset_requested.connect(self._reset_module_override)
         self._active_detail_dlg = dlg
         dlg.exec()
         self._active_detail_dlg = None
@@ -300,11 +313,7 @@ class UseCasePage(QWidget):
         apply_impacts_to_modules(self._use_case, result)
         json_store.save(self._use_case)
         self._refresh_grid()
-        # Refresh the open dialog
-        if self._active_detail_dlg:
-            ms = self._use_case.modules.get(module_id)
-            if ms:
-                self._active_detail_dlg.refresh(ms)
+        self._refresh_open_dialog(module_id)
 
     @Slot(str)
     def _toggle_module_override(self, module_id: str) -> None:
@@ -324,10 +333,28 @@ class UseCasePage(QWidget):
         apply_impacts_to_modules(uc, result)
         json_store.save(uc)
         self._refresh_grid()
-        if self._active_detail_dlg:
-            new_ms = uc.modules.get(module_id)
-            if new_ms:
-                self._active_detail_dlg.refresh(new_ms)
+        self._refresh_open_dialog(module_id)
+
+    @Slot(str)
+    def _reset_module_override(self, module_id: str) -> None:
+        """Clear an explicit override so the module follows the task-type default again."""
+        uc = self._use_case
+        if uc is None:
+            return
+        ms = uc.modules.get(module_id)
+        if ms is None or ms.status in ("computing", "deploying"):
+            return
+        if module_id not in uc.module_overrides:
+            return
+        del uc.module_overrides[module_id]
+        uc.updated_at = datetime.now(timezone.utc).isoformat()
+        result = compute_impacts(
+            uc.answers, module_answers=uc.module_answers, module_overrides=uc.module_overrides
+        )
+        apply_impacts_to_modules(uc, result)
+        json_store.save(uc)
+        self._refresh_grid()
+        self._refresh_open_dialog(module_id)
 
     @Slot(str, str)
     def _handle_module_action(self, module_id: str, action: str) -> None:
@@ -352,8 +379,7 @@ class UseCasePage(QWidget):
             f.acknowledged = True
         json_store.save(uc)
         self._refresh_grid()
-        if self._active_detail_dlg:
-            self._active_detail_dlg.refresh(ms)
+        self._refresh_open_dialog(module_id)
         if newly_acked:
             flag_word = "flag" if newly_acked == 1 else "flags"
             self._show_banner(
@@ -377,8 +403,7 @@ class UseCasePage(QWidget):
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
         self._refresh_grid()
-        if self._active_detail_dlg:
-            self._active_detail_dlg.refresh(ms)
+        self._refresh_open_dialog(module_id)
 
     def _run_compute(self, module_id: str) -> None:
         uc = self._use_case
@@ -392,8 +417,7 @@ class UseCasePage(QWidget):
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
         self._refresh_grid()
-        if self._active_detail_dlg:
-            self._active_detail_dlg.refresh(ms)
+        self._refresh_open_dialog(module_id)
 
         from app.engine.module_registry import MODULES
         module_name = MODULES.get(module_id, {}).get("name", module_id)
@@ -447,8 +471,7 @@ class UseCasePage(QWidget):
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
         self._refresh_grid()
-        if self._active_detail_dlg:
-            self._active_detail_dlg.refresh(ms)
+        self._refresh_open_dialog(module_id)
 
     def _deploy_module(self, module_id: str) -> None:
         uc = self._use_case
@@ -519,5 +542,4 @@ class UseCasePage(QWidget):
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
         self._refresh_grid()
-        if self._active_detail_dlg:
-            self._active_detail_dlg.refresh(ms)
+        self._refresh_open_dialog(module_id)

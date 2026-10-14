@@ -15,6 +15,8 @@ Lifecycle buttons shown based on module status:
 
 from __future__ import annotations
 
+from typing import Optional
+
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QWidget, QFrame, QTabWidget,
@@ -58,11 +60,17 @@ class ModuleDetail(QDialog):
     # Emitted when the user (un)ticks the enable/disable checkbox; parent
     # derives the new value from the authoritative use case state and saves it
     override_toggled = Signal(str)   # module_id
+    # Emitted when the user clears an explicit override, so the module goes
+    # back to following the task-type default + normal impact computation
+    override_reset_requested = Signal(str)   # module_id
 
-    def __init__(self, module: ModuleState, module_config: dict = None, parent=None) -> None:
+    def __init__(
+        self, module: ModuleState, module_config: dict = None, override: Optional[bool] = None, parent=None
+    ) -> None:
         super().__init__(parent)
         self._module = module
         self._module_config: dict = dict(module_config or {})
+        self._override = override   # True/False = explicit, None = following default
         self.setWindowTitle(module.module_name)
         self.setMinimumSize(640, 560)
         self.setModal(True)
@@ -154,6 +162,10 @@ class ModuleDetail(QDialog):
             )
             self._override_btn.setToolTip("Module is disabled — click to re-enable it.")
 
+        # Only shown when an explicit override exists — clears it so the module
+        # goes back to following the task-type default + normal impact computation
+        self._reset_override_btn.setVisible(self._override is not None)
+
     def _save_config(self) -> None:
         self.module_config_changed.emit(self._module.module_id, self._module_config)
         # Brief visual feedback via window title flash
@@ -162,9 +174,10 @@ class ModuleDetail(QDialog):
         from PySide6.QtCore import QTimer
         QTimer.singleShot(1500, lambda: self.setWindowTitle(orig))
 
-    def refresh(self, module: ModuleState) -> None:
+    def refresh(self, module: ModuleState, override: Optional[bool] = None) -> None:
         """Update the dialog in-place after an action has been taken."""
         self._module = module
+        self._override = override
         root = self.layout()
 
         self._sync_override_button()
@@ -211,6 +224,19 @@ class ModuleDetail(QDialog):
             lambda _checked: self.override_toggled.emit(self._module.module_id)
         )
         header.addWidget(self._override_btn)
+        self._reset_override_btn = QPushButton("Reset to default")
+        self._reset_override_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._reset_override_btn.setStyleSheet(
+            "QPushButton { border: none; background: transparent; color: #2563eb; "
+            "font-size: 11px; text-decoration: underline; }"
+        )
+        self._reset_override_btn.setToolTip(
+            "Clear this manual override — the module will follow the task-type default again."
+        )
+        self._reset_override_btn.clicked.connect(
+            lambda: self.override_reset_requested.emit(self._module.module_id)
+        )
+        header.addWidget(self._reset_override_btn)
         root.addLayout(header)
         self._sync_override_button()
 
