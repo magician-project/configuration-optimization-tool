@@ -69,7 +69,7 @@ def load(use_case_id: str) -> Optional[UseCase]:
 def _ensure_all_modules(uc: UseCase) -> None:
     """Add any modules that exist in the registry but are missing from the stored use case.
     This handles the case where new modules are added after a use case was first saved."""
-    from app.engine.module_registry import MODULES
+    from app.engine.module_registry import MODULES, compute_default_modules
     from app.models.use_case import ModuleState
     for mid, info in MODULES.items():
         if mid not in uc.modules:
@@ -82,6 +82,10 @@ def _ensure_all_modules(uc: UseCase) -> None:
                 description=info["description"],
                 status=status,
             )
+    # Always recomputed on load — use cases saved before this field existed (or not
+    # re-saved since) would otherwise be stuck with the Pydantic default `[]` instead
+    # of the task-type fallback, leaving every module looking inactive.
+    uc.default_modules = compute_default_modules(uc.answers.q_task_type, uc.answers.q3_additional_sensors)
 
 
 def list_all() -> List[UseCase]:

@@ -29,3 +29,11 @@ _Avoid_: automation level, autonomy threshold
 **Implemented / Verified / Supported**:
 A three-step maturity ladder for any COT capability. _Implemented_: the code path exists and runs. _Verified_: it has been exercised against a representative live environment (e.g. a running ROS 2 node) and produces correct results. _Supported_: a Verified capability COT officially stands behind for a release — documented and safe for a partner to rely on. A capability can be Implemented without being Verified or Supported.
 _Avoid_: tested (too vague — state which rung of the ladder)
+
+**Task type**:
+A use case's answer to whether its robot arm only inspects, or also grinds/reworks. Grinding always implies inspection too — there is no grind-only scenario. Determines a use case's default module set.
+_Avoid_: task mode, workflow type
+
+**Default module set**:
+The module ids relevant to a use case, derived from its task type (plus the tactile classifier when tactile sensing is selected). Recomputed from scratch on every save — never a frozen snapshot edited directly, and distinct from a per-module override a user applies on top of it.
+_Avoid_: active modules (ambiguous with `ModuleState.status`), enabled modules

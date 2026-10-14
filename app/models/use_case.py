@@ -90,4 +90,7 @@ class UseCase(BaseModel):
     # holds all q_clf_* fields configured in the module detail panel.
     module_answers: Dict[str, dict] = {}
     modules: Dict[str, ModuleState] = {}
+    # Module ids relevant to this use case's task type (see module_registry.compute_default_modules).
+    # Recomputed on every save — never edited by hand.
+    default_modules: List[str] = []
     confidence: ConfidenceScore = ConfidenceScore(score=0, percentage=0.0, level="low")
