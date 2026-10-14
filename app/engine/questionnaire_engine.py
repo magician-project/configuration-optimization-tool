@@ -8,7 +8,11 @@ from app.engine.module_registry import MODULES, compute_default_modules
 # Public API
 # ---------------------------------------------------------------------------
 
-def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) -> Dict[str, Any]:
+def compute_impacts(
+    answers: QuestionnaireAnswers,
+    module_answers: dict = None,
+    module_overrides: Dict[str, bool] = None,
+) -> Dict[str, Any]:
     """
     Pure function. Given questionnaire answers and optional per-module config,
     returns:
@@ -18,9 +22,14 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
       }
     module_answers: dict keyed by module_id, e.g.
       {"vision_classifier": {"q_clf_model": "resnet18", ...}}
+    module_overrides: dict keyed by module_id, e.g. {"tactile_sensor": False} —
+      a module overridden off (False) never surfaces impacts or flags here,
+      regardless of what the questionnaire answers would otherwise trigger.
     """
     if module_answers is None:
         module_answers = {}
+    if module_overrides is None:
+        module_overrides = {}
     result: Dict[str, Dict] = {mid: {"impacts": [], "flags": []} for mid in MODULES}
     total_characteristics = 0
 
@@ -855,6 +864,15 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
         total_characteristics += 1
 
     # ------------------------------------------------------------------
+    # Overridden-off modules: hard filter — no impacts, no flags, regardless
+    # of what the questionnaire answers above would otherwise have triggered.
+    # ------------------------------------------------------------------
+    for mid in MODULES:
+        if module_overrides.get(mid) is False:
+            result[mid]["impacts"] = []
+            result[mid]["flags"] = []
+
+    # ------------------------------------------------------------------
     # Cross-cutting flag: >= 5 characteristics triggered
     # ------------------------------------------------------------------
     affected_modules = [mid for mid, data in result.items() if data["impacts"]]
@@ -879,10 +897,12 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
     """
     Mutates use_case.modules in-place with fresh impacts and flags.
     Preserves flag acknowledged state where flag IDs match.
-    Resets module status to 'ok' or 'needs_action' based on new impacts.
+    Resets module status to 'ok' or 'needs_action' based on new impacts,
+    or to 'disabled' for modules overridden off in use_case.module_overrides.
     """
     module_impacts = result["module_impacts"]
     use_case.confidence = ConfidenceScore(**result["confidence"])
+    overrides = use_case.module_overrides
 
     for mid, info in MODULES.items():
         data = module_impacts[mid]
@@ -904,10 +924,13 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
                 flag.acknowledged = prev_acked.get(flag.id, False)
                 new_flags.append(flag)
 
-        new_status = "needs_action" if new_impacts else "ok"
-        # Ergodic Control always requires configuration before compute
-        if mid == "ergodic_control" and new_status == "ok":
-            new_status = "needs_action"
+        if overrides.get(mid) is False:
+            new_status = "disabled"
+        else:
+            new_status = "needs_action" if new_impacts else "ok"
+            # Ergodic Control always requires configuration before compute
+            if mid == "ergodic_control" and new_status == "ok":
+                new_status = "needs_action"
 
         use_case.modules[mid] = ModuleState(
             module_id=mid,

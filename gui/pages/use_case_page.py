@@ -142,6 +142,7 @@ class UseCasePage(QWidget):
         dash_vbox.setSpacing(8)
         self._module_grid = ModuleGrid()
         self._module_grid.module_selected.connect(self._open_module_detail)
+        self._module_grid.override_toggle_requested.connect(self._toggle_module_override)
         dash_vbox.addWidget(self._module_grid, stretch=1)
         self._tabs.addTab(dash_tab, "Module Dashboard")
 
@@ -171,7 +172,18 @@ class UseCasePage(QWidget):
         self._title_lbl.setTextFormat(Qt.TextFormat.RichText)
         self._confidence_bar.update_score(uc.confidence)
         self._form.load_answers(uc.answers.model_dump())
-        self._module_grid.update_modules(uc.modules)
+        self._refresh_grid()
+
+    def _refresh_grid(self) -> None:
+        """Push the current module states, default set, and overrides to the grid."""
+        uc = self._use_case
+        if uc is None:
+            return
+        self._module_grid.update_modules(
+            uc.modules,
+            default_modules=uc.default_modules,
+            module_overrides=uc.module_overrides,
+        )
 
     # ------------------------------------------------------------------
     # Questionnaire save / dirty tracking
@@ -227,7 +239,11 @@ class UseCasePage(QWidget):
 
         self._use_case.answers = parsed
         self._use_case.updated_at = datetime.now(timezone.utc).isoformat()
-        result = compute_impacts(parsed, module_answers=self._use_case.module_answers)
+        result = compute_impacts(
+            parsed,
+            module_answers=self._use_case.module_answers,
+            module_overrides=self._use_case.module_overrides,
+        )
         apply_impacts_to_modules(self._use_case, result)
         json_store.save(self._use_case)
 
@@ -235,7 +251,7 @@ class UseCasePage(QWidget):
         self._pending_answers = None
         self._save_bar.hide()
         self._confidence_bar.update_score(self._use_case.confidence)
-        self._module_grid.update_modules(self._use_case.modules)
+        self._refresh_grid()
 
         needs = sum(1 for m in self._use_case.modules.values() if m.status == "needs_action")
         total = len(self._use_case.modules)
@@ -261,12 +277,13 @@ class UseCasePage(QWidget):
         dlg = ModuleDetail(ms, module_config=module_config, parent=self)
         dlg.action_requested.connect(self._handle_module_action)
         dlg.module_config_changed.connect(self._on_module_config_changed)
+        dlg.override_toggled.connect(self._toggle_module_override)
         self._active_detail_dlg = dlg
         dlg.exec()
         self._active_detail_dlg = None
         # Refresh grid in case compute/deploy changed state outside the dialog
         if self._use_case:
-            self._module_grid.update_modules(self._use_case.modules)
+            self._refresh_grid()
 
     @Slot(str, dict)
     def _on_module_config_changed(self, module_id: str, config: dict) -> None:
@@ -275,15 +292,42 @@ class UseCasePage(QWidget):
             return
         self._use_case.module_answers[module_id] = config
         self._use_case.updated_at = datetime.now(timezone.utc).isoformat()
-        result = compute_impacts(self._use_case.answers, module_answers=self._use_case.module_answers)
+        result = compute_impacts(
+            self._use_case.answers,
+            module_answers=self._use_case.module_answers,
+            module_overrides=self._use_case.module_overrides,
+        )
         apply_impacts_to_modules(self._use_case, result)
         json_store.save(self._use_case)
-        self._module_grid.update_modules(self._use_case.modules)
+        self._refresh_grid()
         # Refresh the open dialog
         if self._active_detail_dlg:
             ms = self._use_case.modules.get(module_id)
             if ms:
                 self._active_detail_dlg.refresh(ms)
+
+    @Slot(str)
+    def _toggle_module_override(self, module_id: str) -> None:
+        """Flip a module's on/off override and re-evaluate impacts immediately (auto-saved)."""
+        uc = self._use_case
+        if uc is None:
+            return
+        ms = uc.modules.get(module_id)
+        if ms is None or ms.status in ("computing", "deploying"):
+            return
+        currently_enabled = uc.module_overrides.get(module_id, True)
+        uc.module_overrides[module_id] = not currently_enabled
+        uc.updated_at = datetime.now(timezone.utc).isoformat()
+        result = compute_impacts(
+            uc.answers, module_answers=uc.module_answers, module_overrides=uc.module_overrides
+        )
+        apply_impacts_to_modules(uc, result)
+        json_store.save(uc)
+        self._refresh_grid()
+        if self._active_detail_dlg:
+            new_ms = uc.modules.get(module_id)
+            if new_ms:
+                self._active_detail_dlg.refresh(new_ms)
 
     @Slot(str, str)
     def _handle_module_action(self, module_id: str, action: str) -> None:
@@ -307,7 +351,7 @@ class UseCasePage(QWidget):
         for f in ms.flags:
             f.acknowledged = True
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
+        self._refresh_grid()
         if self._active_detail_dlg:
             self._active_detail_dlg.refresh(ms)
         if newly_acked:
@@ -322,7 +366,7 @@ class UseCasePage(QWidget):
         if uc is None:
             return
         ms = uc.modules.get(module_id)
-        if ms is None:
+        if ms is None or ms.status == "disabled":
             return
         unacked = [f for f in ms.flags if not f.acknowledged]
         if unacked:
@@ -332,7 +376,7 @@ class UseCasePage(QWidget):
         ms.validated_at = datetime.now(timezone.utc).isoformat()
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
+        self._refresh_grid()
         if self._active_detail_dlg:
             self._active_detail_dlg.refresh(ms)
 
@@ -341,13 +385,13 @@ class UseCasePage(QWidget):
         if uc is None:
             return
         ms = uc.modules.get(module_id)
-        if ms is None:
+        if ms is None or ms.status == "disabled":
             return
 
         ms.status = "computing"
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
+        self._refresh_grid()
         if self._active_detail_dlg:
             self._active_detail_dlg.refresh(ms)
 
@@ -402,7 +446,7 @@ class UseCasePage(QWidget):
 
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
+        self._refresh_grid()
         if self._active_detail_dlg:
             self._active_detail_dlg.refresh(ms)
 
@@ -411,7 +455,7 @@ class UseCasePage(QWidget):
         if uc is None:
             return
         ms = uc.modules.get(module_id)
-        if ms is None:
+        if ms is None or ms.status == "disabled":
             return
         if ms.compute_result is None:
             QMessageBox.warning(self, "Cannot deploy", "Run Compute first.")
@@ -442,7 +486,7 @@ class UseCasePage(QWidget):
         ms.status = "deploying"
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
+        self._refresh_grid()
 
         try:
             ros_interface_module = __import__(
@@ -455,7 +499,7 @@ class UseCasePage(QWidget):
             QMessageBox.critical(self, "Deploy error", f"Could not load ROS interface: {exc}")
             ms.status = "deploy_failed"
             json_store.save(uc)
-            self._module_grid.update_modules(uc.modules)
+            self._refresh_grid()
             return
 
         adapter = get_adapter()
@@ -474,6 +518,6 @@ class UseCasePage(QWidget):
 
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
+        self._refresh_grid()
         if self._active_detail_dlg:
             self._active_detail_dlg.refresh(ms)

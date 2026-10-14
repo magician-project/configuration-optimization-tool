@@ -63,6 +63,8 @@ class ModuleState(BaseModel):
     # Full lifecycle:
     # ok -> needs_action -> validated -> computing -> computed -> deploying -> deployed
     # Error branches: compute_failed, deploy_failed
+    # Orthogonal branch: disabled (module overridden off — see UseCase.module_overrides;
+    # reachable from any state, returns to the normal lifecycle once re-enabled)
     status: str = "ok"
     impacts: List[ModuleImpact] = []
     flags: List[Flag] = []
@@ -93,4 +95,7 @@ class UseCase(BaseModel):
     # Module ids relevant to this use case's task type (see module_registry.compute_default_modules).
     # Recomputed on every save — never edited by hand.
     default_modules: List[str] = []
+    # Partner's explicit per-module on/off override, independent of default_modules.
+    # True/False = forced; missing key = follow the ordinary impact computation.
+    module_overrides: Dict[str, bool] = {}
     confidence: ConfidenceScore = ConfidenceScore(score=0, percentage=0.0, level="low")

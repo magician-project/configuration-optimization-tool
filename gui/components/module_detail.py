@@ -10,13 +10,14 @@ Lifecycle buttons shown based on module status:
   compute_failed  → Retry Compute
   deployed        → Re-deploy
   deploy_failed   → Re-deploy
+  disabled        → (module overridden off — no buttons; toggle in header re-enables)
 """
 
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QWidget, QFrame, QTabWidget,
+    QScrollArea, QWidget, QFrame, QTabWidget, QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -44,6 +45,7 @@ _STATUS_STYLE = {
     "deploying":     ("Deploying…", "#dbeafe", "#1e40af"),
     "deployed":      ("Deployed", "#d1fae5", "#065f46"),
     "deploy_failed": ("Deploy failed", "#fee2e2", "#991b1b"),
+    "disabled":      ("Disabled", "#e5e7eb", "#4b5563"),
 }
 
 
@@ -53,6 +55,9 @@ class ModuleDetail(QDialog):
     # action: "acknowledge" | "validate" | "compute" | "deploy"
     # Emitted when module-specific config fields are changed and saved
     module_config_changed = Signal(str, dict)  # (module_id, config_dict)
+    # Emitted when the user (un)ticks the enable/disable checkbox; parent
+    # derives the new value from the authoritative use case state and saves it
+    override_toggled = Signal(str)   # module_id
 
     def __init__(self, module: ModuleState, module_config: dict = None, parent=None) -> None:
         super().__init__(parent)
@@ -138,6 +143,10 @@ class ModuleDetail(QDialog):
         self._module = module
         root = self.layout()
 
+        self._override_checkbox.blockSignals(True)
+        self._override_checkbox.setChecked(self._module.status != "disabled")
+        self._override_checkbox.blockSignals(False)
+
         _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser", "motion_planning"}
         if self._module.module_id in _TABBED_MODULES:
             # Tabbed layout: items are 0=header(layout), 1=desc, 2=tabs, 3=footer
@@ -159,7 +168,8 @@ class ModuleDetail(QDialog):
         root = QVBoxLayout(self)
         root.setSpacing(10)
 
-        # Header (static — never changes)
+        # Header (static — never changes; the enabled checkbox's checked
+        # state is refreshed separately, see refresh())
         header = QHBoxLayout()
         title = QLabel(self._module.module_name)
         title.setStyleSheet("font-size: 18px; font-weight: bold;")
@@ -168,6 +178,15 @@ class ModuleDetail(QDialog):
         sub.setTextFormat(Qt.TextFormat.RichText)
         header.addWidget(sub)
         header.addStretch()
+        self._override_checkbox = QCheckBox("Module enabled")
+        self._override_checkbox.setChecked(self._module.status != "disabled")
+        self._override_checkbox.setToolTip(
+            "Untick to exclude this module from impacts, compute and deploy."
+        )
+        self._override_checkbox.toggled.connect(
+            lambda _checked: self.override_toggled.emit(self._module.module_id)
+        )
+        header.addWidget(self._override_checkbox)
         root.addLayout(header)
 
         desc = QLabel(self._module.description)
@@ -218,7 +237,14 @@ class ModuleDetail(QDialog):
                 inner_layout.addWidget(self._build_flag_card(flag))
 
         if not self._module.impacts and not self._module.flags:
-            no_action = QLabel("No impacts or flags for this module with the current configuration.")
+            if self._module.status == "disabled":
+                no_action = QLabel(
+                    "This module is disabled — tick \u201cModule enabled\u201d above to re-enable it "
+                    "and see its impacts, flags, and compute/deploy actions."
+                )
+            else:
+                no_action = QLabel("No impacts or flags for this module with the current configuration.")
+            no_action.setWordWrap(True)
             no_action.setStyleSheet("color: #6b7280; padding: 8px;")
             inner_layout.addWidget(no_action)
 

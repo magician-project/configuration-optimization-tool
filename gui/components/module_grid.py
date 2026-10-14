@@ -5,9 +5,11 @@ Emits module_selected(module_id) when a tile is clicked.
 
 from __future__ import annotations
 
+from typing import Dict, List, Optional
+
 from PySide6.QtWidgets import (
     QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
-    QLabel, QFrame, QSizePolicy, QGraphicsDropShadowEffect,
+    QLabel, QFrame, QSizePolicy, QGraphicsDropShadowEffect, QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
@@ -28,6 +30,7 @@ _STATUS_STYLE = {
     "deploying":     ("#60a5fa", "#1d4ed8", "Deploying…"),
     "deployed":      ("#10b981", "#065f46", "Deployed"),
     "deploy_failed": ("#f87171", "#b91c1c", "Deploy failed"),
+    "disabled":      ("#9ca3af", "#4b5563", "Disabled"),
 }
 
 _ACTION_TYPE_COLOURS = {
@@ -41,6 +44,7 @@ MODULE_ORDER = ["grabber", "orienteering_solver", "localiser", "tactile_sensor",
 
 class ModuleGrid(QWidget):
     module_selected = Signal(str)   # module_id
+    override_toggle_requested = Signal(str)   # module_id
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -75,6 +79,7 @@ class ModuleGrid(QWidget):
             info = MODULES[mid]
             tile = _ModuleTile(mid, info["name"], info["description"])
             tile.clicked.connect(lambda _mid=mid: self.module_selected.emit(_mid))
+            tile.toggle_requested.connect(lambda _mid=mid: self.override_toggle_requested.emit(_mid))
             self._tiles[mid] = tile
             grid.addWidget(tile, i // 3, i % 3)
 
@@ -82,12 +87,19 @@ class ModuleGrid(QWidget):
         grid.setRowStretch(2, 1)
         vbox.addLayout(grid, stretch=1)
 
-    def update_modules(self, modules: dict) -> None:
+    def update_modules(
+        self,
+        modules: dict,
+        default_modules: Optional[List[str]] = None,
+        module_overrides: Optional[Dict[str, bool]] = None,
+    ) -> None:
+        default_modules = default_modules or []
+        module_overrides = module_overrides or {}
         needs = validated = deployed = 0
         for mid, tile in self._tiles.items():
             ms: ModuleState | None = modules.get(mid)
             if ms:
-                tile.update_state(ms)
+                tile.update_state(ms, in_default=mid in default_modules, override=module_overrides.get(mid))
                 if ms.status == "needs_action":
                     needs += 1
                 elif ms.status in ("validated", "computed"):
@@ -109,6 +121,7 @@ class ModuleGrid(QWidget):
 
 class _ModuleTile(QFrame):
     clicked = Signal()
+    toggle_requested = Signal()
 
     _NORMAL_BORDER = "#e5e7eb"
 
@@ -175,12 +188,23 @@ class _ModuleTile(QFrame):
         )
         self._flag_badge.hide()
         header.addWidget(self._flag_badge)
+
+        self._override_checkbox = QCheckBox()
+        self._override_checkbox.setStyleSheet("background: transparent;")
+        self._override_checkbox.toggled.connect(self._on_override_toggled)
+        header.addWidget(self._override_checkbox)
         vbox.addLayout(header)
 
         # Status label
         self._status_lbl = QLabel("ok")
         self._status_lbl.setStyleSheet("font-size: 11px; color: #6b7280; background: transparent;")
         vbox.addWidget(self._status_lbl)
+
+        # Default-scope badge (shown only when the module is outside the
+        # task-type default set, or explicitly enabled despite that)
+        self._scope_badge = QLabel()
+        self._scope_badge.hide()
+        vbox.addWidget(self._scope_badge)
 
         # Action type badges row
         self._badges_row = QHBoxLayout()
@@ -204,7 +228,9 @@ class _ModuleTile(QFrame):
         hint.setAlignment(Qt.AlignmentFlag.AlignRight)
         vbox.addWidget(hint)
 
-    def update_state(self, ms: ModuleState) -> None:
+    def update_state(
+        self, ms: ModuleState, in_default: bool = True, override: Optional[bool] = None
+    ) -> None:
         strip, accent, status_text = _STATUS_STYLE.get(
             ms.status, ("#d1d5db", "#6b7280", ms.status)
         )
@@ -217,6 +243,38 @@ class _ModuleTile(QFrame):
         self._status_lbl.setStyleSheet(
             f"font-size: 11px; font-weight: 600; color: {accent}; background: transparent;"
         )
+
+        # Override toggle — reflects current state, blocked while a job is in flight
+        self._override_checkbox.blockSignals(True)
+        self._override_checkbox.setChecked(ms.status != "disabled")
+        self._override_checkbox.setEnabled(ms.status not in ("computing", "deploying"))
+        self._override_checkbox.setToolTip(
+            "Untick to exclude this module — no impacts, flags, compute or deploy."
+            if ms.status != "disabled"
+            else "Tick to re-enable this module."
+        )
+        self._override_checkbox.blockSignals(False)
+
+        # Default-scope badge: purely informational, "disabled" always wins
+        if ms.status != "disabled" and not in_default:
+            if override is True:
+                text, fg, bg = "ENABLED (OVERRIDE)", "#1d4ed8", "#dbeafe"
+                tip = "Manually enabled even though it isn't in the default module set for this task type."
+            else:
+                text, fg, bg = "NOT IN DEFAULT SCOPE", "#6b7280", "#f3f4f6"
+                tip = (
+                    "Not part of the default module set for this task type, but still fully "
+                    "usable — any impacts triggered by your answers still show here."
+                )
+            self._scope_badge.setText(text)
+            self._scope_badge.setStyleSheet(
+                f"background: {bg}; color: {fg}; border-radius: 4px; "
+                "padding: 1px 7px; font-size: 10px; font-weight: bold;"
+            )
+            self._scope_badge.setToolTip(tip)
+            self._scope_badge.show()
+        else:
+            self._scope_badge.hide()
 
         # Flag badge
         unacked = sum(1 for f in ms.flags if not f.acknowledged)
@@ -231,6 +289,7 @@ class _ModuleTile(QFrame):
             self._flag_badge.show()
         else:
             self._flag_badge.hide()
+
 
         # Clear + rebuild action type badges
         while self._badges_row.count():
@@ -274,3 +333,8 @@ class _ModuleTile(QFrame):
     def mousePressEvent(self, event) -> None:
         self.clicked.emit()
         super().mousePressEvent(event)
+
+    def _on_override_toggled(self, _checked: bool) -> None:
+        # The parent derives the actual new value from the authoritative
+        # use case state, not from this checkbox's transient UI state.
+        self.toggle_requested.emit()
