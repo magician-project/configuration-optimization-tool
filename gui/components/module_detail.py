@@ -19,11 +19,12 @@ from typing import List, Optional
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QWidget, QFrame, QTabWidget,
+    QScrollArea, QWidget, QFrame, QTabWidget, QTextBrowser,
 )
 from PySide6.QtCore import Qt, Signal
 
 from app.engine.module_dependencies import ExternalInputRequirement
+from app.engine.module_registry import load_module_readme
 from app.models.use_case import ModuleState
 from gui.components.external_inputs import ExternalInputForm
 
@@ -76,7 +77,7 @@ class ModuleDetail(QDialog):
         self._build_ui()
 
     def _build_tabbed_ui(self, root: QVBoxLayout) -> None:
-        """Two-tab layout: Impacts/Flags | Module Configuration."""
+        """Tabs: Impacts & Flags | Module Configuration (only with a config schema) | Documentation."""
         from app.engine.schema import VISION_CLASSIFIER_CONFIG, ERGODIC_CONTROL_CONFIG, GRABBER_CONFIG, LOCALISER_CONFIG, MOTION_PLANNER_CONFIG
         from gui.components.questionnaire_form import QuestionnaireForm
 
@@ -95,41 +96,49 @@ class ModuleDetail(QDialog):
         impacts_tab = QWidget()
         impacts_layout = QVBoxLayout(impacts_tab)
         impacts_layout.setContentsMargins(0, 4, 0, 0)
-        self._insert_dynamic_widgets(impacts_layout, include_footer=False)
+        self._insert_dynamic_widgets(impacts_layout)
         tabs.addTab(impacts_tab, "Impacts & Flags")
 
         # Tab 2: Module Configuration
-        config_tab = QWidget()
-        config_layout = QVBoxLayout(config_tab)
-        config_layout.setContentsMargins(0, 4, 0, 4)
-        config_layout.setSpacing(8)
+        if config_questions:
+            config_tab = QWidget()
+            config_layout = QVBoxLayout(config_tab)
+            config_layout.setContentsMargins(0, 4, 0, 4)
+            config_layout.setSpacing(8)
 
-        info = QLabel(
-            "Configure this module below. "
-            "Changes are saved immediately and re-evaluated on the next questionnaire save."
-        )
-        info.setWordWrap(True)
-        info.setStyleSheet("color: #6b7280; font-size: 11px; padding: 4px 0;")
-        config_layout.addWidget(info)
+            info = QLabel(
+                "Configure this module below. "
+                "Changes are saved immediately and re-evaluated on the next questionnaire save."
+            )
+            info.setWordWrap(True)
+            info.setStyleSheet("color: #6b7280; font-size: 11px; padding: 4px 0;")
+            config_layout.addWidget(info)
 
-        self._config_form = QuestionnaireForm(questions=config_questions)
-        self._config_form.load_answers(self._module_config)
-        self._config_form.answers_changed.connect(self._on_config_changed)
-        config_layout.addWidget(self._config_form, stretch=1)
+            self._config_form = QuestionnaireForm(questions=config_questions)
+            self._config_form.load_answers(self._module_config)
+            self._config_form.answers_changed.connect(self._on_config_changed)
+            config_layout.addWidget(self._config_form, stretch=1)
 
-        # Save button
-        save_bar = QHBoxLayout()
-        save_bar.addStretch()
-        save_btn = QPushButton("Save Configuration")
-        save_btn.setStyleSheet(
-            "background: #162759; color: white; padding: 5px 16px; "
-            "border-radius: 4px; font-weight: bold; border: none;"
-        )
-        save_btn.clicked.connect(self._save_config)
-        save_bar.addWidget(save_btn)
-        config_layout.addLayout(save_bar)
+            # Save button
+            save_bar = QHBoxLayout()
+            save_bar.addStretch()
+            save_btn = QPushButton("Save Configuration")
+            save_btn.setStyleSheet(
+                "background: #162759; color: white; padding: 5px 16px; "
+                "border-radius: 4px; font-weight: bold; border: none;"
+            )
+            save_btn.clicked.connect(self._save_config)
+            save_bar.addWidget(save_btn)
+            config_layout.addLayout(save_bar)
 
-        tabs.addTab(config_tab, "Module Configuration")
+            tabs.addTab(config_tab, "Module Configuration")
+
+        # Tab 3: Documentation (module README, also for out-of-scope modules)
+        docs = QTextBrowser()
+        docs.setOpenLinks(False)
+        docs.setOpenExternalLinks(True)
+        docs.setMarkdown(load_module_readme(self._module.module_id))
+        tabs.addTab(docs, "Documentation")
         root.addWidget(tabs, stretch=1)
 
         root.addWidget(self._build_footer())
@@ -153,22 +162,12 @@ class ModuleDetail(QDialog):
         self._external_inputs = list(external_inputs or [])
         root = self.layout()
 
-        _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser", "motion_planning"}
-        if self._module.module_id in _TABBED_MODULES:
-            # Tabbed layout: items are 0=header(layout), 1=desc, 2=tabs, 3=footer
-            # Remove tabs + footer, rebuild
-            for idx in (3, 2):
-                item = root.takeAt(idx)
-                if item and item.widget():
-                    item.widget().deleteLater()
-            self._build_tabbed_ui(root)
-        else:
-            # Flat layout: 0=header(layout), 1=desc, 2=status_banner, 3=scroll, 4=footer
-            for idx in (4, 3, 2):
-                item = root.takeAt(idx)
-                if item and item.widget():
-                    item.widget().deleteLater()
-            self._insert_dynamic_widgets(root)
+        # Items: 0=header(layout), 1=desc, 2=tabs, 3=footer. Remove tabs + footer, rebuild.
+        for idx in (3, 2):
+            item = root.takeAt(idx)
+            if item and item.widget():
+                item.widget().deleteLater()
+        self._build_tabbed_ui(root)
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -190,15 +189,10 @@ class ModuleDetail(QDialog):
         desc.setStyleSheet("color: #6b7280; font-size: 12px;")
         root.addWidget(desc)
 
-        # Modules with their own config schema get a tabbed layout
-        _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser", "motion_planning"}
-        if self._module.module_id in _TABBED_MODULES:
-            self._build_tabbed_ui(root)
-        else:
-            self._insert_dynamic_widgets(root)
+        self._build_tabbed_ui(root)
 
-    def _insert_dynamic_widgets(self, root, include_footer: bool = True) -> None:
-        """Build (or rebuild) status banner + scroll area + footer."""
+    def _insert_dynamic_widgets(self, root) -> None:
+        """Build (or rebuild) status banner + scroll area."""
         # Status banner
         status_text, bg, fg = _STATUS_STYLE.get(
             self._module.status, ("Unknown", "#f3f4f6", "#374151")
@@ -253,9 +247,6 @@ class ModuleDetail(QDialog):
         inner_layout.addStretch()
         scroll.setWidget(inner)
         root.addWidget(scroll, stretch=1)
-
-        if include_footer:
-            root.addWidget(self._build_footer())
 
     def _build_impact_card(self, impact) -> QWidget:
         frame = QFrame()
