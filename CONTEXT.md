@@ -31,17 +31,25 @@ A three-step maturity ladder for any COT capability. _Implemented_: the code pat
 _Avoid_: tested (too vague — state which rung of the ladder)
 
 **Task type**:
-A use case's answer to whether its robot arm only inspects, or also grinds/reworks. Grinding always implies inspection too — there is no grind-only scenario. Determines a use case's default module set.
+A use case's answer to whether the robot performs inspection, grinding/rework, or both. Grinding may use defect information from an external inspection source without using MAGICIAN Inspection.
 _Avoid_: task mode, workflow type
 
+**Pipeline selection**:
+The choice of MAGICIAN functionality used by a use case: `inspection`, `grinding`, or `both`. It determines the scope and default module set; it is distinct from the physical task type.
+_Avoid_: task type, workflow type
+
 **Default module set**:
-The module ids relevant to a use case, derived from its task type (plus the tactile classifier when tactile sensing is selected). Recomputed from scratch on every save — never a frozen snapshot edited directly. Acts as the *implicit* per-module state: a module with no explicit override is active if it's in this set and disabled (hard filter) if it isn't, so it's automatically re-evaluated whenever task type changes.
+The module ids relevant to a use case, derived from its pipeline selection and specific capability answers such as whether tactile sensing is used. Recomputed from the use-case answers rather than edited as a frozen snapshot.
 _Avoid_: active modules (ambiguous with `ModuleState.status`), enabled modules
 
-**Module override**:
-A partner's explicit, per-module choice to force a module on or off, independent of the default module set. An explicit override always wins over the default module set and persists across later changes to task type or other answers, since it's a deliberate choice that must never be silently undone — only a module with *no* explicit override tracks the default set automatically. Overriding a module off (or being outside the default set with no override) is a hard filter — it suppresses impacts, flags, and blocks compute/deploy entirely. A partner clears an override with an explicit "Reset to default" action, which removes the override entirely rather than flipping it — the module then goes back to tracking the default module set.
-_Avoid_: toggle (the UI control, not the domain concept), enable/disable (ambiguous with `ModuleState.status`)
+**Module dependency**:
+A required or conditional input relationship from a provider output to a consumer input. A dependency may be satisfied by an active MAGICIAN module or, when explicitly allowed, by a declared external input.
 
-**Disabled** (module status):
-The `ModuleState.status` value a module gets when it's effectively off: either explicitly overridden off, or left to follow the default module set and it falls outside it.
-_Avoid_: inactive, off
+**External input requirement**:
+A required consumer input for which the normal MAGICIAN provider is inactive and an external source is allowed. For the initial grinding-only scenario, this is defect information required by the Orienteering Solver.
+
+**Dependency evidence status**:
+The confidence category attached to a dependency or interface: documented, conceptual, proposed, or unknown. This describes evidence, not whether a module is present in the COT or whether a use-case configuration is valid.
+
+**Configuration validation status**:
+The result of checking active modules and their required inputs: `valid`, `valid_with_external_inputs`, `incomplete`, or `invalid`. `valid_with_external_inputs` means complete for configuration, while receipt and validation of runtime data are a separate handover concern.
