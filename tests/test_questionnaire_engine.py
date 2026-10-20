@@ -74,3 +74,22 @@ def test_grinding_only_confidence_ignores_inspection_categories():
 
     assert confidence["max"] == 5
     assert confidence["score"] == 1
+
+
+def test_grinding_only_ignores_retained_inspection_answers_for_cross_cutting_flag():
+    answers = QuestionnaireAnswers(
+        q_pipeline="grinding",
+        q2_camera_type="gige",
+        q2_camera_resolution={"width": 1920, "height": 1080},
+        q2_camera_framerate=30,
+        q2_stream_shm="yes",
+        q4_lighting="additional",
+        q9_time="tight",
+        q9_time_value=10,
+    )
+
+    solver = compute_impacts(answers, module_answers={})["module_impacts"]["orienteering_solver"]
+
+    assert solver["impacts"], "time constraint should still affect the solver"
+    assert all(f["id"] != "flag_cross_cutting" for f in solver["flags"])
+

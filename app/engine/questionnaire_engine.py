@@ -867,6 +867,11 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             result[mid]["impacts"] = []
             result[mid]["flags"] = []
 
+    # Answers whose impacts were just removed must not count towards the threshold below.
+    total_characteristics = min(
+        total_characteristics, sum(len(data["impacts"]) for data in result.values())
+    )
+
     # ------------------------------------------------------------------
     # Cross-cutting flag: >= 5 characteristics triggered
     # ------------------------------------------------------------------
