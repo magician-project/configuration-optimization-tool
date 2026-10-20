@@ -53,3 +53,17 @@ def test_legacy_disabled_status_is_reconciled_with_scope():
     _ensure_all_modules(uc)
 
     assert uc.modules["grabber"].status in ("ok", "needs_action")
+
+
+def test_legacy_always_required_module_on_ok_is_promoted_to_needs_action():
+    uc = _legacy_use_case()
+    uc.answers = QuestionnaireAnswers(q_pipeline="both")
+    _ensure_all_modules(uc)
+    uc.modules["orienteering_solver"].status = "ok"  # saved before the solver was always-required
+    uc.modules["ergodic_control"].status = "validated"
+
+    _ensure_all_modules(uc)
+
+    assert uc.modules["orienteering_solver"].status == "needs_action"
+    assert uc.modules["ergodic_control"].status == "validated"
+

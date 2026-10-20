@@ -107,6 +107,8 @@ def _reconcile_scope(uc: UseCase) -> None:
         if mid not in uc.default_modules:
             if ms.status != "out_of_scope":
                 ms.status, ms.impacts, ms.flags = "out_of_scope", [], []
+        elif ms.status == "ok" and mid in ALWAYS_NEEDS_ACTION:
+            ms.status = "needs_action"
         elif ms.status in ("disabled", "out_of_scope"):
             if impacts_by_module is None:
                 impacts_by_module = compute_impacts(uc.answers, uc.module_answers)["module_impacts"]
