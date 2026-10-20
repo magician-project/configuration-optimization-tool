@@ -69,14 +69,13 @@ def load(use_case_id: str) -> Optional[UseCase]:
 def _ensure_all_modules(uc: UseCase) -> None:
     """Add any modules that exist in the registry but are missing from the stored use case.
     This handles the case where new modules are added after a use case was first saved."""
-    from app.engine.module_registry import MODULES, compute_default_modules
+    from app.engine.module_registry import ALWAYS_NEEDS_ACTION, MODULES, compute_default_modules
     from app.engine.questionnaire_engine import sync_external_input_status
     from app.models.use_case import ModuleState
     for mid, info in MODULES.items():
         if mid not in uc.modules:
-            # Default ergodic_control (and any future always-required modules) to needs_action
-            _ALWAYS_NEEDS_ACTION = {"ergodic_control"}
-            status = "needs_action" if mid in _ALWAYS_NEEDS_ACTION else "ok"
+            # Default always-required modules to needs_action
+            status = "needs_action" if mid in ALWAYS_NEEDS_ACTION else "ok"
             uc.modules[mid] = ModuleState(
                 module_id=mid,
                 module_name=info["name"],
@@ -97,7 +96,7 @@ def _reconcile_scope(uc: UseCase) -> None:
     Covers use cases saved before scope was derived from the pipeline selection (including the
     old "disabled" status), without resetting the lifecycle of unaffected modules.
     """
-    from app.engine.module_registry import MODULES
+    from app.engine.module_registry import ALWAYS_NEEDS_ACTION, MODULES
     from app.engine.questionnaire_engine import compute_impacts
     from app.models.use_case import Flag, ModuleImpact
 
@@ -114,7 +113,7 @@ def _reconcile_scope(uc: UseCase) -> None:
             data = impacts_by_module[mid]
             ms.impacts = [ModuleImpact(**i) for i in data["impacts"]]
             ms.flags = [Flag(**f) for f in data["flags"]]
-            ms.status = "needs_action" if ms.impacts or mid == "ergodic_control" else "ok"
+            ms.status = "needs_action" if ms.impacts or mid in ALWAYS_NEEDS_ACTION else "ok"
 
 
 def list_all() -> List[UseCase]:

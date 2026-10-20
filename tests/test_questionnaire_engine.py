@@ -93,3 +93,15 @@ def test_grinding_only_ignores_retained_inspection_answers_for_cross_cutting_fla
     assert solver["impacts"], "time constraint should still affect the solver"
     assert all(f["id"] != "flag_cross_cutting" for f in solver["flags"])
 
+
+
+def test_retained_tactile_answer_does_not_affect_motion_planner_for_grinding_only():
+    grinding = QuestionnaireAnswers(q_pipeline="grinding", q3_additional_sensors=["tactile"])
+    both = QuestionnaireAnswers(q_pipeline="both", q3_additional_sensors=["tactile"])
+
+    grinding_mp = compute_impacts(grinding, module_answers={})["module_impacts"]["motion_planning"]
+    both_mp = compute_impacts(both, module_answers={})["module_impacts"]["motion_planning"]
+
+    assert grinding_mp["impacts"] == []
+    assert both_mp["impacts"]
+

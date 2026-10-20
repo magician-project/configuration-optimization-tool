@@ -80,7 +80,7 @@ def test_consumer_of_missing_external_input_needs_action():
     assert uc.modules["localiser"].status == "ok"
 
 
-def test_agreeing_the_external_source_clears_needs_action():
+def test_agreeing_the_external_source_keeps_the_solver_actionable():
     from app.engine.questionnaire_engine import sync_external_input_status
 
     uc = _grinding_use_case()
@@ -90,7 +90,8 @@ def test_agreeing_the_external_source_clears_needs_action():
 
     sync_external_input_status(uc)
 
-    assert uc.modules["orienteering_solver"].status == "ok"
+    # The solver always needs validation/compute, so agreeing the source must not remove that route.
+    assert uc.modules["orienteering_solver"].status == "needs_action"
 
 
 def test_pending_external_input_does_not_reset_advanced_lifecycle_status():

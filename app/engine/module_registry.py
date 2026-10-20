@@ -114,6 +114,9 @@ MODULES: Dict[str, dict] = {
 
 PIPELINES = ("inspection", "grinding", "both")
 
+# In scope but always need configuration/validation before compute, even without questionnaire impacts.
+ALWAYS_NEEDS_ACTION = {"ergodic_control", "orienteering_solver"}
+
 # Localiser and Motion Planner are shared: in scope for every pipeline until a question drives them.
 _SHARED_MODULES = ["localiser", "motion_planning"]
 _INSPECTION_MODULES = ["grabber", "vision_classifier", "ergodic_control"]

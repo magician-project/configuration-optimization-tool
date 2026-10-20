@@ -1,11 +1,8 @@
 from typing import Dict, Any, List
 from app.models.questionnaire import QuestionnaireAnswers
 from app.models.use_case import ModuleImpact, Flag, ModuleState, ConfidenceScore, UseCase
-from app.engine.module_registry import MODULES, compute_default_modules
+from app.engine.module_registry import ALWAYS_NEEDS_ACTION, MODULES, compute_default_modules
 from app.engine.module_dependencies import validate_configuration
-
-# Modules that need configuration before compute even when no answer triggers an impact.
-_ALWAYS_NEEDS_ACTION = {"ergodic_control"}
 
 
 # ---------------------------------------------------------------------------
@@ -819,7 +816,10 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
         ))
         total_characteristics += 1
 
-    if "tactile" in answers.q3_additional_sensors:
+    # Force sensing only matters when MAGICIAN Inspection (Grabber/tactile) is in scope; a
+    # retained answer from a hidden section must not keep affecting the Motion Planner.
+    tactile_in_scope = "tactile_sensor" in compute_default_modules(answers.q_pipeline, answers.q3_additional_sensors)
+    if tactile_in_scope:
         impedance_sensor = mp.get("q_mp_impedance_sensor") or "force_estimate"
         result["motion_planning"]["impacts"].append(_impact(
             characteristic="Force/torque sensing feeds impedance control",
@@ -932,7 +932,7 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
         else:
             new_status = "needs_action" if new_impacts else "ok"
             # Ergodic Control always requires configuration before compute
-            if mid in _ALWAYS_NEEDS_ACTION and new_status == "ok":
+            if mid in ALWAYS_NEEDS_ACTION and new_status == "ok":
                 new_status = "needs_action"
 
         use_case.modules[mid] = ModuleState(
@@ -968,7 +968,7 @@ def sync_external_input_status(use_case: UseCase) -> None:
         if mid in pending:
             if ms.status == "ok":
                 ms.status = "needs_action"
-        elif ms.status == "needs_action" and not ms.impacts and mid not in _ALWAYS_NEEDS_ACTION:
+        elif ms.status == "needs_action" and not ms.impacts and mid not in ALWAYS_NEEDS_ACTION:
             ms.status = "ok"
 
 

@@ -6,6 +6,7 @@ External input widgets:
 
 from __future__ import annotations
 
+from html import escape
 from typing import List
 
 from PySide6.QtWidgets import (
@@ -89,11 +90,13 @@ class ConfigurationValidationPanel(QFrame):
     def _build_row(self, req: ExternalInputRequirement) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setSpacing(8)
+        # The label renders rich text and the source name is free input.
+        source = escape(req.source_name)
         if req.complete:
-            state = f"Source: {req.source_name} \u00b7 contract agreed"
+            state = f"Source: {source} \u00b7 contract agreed"
             colour = "#065f46"
         elif req.source_name.strip():
-            state = f"Source: {req.source_name} \u00b7 contract not agreed yet"
+            state = f"Source: {source} \u00b7 contract not agreed yet"
             colour = "#92400e"
         else:
             state = "Source not set"
