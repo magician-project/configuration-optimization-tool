@@ -1,7 +1,8 @@
 """ModuleDetail: every module dialog offers a Documentation tab showing its README."""
 
 import pytest
-from PySide6.QtWidgets import QApplication, QTabWidget, QTextBrowser
+from PySide6.QtCore import QEvent
+from PySide6.QtWidgets import QApplication, QLabel, QTabWidget, QTextBrowser
 
 from app.engine.module_registry import MODULES, README_EMPTY_STATE, module_readme_path
 from app.models.use_case import ModuleState
@@ -63,4 +64,9 @@ def test_documentation_tab_survives_refresh(qapp):
         description=info["description"], status="validated",
     ))
 
+    # refresh() only schedules deletion of the old tabs; process it so findChild sees the rebuilt ones.
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
     assert "Documentation" in _tab_titles(dlg)
+    banners = [lbl.text() for lbl in dlg.findChildren(QLabel) if lbl.text().startswith("Status:")]
+    assert banners == ["Status: Validated — ready to compute"]
