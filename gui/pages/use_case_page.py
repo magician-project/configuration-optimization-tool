@@ -438,6 +438,10 @@ class UseCasePage(QWidget):
         if self._compute_progress_dlg is not None:
             self._compute_progress_dlg.on_done(success, result_path)
 
+        # Scope may have changed while compute ran; a late result must not undo that.
+        if ms.status == "out_of_scope":
+            return
+
         if success and result_path:
             try:
                 with open(result_path, encoding="utf-8") as f:
