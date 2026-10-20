@@ -91,3 +91,16 @@ def test_agreeing_the_external_source_clears_needs_action():
     sync_external_input_status(uc)
 
     assert uc.modules["orienteering_solver"].status == "ok"
+
+
+def test_pending_external_input_does_not_reset_advanced_lifecycle_status():
+    from app.engine.questionnaire_engine import sync_external_input_status
+
+    uc = _grinding_use_case()
+    for status in ("validated", "computed", "deployed"):
+        uc.modules["orienteering_solver"].status = status
+
+        sync_external_input_status(uc)
+
+        assert uc.modules["orienteering_solver"].status == status
+

@@ -956,13 +956,18 @@ def consumers_awaiting_external_input(use_case: UseCase) -> set:
 
 
 def sync_external_input_status(use_case: UseCase) -> None:
-    """A module still waiting for an agreed external input needs action; clear that once it is agreed."""
+    """Flag a module waiting for an agreed external input; undo that once it is agreed.
+
+    Only escalates "ok": later lifecycle states (validated, computed, ...) are left alone,
+    since external-input readiness is informational and must not block compute or deploy.
+    """
     pending = consumers_awaiting_external_input(use_case)
     for mid, ms in use_case.modules.items():
         if ms.status in ("out_of_scope", "computing", "deploying"):
             continue
         if mid in pending:
-            ms.status = "needs_action"
+            if ms.status == "ok":
+                ms.status = "needs_action"
         elif ms.status == "needs_action" and not ms.impacts and mid not in _ALWAYS_NEEDS_ACTION:
             ms.status = "ok"
 

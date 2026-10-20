@@ -370,11 +370,15 @@ class UseCasePage(QWidget):
         if ms is None or ms.status == "out_of_scope":
             return
         if module_id in consumers_awaiting_external_input(uc):
-            QMessageBox.warning(
-                self, "Cannot validate",
-                "This module still needs an external input source with an agreed contract.",
+            reply = QMessageBox.question(
+                self, "External input not agreed",
+                "This module still needs an external input source with an agreed contract.\n"
+                "Mark it as validated anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
             )
-            return
+            if reply != QMessageBox.StandardButton.Yes:
+                return
         unacked = [f for f in ms.flags if not f.acknowledged]
         if unacked:
             QMessageBox.warning(self, "Cannot validate", "All flags must be acknowledged first.")
