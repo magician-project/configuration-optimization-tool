@@ -63,6 +63,7 @@ class ModuleState(BaseModel):
     # Full lifecycle:
     # ok -> needs_action -> validated -> computing -> computed -> deploying -> deployed
     # Error branches: compute_failed, deploy_failed
+    # Derived branch: out_of_scope (module not in the use case's default module set)
     status: str = "ok"
     impacts: List[ModuleImpact] = []
     flags: List[Flag] = []
@@ -79,6 +80,13 @@ class ConfidenceScore(BaseModel):
     level: str         # "low" | "medium" | "high"
 
 
+class ExternalSource(BaseModel):
+    """Partner-declared source for one external input requirement (see module_dependencies)."""
+    source_name: str = ""
+    contract_agreed: bool = False
+    schema_reference: str = ""
+
+
 class UseCase(BaseModel):
     id: str
     name: str
@@ -90,7 +98,10 @@ class UseCase(BaseModel):
     # holds all q_clf_* fields configured in the module detail panel.
     module_answers: Dict[str, dict] = {}
     modules: Dict[str, ModuleState] = {}
-    # Module ids relevant to this use case's task type (see module_registry.compute_default_modules).
+    # Module ids relevant to this use case's pipeline selection (see module_registry.compute_default_modules).
     # Recomputed on every save — never edited by hand.
     default_modules: List[str] = []
+    # External input sources keyed by dependency id. Kept when a dependency leaves scope,
+    # so switching the pipeline back does not lose what the partner filled in.
+    external_sources: Dict[str, ExternalSource] = {}
     confidence: ConfidenceScore = ConfidenceScore(score=0, percentage=0.0, level="low")

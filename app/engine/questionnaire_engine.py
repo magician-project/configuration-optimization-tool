@@ -1,7 +1,8 @@
 from typing import Dict, Any, List
 from app.models.questionnaire import QuestionnaireAnswers
 from app.models.use_case import ModuleImpact, Flag, ModuleState, ConfidenceScore, UseCase
-from app.engine.module_registry import MODULES, compute_default_modules
+from app.engine.module_registry import ALWAYS_NEEDS_ACTION, MODULES, compute_default_modules
+from app.engine.module_dependencies import validate_configuration
 
 
 # ---------------------------------------------------------------------------
@@ -815,7 +816,10 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
         ))
         total_characteristics += 1
 
-    if "tactile" in answers.q3_additional_sensors:
+    # Force sensing only matters when MAGICIAN Inspection (Grabber/tactile) is in scope; a
+    # retained answer from a hidden section must not keep affecting the Motion Planner.
+    tactile_in_scope = "tactile_sensor" in compute_default_modules(answers.q_pipeline, answers.q3_additional_sensors)
+    if tactile_in_scope:
         impedance_sensor = mp.get("q_mp_impedance_sensor") or "force_estimate"
         result["motion_planning"]["impacts"].append(_impact(
             characteristic="Force/torque sensing feeds impedance control",
@@ -855,6 +859,20 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
         total_characteristics += 1
 
     # ------------------------------------------------------------------
+    # Out-of-scope modules: hard filter — no impacts, no flags.
+    # ------------------------------------------------------------------
+    in_scope = set(compute_default_modules(answers.q_pipeline, answers.q3_additional_sensors))
+    for mid in MODULES:
+        if mid not in in_scope:
+            result[mid]["impacts"] = []
+            result[mid]["flags"] = []
+
+    # Answers whose impacts were just removed must not count towards the threshold below.
+    total_characteristics = min(
+        total_characteristics, sum(len(data["impacts"]) for data in result.values())
+    )
+
+    # ------------------------------------------------------------------
     # Cross-cutting flag: >= 5 characteristics triggered
     # ------------------------------------------------------------------
     affected_modules = [mid for mid, data in result.items() if data["impacts"]]
@@ -879,10 +897,15 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
     """
     Mutates use_case.modules in-place with fresh impacts and flags.
     Preserves flag acknowledged state where flag IDs match.
-    Resets module status to 'ok' or 'needs_action' based on new impacts.
+    Resets module status to 'ok' or 'needs_action' based on new impacts, or to
+    'out_of_scope' when the module is not in the use case's default module set.
     """
     module_impacts = result["module_impacts"]
     use_case.confidence = ConfidenceScore(**result["confidence"])
+
+    use_case.default_modules = compute_default_modules(
+        use_case.answers.q_pipeline, use_case.answers.q3_additional_sensors
+    )
 
     for mid, info in MODULES.items():
         data = module_impacts[mid]
@@ -904,10 +927,13 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
                 flag.acknowledged = prev_acked.get(flag.id, False)
                 new_flags.append(flag)
 
-        new_status = "needs_action" if new_impacts else "ok"
-        # Ergodic Control always requires configuration before compute
-        if mid == "ergodic_control" and new_status == "ok":
-            new_status = "needs_action"
+        if mid not in use_case.default_modules:
+            new_status = "out_of_scope"
+        else:
+            new_status = "needs_action" if new_impacts else "ok"
+            # Ergodic Control always requires configuration before compute
+            if mid in ALWAYS_NEEDS_ACTION and new_status == "ok":
+                new_status = "needs_action"
 
         use_case.modules[mid] = ModuleState(
             module_id=mid,
@@ -918,9 +944,32 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
             flags=new_flags,
         )
 
-    use_case.default_modules = compute_default_modules(
-        use_case.answers.q_task_type, use_case.answers.q3_additional_sensors
+    sync_external_input_status(use_case)
+
+
+def consumers_awaiting_external_input(use_case: UseCase) -> set:
+    """Module ids whose required external input has no agreed source yet."""
+    validation = validate_configuration(
+        use_case.answers.q_pipeline, use_case.answers.q3_additional_sensors, use_case.external_sources
     )
+    return {r.consumer for r in validation.external_inputs if not r.complete}
+
+
+def sync_external_input_status(use_case: UseCase) -> None:
+    """Flag a module waiting for an agreed external input; undo that once it is agreed.
+
+    Only escalates "ok": later lifecycle states (validated, computed, ...) are left alone,
+    since external-input readiness is informational and must not block compute or deploy.
+    """
+    pending = consumers_awaiting_external_input(use_case)
+    for mid, ms in use_case.modules.items():
+        if ms.status in ("out_of_scope", "computing", "deploying"):
+            continue
+        if mid in pending:
+            if ms.status == "ok":
+                ms.status = "needs_action"
+        elif ms.status == "needs_action" and not ms.impacts and mid not in ALWAYS_NEEDS_ACTION:
+            ms.status = "ok"
 
 
 # ---------------------------------------------------------------------------
@@ -931,19 +980,22 @@ def _compute_confidence(answers: QuestionnaireAnswers, module_answers: dict = No
     if module_answers is None:
         module_answers = {}
     score = 0
+    # Sensors, lighting, grabber hardware and classifier config are not asked for grinding-only.
+    inspection_relevant = answers.q_pipeline != "grinding"
+    max_score = 9 if inspection_relevant else 5
 
     # Cat 1: Robot Arms
     if answers.q1_robot_arms:
         score += 1
 
     # Cat 2: Camera / Sensors (original + new grabber camera questions)
-    if (answers.q2_camera_type or answers.q3_additional_sensors
+    if inspection_relevant and (answers.q2_camera_type or answers.q3_additional_sensors
             or answers.q2_camera_resolution or answers.q2_camera_framerate
             or answers.q2_stream_shm):
         score += 1
 
     # Cat 3: Lighting
-    if answers.q4_lighting:
+    if inspection_relevant and answers.q4_lighting:
         score += 1
 
     # Cat 4: Material / Size
@@ -964,19 +1016,19 @@ def _compute_confidence(answers: QuestionnaireAnswers, module_answers: dict = No
 
     # Cat 8: Grabber Hardware (now in module_answers["grabber"])
     _grab_conf = module_answers.get("grabber", {})
-    if (_grab_conf.get("q_grab_force_sensor_ip") or _grab_conf.get("q_grab_lighting_mode")
+    if inspection_relevant and (_grab_conf.get("q_grab_force_sensor_ip") or _grab_conf.get("q_grab_lighting_mode")
             or _grab_conf.get("q_grab_arduino_path") or _grab_conf.get("q_grab_teensy_path")
             or answers.q2_camera_framerate):
         score += 1
 
     # Cat 9: Classifier Config — now sourced from module_answers["vision_classifier"]
     _clf_conf = module_answers.get("vision_classifier", {})
-    if (_clf_conf.get("q_clf_model_path") or _clf_conf.get("q_clf_dataset_dir")
+    if inspection_relevant and (_clf_conf.get("q_clf_model_path") or _clf_conf.get("q_clf_dataset_dir")
             or _clf_conf.get("q_clf_use_lasers") or _clf_conf.get("q_clf_threshold")
             or _clf_conf.get("q_clf_fps")):
         score += 1
 
-    pct = (score / 9) * 100
+    pct = (score / max_score) * 100
     if pct < 40:
         level = "low"
     elif pct < 70:
@@ -984,7 +1036,7 @@ def _compute_confidence(answers: QuestionnaireAnswers, module_answers: dict = No
     else:
         level = "high"
 
-    return {"score": score, "max": 9, "percentage": round(pct, 1), "level": level}
+    return {"score": score, "max": max_score, "percentage": round(pct, 1), "level": level}
 
 
 # ---------------------------------------------------------------------------

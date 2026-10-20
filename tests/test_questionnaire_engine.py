@@ -37,19 +37,71 @@ def _new_use_case() -> UseCase:
     return UseCase(id="test", name="Test", created_at=now, updated_at=now)
 
 
-def test_apply_impacts_recomputes_default_modules_from_task_type():
+def test_apply_impacts_recomputes_default_modules_from_pipeline():
     uc = _new_use_case()
-    uc.answers = QuestionnaireAnswers(q_task_type="inspection")
+    uc.answers = QuestionnaireAnswers(q_pipeline="inspection")
 
     apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
 
-    assert set(uc.default_modules) == {"grabber", "localiser", "vision_classifier", "ergodic_control"}
+    assert set(uc.default_modules) == {
+        "grabber", "vision_classifier", "ergodic_control", "localiser", "motion_planning",
+    }
+    assert uc.modules["orienteering_solver"].status == "out_of_scope"
 
 
-def test_apply_impacts_falls_back_to_grinding_when_task_type_unanswered():
-    uc = _new_use_case()  # q_task_type left at its default (None) — backward compatibility
+def test_out_of_scope_module_gets_no_impacts_or_flags():
+    answers = QuestionnaireAnswers(q_pipeline="inspection", q1_robot_arms="multiple")
+
+    result = compute_impacts(answers, module_answers={})
+
+    assert result["module_impacts"]["orienteering_solver"] == {"impacts": [], "flags": []}
+    assert result["module_impacts"]["motion_planning"]["impacts"]
+
+
+def test_apply_impacts_falls_back_to_both_when_pipeline_unanswered():
+    uc = _new_use_case()  # q_pipeline left at its default (None) — backward compatibility
 
     apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
 
     assert "orienteering_solver" in uc.default_modules
-    assert "motion_planning" in uc.default_modules
+    assert "grabber" in uc.default_modules
+
+
+def test_grinding_only_confidence_ignores_inspection_categories():
+    answers = QuestionnaireAnswers(q_pipeline="grinding", q1_robot_arms="single")
+
+    confidence = compute_impacts(answers, module_answers={})["confidence"]
+
+    assert confidence["max"] == 5
+    assert confidence["score"] == 1
+
+
+def test_grinding_only_ignores_retained_inspection_answers_for_cross_cutting_flag():
+    answers = QuestionnaireAnswers(
+        q_pipeline="grinding",
+        q2_camera_type="gige",
+        q2_camera_resolution={"width": 1920, "height": 1080},
+        q2_camera_framerate=30,
+        q2_stream_shm="yes",
+        q4_lighting="additional",
+        q9_time="tight",
+        q9_time_value=10,
+    )
+
+    solver = compute_impacts(answers, module_answers={})["module_impacts"]["orienteering_solver"]
+
+    assert solver["impacts"], "time constraint should still affect the solver"
+    assert all(f["id"] != "flag_cross_cutting" for f in solver["flags"])
+
+
+
+def test_retained_tactile_answer_does_not_affect_motion_planner_for_grinding_only():
+    grinding = QuestionnaireAnswers(q_pipeline="grinding", q3_additional_sensors=["tactile"])
+    both = QuestionnaireAnswers(q_pipeline="both", q3_additional_sensors=["tactile"])
+
+    grinding_mp = compute_impacts(grinding, module_answers={})["module_impacts"]["motion_planning"]
+    both_mp = compute_impacts(both, module_answers={})["module_impacts"]["motion_planning"]
+
+    assert grinding_mp["impacts"] == []
+    assert both_mp["impacts"]
+

@@ -1,5 +1,5 @@
 """
-ConfidenceBar — segmented dot display showing questionnaire completeness (0–7).
+ConfidenceBar — segmented dot display showing questionnaire completeness (score / max).
 """
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel
@@ -12,7 +12,7 @@ _COLOURS = {
     "low":    ("#dc2626", "#fee2e2", "Answer more questions to improve recommendation quality."),
 }
 
-_CATEGORY_LABELS = ["Arms", "Camera", "Lighting", "Material", "Defects", "Time", "Mesh"]
+_DEFAULT_DOT_COUNT = 7
 
 
 class ConfidenceBar(QWidget):
@@ -44,24 +44,33 @@ class ConfidenceBar(QWidget):
         top.addWidget(self._level_badge)
         root.addLayout(top)
 
-        # Segmented dots row
-        dots_row = QHBoxLayout()
-        dots_row.setSpacing(6)
-        for i in range(len(_CATEGORY_LABELS)):
-            dot = QLabel()
-            dot.setFixedSize(32, 10)
-            dot.setStyleSheet("background: #e5e7eb; border-radius: 5px;")
-            dot.setToolTip(_CATEGORY_LABELS[i])
-            self._dots.append(dot)
-            dots_row.addWidget(dot)
-        dots_row.addStretch()
-        root.addLayout(dots_row)
+        # Segmented dots row (one dot per scoring category, so the count follows the score's max)
+        self._dots_row = QHBoxLayout()
+        self._dots_row.setSpacing(6)
+        self._set_dot_count(_DEFAULT_DOT_COUNT)
+        root.addLayout(self._dots_row)
 
         self._hint_label = QLabel("Answer questions to improve recommendation quality.")
         self._hint_label.setStyleSheet("color: #9ca3af; font-size: 11px;")
         root.addWidget(self._hint_label)
 
+    def _set_dot_count(self, count: int) -> None:
+        while self._dots_row.count():
+            item = self._dots_row.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._dots = []
+        for _ in range(count):
+            dot = QLabel()
+            dot.setFixedSize(32, 10)
+            dot.setStyleSheet("background: #e5e7eb; border-radius: 5px;")
+            self._dots.append(dot)
+            self._dots_row.addWidget(dot)
+        self._dots_row.addStretch()
+
     def update_score(self, confidence: ConfidenceScore) -> None:
+        if len(self._dots) != confidence.max:
+            self._set_dot_count(confidence.max)
         fg, bg, hint = _COLOURS.get(confidence.level, ("#6b7280", "#f3f4f6", ""))
 
         self._score_label.setText(

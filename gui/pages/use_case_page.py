@@ -20,11 +20,16 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, Slot
 
-from app.models.use_case import UseCase, ComputeResult
-from app.engine.questionnaire_engine import compute_impacts, apply_impacts_to_modules
+from app.models.use_case import UseCase, ComputeResult, ExternalSource
+from app.engine.module_dependencies import validate_configuration
+from app.engine.questionnaire_engine import (
+    compute_impacts, apply_impacts_to_modules, consumers_awaiting_external_input,
+    sync_external_input_status,
+)
 from app.ros.ros2_adapter import get_adapter
 from app.storage import json_store
 from gui.components.confidence_bar import ConfidenceBar
+from gui.components.external_inputs import ConfigurationValidationPanel
 from gui.components.questionnaire_form import QuestionnaireForm
 from gui.components.module_grid import ModuleGrid
 from gui.components.module_detail import ModuleDetail
@@ -140,6 +145,9 @@ class UseCasePage(QWidget):
         dash_vbox = QVBoxLayout(dash_tab)
         dash_vbox.setContentsMargins(8, 8, 8, 8)
         dash_vbox.setSpacing(8)
+        self._validation_panel = ConfigurationValidationPanel()
+        self._validation_panel.configure_requested.connect(self._open_module_detail)
+        dash_vbox.addWidget(self._validation_panel)
         self._module_grid = ModuleGrid()
         self._module_grid.module_selected.connect(self._open_module_detail)
         dash_vbox.addWidget(self._module_grid, stretch=1)
@@ -171,7 +179,30 @@ class UseCasePage(QWidget):
         self._title_lbl.setTextFormat(Qt.TextFormat.RichText)
         self._confidence_bar.update_score(uc.confidence)
         self._form.load_answers(uc.answers.model_dump())
+        self._refresh_grid()
+
+    def _refresh_grid(self) -> None:
+        """Push the current module states and configuration validation to the dashboard."""
+        uc = self._use_case
+        if uc is None:
+            return
         self._module_grid.update_modules(uc.modules)
+        self._validation_panel.update_validation(self._validation(uc))
+
+    @staticmethod
+    def _validation(uc: UseCase):
+        return validate_configuration(uc.answers.q_pipeline, uc.answers.q3_additional_sensors, uc.external_sources)
+
+    def _refresh_open_dialog(self, module_id: str) -> None:
+        """Push the latest ModuleState + external inputs into the open detail dialog, if any."""
+        if self._use_case is None or self._active_detail_dlg is None:
+            return
+        ms = self._use_case.modules.get(module_id)
+        if ms:
+            self._active_detail_dlg.refresh(ms, external_inputs=self._external_inputs_for(module_id))
+
+    def _external_inputs_for(self, module_id: str) -> list:
+        return [r for r in self._validation(self._use_case).external_inputs if r.consumer == module_id]
 
     # ------------------------------------------------------------------
     # Questionnaire save / dirty tracking
@@ -235,7 +266,7 @@ class UseCasePage(QWidget):
         self._pending_answers = None
         self._save_bar.hide()
         self._confidence_bar.update_score(self._use_case.confidence)
-        self._module_grid.update_modules(self._use_case.modules)
+        self._refresh_grid()
 
         needs = sum(1 for m in self._use_case.modules.values() if m.status == "needs_action")
         total = len(self._use_case.modules)
@@ -258,15 +289,19 @@ class UseCasePage(QWidget):
         if ms is None:
             return
         module_config = self._use_case.module_answers.get(module_id, {})
-        dlg = ModuleDetail(ms, module_config=module_config, parent=self)
+        dlg = ModuleDetail(
+            ms, module_config=module_config,
+            external_inputs=self._external_inputs_for(module_id), parent=self,
+        )
         dlg.action_requested.connect(self._handle_module_action)
         dlg.module_config_changed.connect(self._on_module_config_changed)
+        dlg.external_source_changed.connect(self._on_external_source_changed)
         self._active_detail_dlg = dlg
         dlg.exec()
         self._active_detail_dlg = None
         # Refresh grid in case compute/deploy changed state outside the dialog
         if self._use_case:
-            self._module_grid.update_modules(self._use_case.modules)
+            self._refresh_grid()
 
     @Slot(str, dict)
     def _on_module_config_changed(self, module_id: str, config: dict) -> None:
@@ -278,12 +313,23 @@ class UseCasePage(QWidget):
         result = compute_impacts(self._use_case.answers, module_answers=self._use_case.module_answers)
         apply_impacts_to_modules(self._use_case, result)
         json_store.save(self._use_case)
-        self._module_grid.update_modules(self._use_case.modules)
-        # Refresh the open dialog
-        if self._active_detail_dlg:
-            ms = self._use_case.modules.get(module_id)
-            if ms:
-                self._active_detail_dlg.refresh(ms)
+        self._refresh_grid()
+        self._refresh_open_dialog(module_id)
+
+    @Slot(str, dict)
+    def _on_external_source_changed(self, dependency_id: str, source: dict) -> None:
+        """Persist the partner's external source for an input requirement."""
+        uc = self._use_case
+        if uc is None:
+            return
+        uc.external_sources[dependency_id] = ExternalSource(**source)
+        sync_external_input_status(uc)
+        uc.updated_at = datetime.now(timezone.utc).isoformat()
+        json_store.save(uc)
+        self._refresh_grid()
+        for req in self._validation(uc).external_inputs:
+            if req.dependency_id == dependency_id:
+                self._refresh_open_dialog(req.consumer)
 
     @Slot(str, str)
     def _handle_module_action(self, module_id: str, action: str) -> None:
@@ -307,9 +353,8 @@ class UseCasePage(QWidget):
         for f in ms.flags:
             f.acknowledged = True
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
-        if self._active_detail_dlg:
-            self._active_detail_dlg.refresh(ms)
+        self._refresh_grid()
+        self._refresh_open_dialog(module_id)
         if newly_acked:
             flag_word = "flag" if newly_acked == 1 else "flags"
             self._show_banner(
@@ -322,8 +367,18 @@ class UseCasePage(QWidget):
         if uc is None:
             return
         ms = uc.modules.get(module_id)
-        if ms is None:
+        if ms is None or ms.status == "out_of_scope":
             return
+        if module_id in consumers_awaiting_external_input(uc):
+            reply = QMessageBox.question(
+                self, "External input not agreed",
+                "This module still needs an external input source with an agreed contract.\n"
+                "Mark it as validated anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
         unacked = [f for f in ms.flags if not f.acknowledged]
         if unacked:
             QMessageBox.warning(self, "Cannot validate", "All flags must be acknowledged first.")
@@ -332,24 +387,22 @@ class UseCasePage(QWidget):
         ms.validated_at = datetime.now(timezone.utc).isoformat()
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
-        if self._active_detail_dlg:
-            self._active_detail_dlg.refresh(ms)
+        self._refresh_grid()
+        self._refresh_open_dialog(module_id)
 
     def _run_compute(self, module_id: str) -> None:
         uc = self._use_case
         if uc is None:
             return
         ms = uc.modules.get(module_id)
-        if ms is None:
+        if ms is None or ms.status == "out_of_scope":
             return
 
         ms.status = "computing"
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
-        if self._active_detail_dlg:
-            self._active_detail_dlg.refresh(ms)
+        self._refresh_grid()
+        self._refresh_open_dialog(module_id)
 
         from app.engine.module_registry import MODULES
         module_name = MODULES.get(module_id, {}).get("name", module_id)
@@ -385,6 +438,10 @@ class UseCasePage(QWidget):
         if self._compute_progress_dlg is not None:
             self._compute_progress_dlg.on_done(success, result_path)
 
+        # Scope may have changed while compute ran; a late result must not undo that.
+        if ms.status == "out_of_scope":
+            return
+
         if success and result_path:
             try:
                 with open(result_path, encoding="utf-8") as f:
@@ -402,16 +459,15 @@ class UseCasePage(QWidget):
 
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
-        if self._active_detail_dlg:
-            self._active_detail_dlg.refresh(ms)
+        self._refresh_grid()
+        self._refresh_open_dialog(module_id)
 
     def _deploy_module(self, module_id: str) -> None:
         uc = self._use_case
         if uc is None:
             return
         ms = uc.modules.get(module_id)
-        if ms is None:
+        if ms is None or ms.status == "out_of_scope":
             return
         if ms.compute_result is None:
             QMessageBox.warning(self, "Cannot deploy", "Run Compute first.")
@@ -442,7 +498,7 @@ class UseCasePage(QWidget):
         ms.status = "deploying"
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
+        self._refresh_grid()
 
         try:
             ros_interface_module = __import__(
@@ -455,7 +511,7 @@ class UseCasePage(QWidget):
             QMessageBox.critical(self, "Deploy error", f"Could not load ROS interface: {exc}")
             ms.status = "deploy_failed"
             json_store.save(uc)
-            self._module_grid.update_modules(uc.modules)
+            self._refresh_grid()
             return
 
         adapter = get_adapter()
@@ -474,6 +530,5 @@ class UseCasePage(QWidget):
 
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
-        self._module_grid.update_modules(uc.modules)
-        if self._active_detail_dlg:
-            self._active_detail_dlg.refresh(ms)
+        self._refresh_grid()
+        self._refresh_open_dialog(module_id)

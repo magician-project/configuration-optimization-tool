@@ -30,10 +30,26 @@ _Avoid_: automation level, autonomy threshold
 A three-step maturity ladder for any COT capability. _Implemented_: the code path exists and runs. _Verified_: it has been exercised against a representative live environment (e.g. a running ROS 2 node) and produces correct results. _Supported_: a Verified capability COT officially stands behind for a release — documented and safe for a partner to rely on. A capability can be Implemented without being Verified or Supported.
 _Avoid_: tested (too vague — state which rung of the ladder)
 
-**Task type**:
-A use case's answer to whether its robot arm only inspects, or also grinds/reworks. Grinding always implies inspection too — there is no grind-only scenario. Determines a use case's default module set.
-_Avoid_: task mode, workflow type
+**Pipeline selection**:
+The single questionnaire answer stating which MAGICIAN functionality a use case uses: `inspection`, `grinding`, or `both`. It determines the scope and default module set. Grinding does not imply MAGICIAN Inspection: grinding-only may use defect information from an external inspection source.
+_Avoid_: task type, task mode, workflow type
 
 **Default module set**:
-The module ids relevant to a use case, derived from its task type (plus the tactile classifier when tactile sensing is selected). Recomputed from scratch on every save — never a frozen snapshot edited directly, and distinct from a per-module override a user applies on top of it.
+The module ids relevant to a use case, derived from its pipeline selection and specific capability answers such as whether tactile sensing is used. Recomputed from the use-case answers rather than edited as a frozen snapshot.
 _Avoid_: active modules (ambiguous with `ModuleState.status`), enabled modules
+
+**In scope / Out of scope**:
+Whether a module belongs to a use case's default module set. Derived only from questionnaire answers; a partner cannot switch an individual module on or off. An out-of-scope module produces no impacts or flags.
+_Avoid_: enabled/disabled, on/off, override
+
+**Module dependency**:
+A required or conditional input relationship from a provider output to a consumer input. A dependency may be satisfied by an active MAGICIAN module or, when explicitly allowed, by a declared external input.
+
+**External input requirement**:
+A required consumer input for which the normal MAGICIAN provider is inactive and an external source is allowed. For the initial grinding-only scenario, this is defect information required by the Orienteering Solver.
+
+**Dependency evidence status**:
+The confidence category attached to a dependency or interface: documented, conceptual, proposed, or unknown. This describes evidence, not whether a module is present in the COT or whether a use-case configuration is valid.
+
+**Configuration validation status**:
+The result of checking active modules and their required inputs: `valid`, `valid_with_external_inputs`, `incomplete`, or `invalid`. `valid_with_external_inputs` means complete for configuration, while receipt and validation of runtime data are a separate handover concern.

@@ -125,3 +125,26 @@ def test_select_follow_up_is_visible_after_reload(qapp):
 
     assert form._widgets["q_test_camera_spec"].text() == "Sony XCG-CP510"
     assert not follow_up_widget.isHidden()
+
+
+def _sensor_section(form):
+    [card] = [w for w in form._conditional_widgets if w.property("question_condition")["field"] == "q_pipeline"]
+    return card
+
+
+def test_sensor_section_hidden_for_grinding_only(qapp):
+    form = QuestionnaireForm()
+
+    form.load_answers({"q_pipeline": "grinding"})
+    assert _sensor_section(form).isHidden()
+
+    form.load_answers({"q_pipeline": "both"})
+    assert not _sensor_section(form).isHidden()
+
+
+def test_sensor_section_visible_when_pipeline_unanswered(qapp):
+    form = QuestionnaireForm()
+
+    form.load_answers({})
+
+    assert not _sensor_section(form).isHidden()

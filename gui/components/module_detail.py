@@ -10,9 +10,12 @@ Lifecycle buttons shown based on module status:
   compute_failed  → Retry Compute
   deployed        → Re-deploy
   deploy_failed   → Re-deploy
+  out_of_scope    → (module not in the use case's default module set — no buttons)
 """
 
 from __future__ import annotations
+
+from typing import List, Optional
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -20,7 +23,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
+from app.engine.module_dependencies import ExternalInputRequirement
 from app.models.use_case import ModuleState
+from gui.components.external_inputs import ExternalInputForm
 
 _ACTION_COLOURS = {
     "retrain":     ("#7c3aed", "#ede9fe"),   # purple
@@ -44,6 +49,7 @@ _STATUS_STYLE = {
     "deploying":     ("Deploying…", "#dbeafe", "#1e40af"),
     "deployed":      ("Deployed", "#d1fae5", "#065f46"),
     "deploy_failed": ("Deploy failed", "#fee2e2", "#991b1b"),
+    "out_of_scope":  ("Out of scope for this pipeline selection", "#e5e7eb", "#4b5563"),
 }
 
 
@@ -53,11 +59,17 @@ class ModuleDetail(QDialog):
     # action: "acknowledge" | "validate" | "compute" | "deploy"
     # Emitted when module-specific config fields are changed and saved
     module_config_changed = Signal(str, dict)  # (module_id, config_dict)
+    # Emitted when the partner saves the external source for an input requirement
+    external_source_changed = Signal(str, dict)  # (dependency_id, ExternalSource fields)
 
-    def __init__(self, module: ModuleState, module_config: dict = None, parent=None) -> None:
+    def __init__(
+        self, module: ModuleState, module_config: dict = None,
+        external_inputs: Optional[List[ExternalInputRequirement]] = None, parent=None,
+    ) -> None:
         super().__init__(parent)
         self._module = module
         self._module_config: dict = dict(module_config or {})
+        self._external_inputs: List[ExternalInputRequirement] = list(external_inputs or [])
         self.setWindowTitle(module.module_name)
         self.setMinimumSize(640, 560)
         self.setModal(True)
@@ -133,9 +145,12 @@ class ModuleDetail(QDialog):
         from PySide6.QtCore import QTimer
         QTimer.singleShot(1500, lambda: self.setWindowTitle(orig))
 
-    def refresh(self, module: ModuleState) -> None:
+    def refresh(
+        self, module: ModuleState, external_inputs: Optional[List[ExternalInputRequirement]] = None
+    ) -> None:
         """Update the dialog in-place after an action has been taken."""
         self._module = module
+        self._external_inputs = list(external_inputs or [])
         root = self.layout()
 
         _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser", "motion_planning"}
@@ -203,6 +218,11 @@ class ModuleDetail(QDialog):
         inner_layout = QVBoxLayout(inner)
         inner_layout.setSpacing(8)
 
+        for req in self._external_inputs:
+            form = ExternalInputForm(req)
+            form.source_changed.connect(self.external_source_changed)
+            inner_layout.addWidget(form)
+
         if self._module.impacts:
             section_lbl = QLabel("Required actions")
             section_lbl.setStyleSheet("font-weight: bold; font-size: 13px; margin-top: 4px;")
@@ -218,7 +238,15 @@ class ModuleDetail(QDialog):
                 inner_layout.addWidget(self._build_flag_card(flag))
 
         if not self._module.impacts and not self._module.flags:
-            no_action = QLabel("No impacts or flags for this module with the current configuration.")
+            if self._module.status == "out_of_scope":
+                no_action = QLabel(
+                    "This module is not in scope for the selected pipeline, so it has no impacts, "
+                    "flags, or compute/deploy actions. Change the pipeline selection in the "
+                    "questionnaire to bring it into scope."
+                )
+            else:
+                no_action = QLabel("No impacts or flags for this module with the current configuration.")
+            no_action.setWordWrap(True)
             no_action.setStyleSheet("color: #6b7280; padding: 8px;")
             inner_layout.addWidget(no_action)
 
