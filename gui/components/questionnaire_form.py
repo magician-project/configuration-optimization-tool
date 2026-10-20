@@ -98,7 +98,11 @@ class QuestionnaireForm(QScrollArea):
                 qs = sections.get(sid, [])
                 if not qs:
                     continue
-                self._layout.addWidget(self._build_section_card(sid, section_def["title"], qs))
+                card = self._build_section_card(sid, section_def["title"], qs)
+                if section_def.get("condition"):
+                    card.setProperty("question_condition", section_def["condition"])
+                    self._conditional_widgets.append(card)
+                self._layout.addWidget(card)
         else:
             # Flat rendering — all questions in one list, no section cards
             for q in self._questions:
@@ -537,6 +541,8 @@ class QuestionnaireForm(QScrollArea):
             return value == cond.get("value")
         elif operator == "in":
             return value in cond.get("values", [])
+        elif operator == "not_in":
+            return value not in cond.get("values", [])
         elif operator == "contains":
             return isinstance(value, list) and cond.get("value") in value
         return False

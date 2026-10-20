@@ -20,11 +20,16 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, Slot
 
-from app.models.use_case import UseCase, ComputeResult
-from app.engine.questionnaire_engine import compute_impacts, apply_impacts_to_modules
+from app.models.use_case import UseCase, ComputeResult, ExternalSource
+from app.engine.module_dependencies import validate_configuration
+from app.engine.questionnaire_engine import (
+    compute_impacts, apply_impacts_to_modules, consumers_awaiting_external_input,
+    sync_external_input_status,
+)
 from app.ros.ros2_adapter import get_adapter
 from app.storage import json_store
 from gui.components.confidence_bar import ConfidenceBar
+from gui.components.external_inputs import ConfigurationValidationPanel
 from gui.components.questionnaire_form import QuestionnaireForm
 from gui.components.module_grid import ModuleGrid
 from gui.components.module_detail import ModuleDetail
@@ -140,10 +145,11 @@ class UseCasePage(QWidget):
         dash_vbox = QVBoxLayout(dash_tab)
         dash_vbox.setContentsMargins(8, 8, 8, 8)
         dash_vbox.setSpacing(8)
+        self._validation_panel = ConfigurationValidationPanel()
+        self._validation_panel.configure_requested.connect(self._open_module_detail)
+        dash_vbox.addWidget(self._validation_panel)
         self._module_grid = ModuleGrid()
         self._module_grid.module_selected.connect(self._open_module_detail)
-        self._module_grid.override_toggle_requested.connect(self._toggle_module_override)
-        self._module_grid.override_reset_requested.connect(self._reset_module_override)
         dash_vbox.addWidget(self._module_grid, stretch=1)
         self._tabs.addTab(dash_tab, "Module Dashboard")
 
@@ -176,23 +182,27 @@ class UseCasePage(QWidget):
         self._refresh_grid()
 
     def _refresh_grid(self) -> None:
-        """Push the current module states, default set, and overrides to the grid."""
+        """Push the current module states and configuration validation to the dashboard."""
         uc = self._use_case
         if uc is None:
             return
-        self._module_grid.update_modules(
-            uc.modules,
-            default_modules=uc.default_modules,
-            module_overrides=uc.module_overrides,
-        )
+        self._module_grid.update_modules(uc.modules)
+        self._validation_panel.update_validation(self._validation(uc))
+
+    @staticmethod
+    def _validation(uc: UseCase):
+        return validate_configuration(uc.answers.q_pipeline, uc.answers.q3_additional_sensors, uc.external_sources)
 
     def _refresh_open_dialog(self, module_id: str) -> None:
-        """Push the latest ModuleState + override value into the open detail dialog, if any."""
+        """Push the latest ModuleState + external inputs into the open detail dialog, if any."""
         if self._use_case is None or self._active_detail_dlg is None:
             return
         ms = self._use_case.modules.get(module_id)
         if ms:
-            self._active_detail_dlg.refresh(ms, override=self._use_case.module_overrides.get(module_id))
+            self._active_detail_dlg.refresh(ms, external_inputs=self._external_inputs_for(module_id))
+
+    def _external_inputs_for(self, module_id: str) -> list:
+        return [r for r in self._validation(self._use_case).external_inputs if r.consumer == module_id]
 
     # ------------------------------------------------------------------
     # Questionnaire save / dirty tracking
@@ -248,11 +258,7 @@ class UseCasePage(QWidget):
 
         self._use_case.answers = parsed
         self._use_case.updated_at = datetime.now(timezone.utc).isoformat()
-        result = compute_impacts(
-            parsed,
-            module_answers=self._use_case.module_answers,
-            module_overrides=self._use_case.module_overrides,
-        )
+        result = compute_impacts(parsed, module_answers=self._use_case.module_answers)
         apply_impacts_to_modules(self._use_case, result)
         json_store.save(self._use_case)
 
@@ -285,12 +291,11 @@ class UseCasePage(QWidget):
         module_config = self._use_case.module_answers.get(module_id, {})
         dlg = ModuleDetail(
             ms, module_config=module_config,
-            override=self._use_case.module_overrides.get(module_id), parent=self,
+            external_inputs=self._external_inputs_for(module_id), parent=self,
         )
         dlg.action_requested.connect(self._handle_module_action)
         dlg.module_config_changed.connect(self._on_module_config_changed)
-        dlg.override_toggled.connect(self._toggle_module_override)
-        dlg.override_reset_requested.connect(self._reset_module_override)
+        dlg.external_source_changed.connect(self._on_external_source_changed)
         self._active_detail_dlg = dlg
         dlg.exec()
         self._active_detail_dlg = None
@@ -305,57 +310,26 @@ class UseCasePage(QWidget):
             return
         self._use_case.module_answers[module_id] = config
         self._use_case.updated_at = datetime.now(timezone.utc).isoformat()
-        result = compute_impacts(
-            self._use_case.answers,
-            module_answers=self._use_case.module_answers,
-            module_overrides=self._use_case.module_overrides,
-        )
+        result = compute_impacts(self._use_case.answers, module_answers=self._use_case.module_answers)
         apply_impacts_to_modules(self._use_case, result)
         json_store.save(self._use_case)
         self._refresh_grid()
         self._refresh_open_dialog(module_id)
 
-    @Slot(str)
-    def _toggle_module_override(self, module_id: str) -> None:
-        """Flip a module's on/off override and re-evaluate impacts immediately (auto-saved)."""
+    @Slot(str, dict)
+    def _on_external_source_changed(self, dependency_id: str, source: dict) -> None:
+        """Persist the partner's external source for an input requirement."""
         uc = self._use_case
         if uc is None:
             return
-        ms = uc.modules.get(module_id)
-        if ms is None or ms.status in ("computing", "deploying"):
-            return
-        # ms.status already reflects the *effective* state (explicit override,
-        # or else default-module-set membership) — flip that, not a stale guess.
-        uc.module_overrides[module_id] = ms.status == "disabled"
+        uc.external_sources[dependency_id] = ExternalSource(**source)
+        sync_external_input_status(uc)
         uc.updated_at = datetime.now(timezone.utc).isoformat()
-        result = compute_impacts(
-            uc.answers, module_answers=uc.module_answers, module_overrides=uc.module_overrides
-        )
-        apply_impacts_to_modules(uc, result)
         json_store.save(uc)
         self._refresh_grid()
-        self._refresh_open_dialog(module_id)
-
-    @Slot(str)
-    def _reset_module_override(self, module_id: str) -> None:
-        """Clear an explicit override so the module follows the task-type default again."""
-        uc = self._use_case
-        if uc is None:
-            return
-        ms = uc.modules.get(module_id)
-        if ms is None or ms.status in ("computing", "deploying"):
-            return
-        if module_id not in uc.module_overrides:
-            return
-        del uc.module_overrides[module_id]
-        uc.updated_at = datetime.now(timezone.utc).isoformat()
-        result = compute_impacts(
-            uc.answers, module_answers=uc.module_answers, module_overrides=uc.module_overrides
-        )
-        apply_impacts_to_modules(uc, result)
-        json_store.save(uc)
-        self._refresh_grid()
-        self._refresh_open_dialog(module_id)
+        for req in self._validation(uc).external_inputs:
+            if req.dependency_id == dependency_id:
+                self._refresh_open_dialog(req.consumer)
 
     @Slot(str, str)
     def _handle_module_action(self, module_id: str, action: str) -> None:
@@ -393,7 +367,13 @@ class UseCasePage(QWidget):
         if uc is None:
             return
         ms = uc.modules.get(module_id)
-        if ms is None or ms.status == "disabled":
+        if ms is None or ms.status == "out_of_scope":
+            return
+        if module_id in consumers_awaiting_external_input(uc):
+            QMessageBox.warning(
+                self, "Cannot validate",
+                "This module still needs an external input source with an agreed contract.",
+            )
             return
         unacked = [f for f in ms.flags if not f.acknowledged]
         if unacked:
@@ -411,7 +391,7 @@ class UseCasePage(QWidget):
         if uc is None:
             return
         ms = uc.modules.get(module_id)
-        if ms is None or ms.status == "disabled":
+        if ms is None or ms.status == "out_of_scope":
             return
 
         ms.status = "computing"
@@ -479,7 +459,7 @@ class UseCasePage(QWidget):
         if uc is None:
             return
         ms = uc.modules.get(module_id)
-        if ms is None or ms.status == "disabled":
+        if ms is None or ms.status == "out_of_scope":
             return
         if ms.compute_result is None:
             QMessageBox.warning(self, "Cannot deploy", "Run Compute first.")

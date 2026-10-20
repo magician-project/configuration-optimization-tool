@@ -10,12 +10,12 @@ Lifecycle buttons shown based on module status:
   compute_failed  → Retry Compute
   deployed        → Re-deploy
   deploy_failed   → Re-deploy
-  disabled        → (module overridden off — no buttons; toggle in header re-enables)
+  out_of_scope    → (module not in the use case's default module set — no buttons)
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -23,7 +23,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
+from app.engine.module_dependencies import ExternalInputRequirement
 from app.models.use_case import ModuleState
+from gui.components.external_inputs import ExternalInputForm
 
 _ACTION_COLOURS = {
     "retrain":     ("#7c3aed", "#ede9fe"),   # purple
@@ -47,7 +49,7 @@ _STATUS_STYLE = {
     "deploying":     ("Deploying…", "#dbeafe", "#1e40af"),
     "deployed":      ("Deployed", "#d1fae5", "#065f46"),
     "deploy_failed": ("Deploy failed", "#fee2e2", "#991b1b"),
-    "disabled":      ("Disabled", "#e5e7eb", "#4b5563"),
+    "out_of_scope":  ("Out of scope for this pipeline selection", "#e5e7eb", "#4b5563"),
 }
 
 
@@ -57,20 +59,17 @@ class ModuleDetail(QDialog):
     # action: "acknowledge" | "validate" | "compute" | "deploy"
     # Emitted when module-specific config fields are changed and saved
     module_config_changed = Signal(str, dict)  # (module_id, config_dict)
-    # Emitted when the user (un)ticks the enable/disable checkbox; parent
-    # derives the new value from the authoritative use case state and saves it
-    override_toggled = Signal(str)   # module_id
-    # Emitted when the user clears an explicit override, so the module goes
-    # back to following the task-type default + normal impact computation
-    override_reset_requested = Signal(str)   # module_id
+    # Emitted when the partner saves the external source for an input requirement
+    external_source_changed = Signal(str, dict)  # (dependency_id, ExternalSource fields)
 
     def __init__(
-        self, module: ModuleState, module_config: dict = None, override: Optional[bool] = None, parent=None
+        self, module: ModuleState, module_config: dict = None,
+        external_inputs: Optional[List[ExternalInputRequirement]] = None, parent=None,
     ) -> None:
         super().__init__(parent)
         self._module = module
         self._module_config: dict = dict(module_config or {})
-        self._override = override   # True/False = explicit, None = following default
+        self._external_inputs: List[ExternalInputRequirement] = list(external_inputs or [])
         self.setWindowTitle(module.module_name)
         self.setMinimumSize(640, 560)
         self.setModal(True)
@@ -138,34 +137,6 @@ class ModuleDetail(QDialog):
     def _on_config_changed(self, config: dict) -> None:
         self._module_config = config
 
-    def _sync_override_button(self) -> None:
-        """Colour + text coded (ON = green, OFF = grey) toggle button, kept in
-        sync with the module's status — a native checkbox proved too subtle."""
-        is_enabled = self._module.status != "disabled"
-        self._override_btn.blockSignals(True)
-        self._override_btn.setChecked(is_enabled)
-        self._override_btn.blockSignals(False)
-        if is_enabled:
-            self._override_btn.setText("ON")
-            self._override_btn.setStyleSheet(
-                "QPushButton { background: #16a34a; color: white; border: none; "
-                "border-radius: 4px; padding: 5px 0; font-weight: bold; }"
-            )
-            self._override_btn.setToolTip(
-                "Module is enabled — click to disable it (no impacts, flags, compute or deploy)."
-            )
-        else:
-            self._override_btn.setText("OFF")
-            self._override_btn.setStyleSheet(
-                "QPushButton { background: #9ca3af; color: white; border: none; "
-                "border-radius: 4px; padding: 5px 0; font-weight: bold; }"
-            )
-            self._override_btn.setToolTip("Module is disabled — click to re-enable it.")
-
-        # Only shown when an explicit override exists — clears it so the module
-        # goes back to following the task-type default + normal impact computation
-        self._reset_override_btn.setVisible(self._override is not None)
-
     def _save_config(self) -> None:
         self.module_config_changed.emit(self._module.module_id, self._module_config)
         # Brief visual feedback via window title flash
@@ -174,13 +145,13 @@ class ModuleDetail(QDialog):
         from PySide6.QtCore import QTimer
         QTimer.singleShot(1500, lambda: self.setWindowTitle(orig))
 
-    def refresh(self, module: ModuleState, override: Optional[bool] = None) -> None:
+    def refresh(
+        self, module: ModuleState, external_inputs: Optional[List[ExternalInputRequirement]] = None
+    ) -> None:
         """Update the dialog in-place after an action has been taken."""
         self._module = module
-        self._override = override
+        self._external_inputs = list(external_inputs or [])
         root = self.layout()
-
-        self._sync_override_button()
 
         _TABBED_MODULES = {"vision_classifier", "ergodic_control", "grabber", "localiser", "motion_planning"}
         if self._module.module_id in _TABBED_MODULES:
@@ -203,8 +174,7 @@ class ModuleDetail(QDialog):
         root = QVBoxLayout(self)
         root.setSpacing(10)
 
-        # Header (static — never changes; the toggle button's text/colour/checked
-        # state is refreshed separately, see refresh())
+        # Header (static — never changes)
         header = QHBoxLayout()
         title = QLabel(self._module.module_name)
         title.setStyleSheet("font-size: 18px; font-weight: bold;")
@@ -213,32 +183,7 @@ class ModuleDetail(QDialog):
         sub.setTextFormat(Qt.TextFormat.RichText)
         header.addWidget(sub)
         header.addStretch()
-        module_lbl = QLabel("Module:")
-        module_lbl.setStyleSheet("color: #6b7280; font-size: 12px;")
-        header.addWidget(module_lbl)
-        self._override_btn = QPushButton()
-        self._override_btn.setCheckable(True)
-        self._override_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._override_btn.setFixedWidth(90)
-        self._override_btn.clicked.connect(
-            lambda _checked: self.override_toggled.emit(self._module.module_id)
-        )
-        header.addWidget(self._override_btn)
-        self._reset_override_btn = QPushButton("Reset to default")
-        self._reset_override_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._reset_override_btn.setStyleSheet(
-            "QPushButton { border: none; background: transparent; color: #2563eb; "
-            "font-size: 11px; text-decoration: underline; }"
-        )
-        self._reset_override_btn.setToolTip(
-            "Clear this manual override — the module will follow the task-type default again."
-        )
-        self._reset_override_btn.clicked.connect(
-            lambda: self.override_reset_requested.emit(self._module.module_id)
-        )
-        header.addWidget(self._reset_override_btn)
         root.addLayout(header)
-        self._sync_override_button()
 
         desc = QLabel(self._module.description)
         desc.setWordWrap(True)
@@ -273,6 +218,11 @@ class ModuleDetail(QDialog):
         inner_layout = QVBoxLayout(inner)
         inner_layout.setSpacing(8)
 
+        for req in self._external_inputs:
+            form = ExternalInputForm(req)
+            form.source_changed.connect(self.external_source_changed)
+            inner_layout.addWidget(form)
+
         if self._module.impacts:
             section_lbl = QLabel("Required actions")
             section_lbl.setStyleSheet("font-weight: bold; font-size: 13px; margin-top: 4px;")
@@ -288,10 +238,11 @@ class ModuleDetail(QDialog):
                 inner_layout.addWidget(self._build_flag_card(flag))
 
         if not self._module.impacts and not self._module.flags:
-            if self._module.status == "disabled":
+            if self._module.status == "out_of_scope":
                 no_action = QLabel(
-                    "This module is disabled — tick \u201cModule enabled\u201d above to re-enable it "
-                    "and see its impacts, flags, and compute/deploy actions."
+                    "This module is not in scope for the selected pipeline, so it has no impacts, "
+                    "flags, or compute/deploy actions. Change the pipeline selection in the "
+                    "questionnaire to bring it into scope."
                 )
             else:
                 no_action = QLabel("No impacts or flags for this module with the current configuration.")

@@ -37,139 +37,40 @@ def _new_use_case() -> UseCase:
     return UseCase(id="test", name="Test", created_at=now, updated_at=now)
 
 
-def test_apply_impacts_recomputes_default_modules_from_task_type():
+def test_apply_impacts_recomputes_default_modules_from_pipeline():
     uc = _new_use_case()
-    uc.answers = QuestionnaireAnswers(q_task_type="inspection")
+    uc.answers = QuestionnaireAnswers(q_pipeline="inspection")
 
     apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
 
-    assert set(uc.default_modules) == {"grabber", "localiser", "vision_classifier", "ergodic_control"}
+    assert set(uc.default_modules) == {
+        "grabber", "vision_classifier", "ergodic_control", "localiser", "motion_planning",
+    }
+    assert uc.modules["orienteering_solver"].status == "out_of_scope"
 
 
-def test_apply_impacts_falls_back_to_grinding_when_task_type_unanswered():
-    uc = _new_use_case()  # q_task_type left at its default (None) — backward compatibility
+def test_out_of_scope_module_gets_no_impacts_or_flags():
+    answers = QuestionnaireAnswers(q_pipeline="inspection", q1_robot_arms="multiple")
+
+    result = compute_impacts(answers, module_answers={})
+
+    assert result["module_impacts"]["orienteering_solver"] == {"impacts": [], "flags": []}
+    assert result["module_impacts"]["motion_planning"]["impacts"]
+
+
+def test_apply_impacts_falls_back_to_both_when_pipeline_unanswered():
+    uc = _new_use_case()  # q_pipeline left at its default (None) — backward compatibility
 
     apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
 
     assert "orienteering_solver" in uc.default_modules
-    assert "motion_planning" in uc.default_modules
+    assert "grabber" in uc.default_modules
 
 
-def test_overridden_off_module_gets_no_impacts_or_flags():
-    answers = QuestionnaireAnswers(q1_robot_arms="multiple")
+def test_grinding_only_confidence_ignores_inspection_categories():
+    answers = QuestionnaireAnswers(q_pipeline="grinding", q1_robot_arms="single")
 
-    result = compute_impacts(answers, module_answers={}, module_overrides={"orienteering_solver": False})
+    confidence = compute_impacts(answers, module_answers={})["confidence"]
 
-    op = result["module_impacts"]["orienteering_solver"]
-    assert op["impacts"] == []
-    assert op["flags"] == []
-    # Other modules triggered by the same answer are unaffected
-    assert result["module_impacts"]["grabber"]["impacts"]
-
-
-def test_overridden_off_module_is_excluded_from_cross_cutting_flag_count():
-    # 5+ characteristics triggers a cross-cutting flag naming every affected module
-    answers = QuestionnaireAnswers(
-        q1_robot_arms="multiple", q2_camera_type="gige", q4_lighting="additional",
-        q5_materials=["metal"], q8_defects=["dents"],
-    )
-
-    result = compute_impacts(answers, module_answers={}, module_overrides={"orienteering_solver": False})
-
-    assert result["module_impacts"]["orienteering_solver"]["flags"] == []
-    assert any(f["id"] == "flag_cross_cutting" for f in result["module_impacts"]["grabber"]["flags"])
-
-
-def test_apply_impacts_sets_disabled_status_for_overridden_off_module():
-    uc = _new_use_case()
-    uc.answers = QuestionnaireAnswers(q1_robot_arms="multiple")
-    uc.module_overrides["orienteering_solver"] = False
-
-    result = compute_impacts(uc.answers, module_answers={}, module_overrides=uc.module_overrides)
-    apply_impacts_to_modules(uc, result)
-
-    assert uc.modules["orienteering_solver"].status == "disabled"
-    assert uc.modules["orienteering_solver"].impacts == []
-    # Unrelated module keeps its normal, impact-driven status
-    assert uc.modules["grabber"].status == "needs_action"
-
-
-def test_re_enabling_a_module_recomputes_its_status_from_current_answers():
-    uc = _new_use_case()
-    uc.answers = QuestionnaireAnswers(q1_robot_arms="multiple")
-    uc.module_overrides["orienteering_solver"] = False
-    apply_impacts_to_modules(
-        uc, compute_impacts(uc.answers, module_answers={}, module_overrides=uc.module_overrides)
-    )
-    assert uc.modules["orienteering_solver"].status == "disabled"
-
-    uc.module_overrides["orienteering_solver"] = True
-    apply_impacts_to_modules(
-        uc, compute_impacts(uc.answers, module_answers={}, module_overrides=uc.module_overrides)
-    )
-
-    assert uc.modules["orienteering_solver"].status == "needs_action"
-    assert uc.modules["orienteering_solver"].impacts
-
-
-def test_resetting_an_override_makes_the_module_follow_the_default_again():
-    """Clearing the module_overrides key (not just flipping it) is how the GUI's
-    "Reset to default" action un-sticks an override — see use_case_page._reset_module_override."""
-    uc = _new_use_case()
-    uc.answers = QuestionnaireAnswers(q1_robot_arms="multiple")
-    uc.module_overrides["orienteering_solver"] = False
-    apply_impacts_to_modules(
-        uc, compute_impacts(uc.answers, module_answers={}, module_overrides=uc.module_overrides)
-    )
-    assert uc.modules["orienteering_solver"].status == "disabled"
-
-    del uc.module_overrides["orienteering_solver"]
-    apply_impacts_to_modules(
-        uc, compute_impacts(uc.answers, module_answers={}, module_overrides=uc.module_overrides)
-    )
-
-    assert "orienteering_solver" not in uc.module_overrides
-    assert uc.modules["orienteering_solver"].status == "needs_action"
-
-
-def test_module_outside_default_is_disabled_with_no_explicit_override():
-    """Ticket-2 follow-up: a module outside the task-type default is now a hard
-    filter by itself, not just an informational badge — see resolve_effective_overrides."""
-    uc = _new_use_case()
-    uc.answers = QuestionnaireAnswers(q_task_type="inspection", q1_robot_arms="multiple")
-
-    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
-
-    # orienteering_solver isn't in the "inspection" default set, so even though
-    # q1_robot_arms="multiple" would normally trigger an impact, it's disabled.
-    assert uc.modules["orienteering_solver"].status == "disabled"
-    assert uc.modules["orienteering_solver"].impacts == []
-    # grabber IS in the default set, so the same answer still triggers normally
-    assert uc.modules["grabber"].status == "needs_action"
-
-
-def test_explicit_override_on_overrules_default_exclusion():
-    uc = _new_use_case()
-    uc.answers = QuestionnaireAnswers(q_task_type="inspection", q1_robot_arms="multiple")
-    uc.module_overrides["orienteering_solver"] = True
-
-    apply_impacts_to_modules(
-        uc, compute_impacts(uc.answers, module_answers={}, module_overrides=uc.module_overrides)
-    )
-
-    assert uc.modules["orienteering_solver"].status == "needs_action"
-    assert uc.modules["orienteering_solver"].impacts
-
-
-def test_switching_task_type_automatically_follows_new_default_without_override():
-    """No explicit override ever existed for orienteering_solver, so switching
-    task type alone (no override bookkeeping) changes whether it's active."""
-    uc = _new_use_case()
-    uc.answers = QuestionnaireAnswers(q_task_type="inspection", q1_robot_arms="multiple")
-    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
-    assert uc.modules["orienteering_solver"].status == "disabled"
-
-    uc.answers = QuestionnaireAnswers(q_task_type="grinding", q1_robot_arms="multiple")
-    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
-
-    assert uc.modules["orienteering_solver"].status == "needs_action"
+    assert confidence["max"] == 5
+    assert confidence["score"] == 1

@@ -6,7 +6,9 @@ Imported by both the GUI form renderer and the questionnaire engine.
 SCHEMA = {
     "sections": [
         {"id": "A", "title": "Robot Configuration"},
-        {"id": "B", "title": "Sensors & Perception"},
+        {"id": "B", "title": "Sensors & Perception",
+         # Unanswered pipeline counts as "both", so the section stays visible then.
+         "condition": {"field": "q_pipeline", "operator": "not_in", "values": ["grinding"]}},
         {"id": "C", "title": "Material & Surface Properties"},
         {"id": "D", "title": "Defect Detection"},
         {"id": "E", "title": "Time & Priority Constraints"},
@@ -55,19 +57,19 @@ SCHEMA = {
             },
         },
         {
-            "id": "q_task_type",
+            "id": "q_pipeline",
             "section": "A",
-            "title": "Task type",
+            "title": "MAGICIAN functionality used",
             "tooltip": (
-                "Does the robot arm only inspect, or also grind/rework detected defects? This "
-                "determines the default set of relevant modules: grinding also activates the "
-                "Orienteering Solver and Motion Planner on top of the inspection modules "
-                "(Grabber, Localiser, Vision Classifier, Ergodic Control)."
+                "Which MAGICIAN functionality does this use case use? This determines which modules "
+                "are in scope. 'Grinding only' leaves MAGICIAN Inspection out of scope: defect "
+                "information must then come from an external inspection system."
             ),
             "type": "select",
             "options": [
                 {"value": "inspection", "label": "Inspection only"},
-                {"value": "grinding",   "label": "Inspection + grinding/rework"},
+                {"value": "grinding",   "label": "Grinding only"},
+                {"value": "both",       "label": "Inspection and grinding (both)"},
             ],
         },
         {

@@ -70,6 +70,7 @@ def _ensure_all_modules(uc: UseCase) -> None:
     """Add any modules that exist in the registry but are missing from the stored use case.
     This handles the case where new modules are added after a use case was first saved."""
     from app.engine.module_registry import MODULES, compute_default_modules
+    from app.engine.questionnaire_engine import sync_external_input_status
     from app.models.use_case import ModuleState
     for mid, info in MODULES.items():
         if mid not in uc.modules:
@@ -84,8 +85,36 @@ def _ensure_all_modules(uc: UseCase) -> None:
             )
     # Always recomputed on load — use cases saved before this field existed (or not
     # re-saved since) would otherwise be stuck with the Pydantic default `[]` instead
-    # of the task-type fallback, leaving every module looking inactive.
-    uc.default_modules = compute_default_modules(uc.answers.q_task_type, uc.answers.q3_additional_sensors)
+    # of the pipeline fallback, leaving every module looking inactive.
+    uc.default_modules = compute_default_modules(uc.answers.q_pipeline, uc.answers.q3_additional_sensors)
+    _reconcile_scope(uc)
+    sync_external_input_status(uc)
+
+
+def _reconcile_scope(uc: UseCase) -> None:
+    """Align stored module status with the derived scope, touching only modules whose scope changed.
+
+    Covers use cases saved before scope was derived from the pipeline selection (including the
+    old "disabled" status), without resetting the lifecycle of unaffected modules.
+    """
+    from app.engine.module_registry import MODULES
+    from app.engine.questionnaire_engine import compute_impacts
+    from app.models.use_case import Flag, ModuleImpact
+
+    impacts_by_module = None
+    for mid, ms in uc.modules.items():
+        if mid not in MODULES:
+            continue
+        if mid not in uc.default_modules:
+            if ms.status != "out_of_scope":
+                ms.status, ms.impacts, ms.flags = "out_of_scope", [], []
+        elif ms.status in ("disabled", "out_of_scope"):
+            if impacts_by_module is None:
+                impacts_by_module = compute_impacts(uc.answers, uc.module_answers)["module_impacts"]
+            data = impacts_by_module[mid]
+            ms.impacts = [ModuleImpact(**i) for i in data["impacts"]]
+            ms.flags = [Flag(**f) for f in data["flags"]]
+            ms.status = "needs_action" if ms.impacts or mid == "ergodic_control" else "ok"
 
 
 def list_all() -> List[UseCase]:

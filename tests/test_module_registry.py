@@ -1,25 +1,25 @@
 """
-Tests for compute_default_modules(): the task-type -> default module set mapping.
-"grinding" is a superset of "inspection" (there is no grind-only scenario), and an
-unanswered task_type (None) falls back to "grinding" for backward compatibility
-with use cases saved before this question existed.
+Tests for compute_default_modules(): the pipeline selection -> default module set mapping.
+An unanswered pipeline (None) falls back to "both" for backward compatibility with use
+cases saved before this question existed.
 """
 
-from app.engine.module_registry import MODULES, compute_default_modules, resolve_effective_overrides
+from app.engine.module_registry import compute_default_modules
+
+_INSPECTION = {"grabber", "vision_classifier", "ergodic_control"}
+_SHARED = {"localiser", "motion_planning"}
 
 
-def test_inspection_only_excludes_grinding_modules():
-    modules = compute_default_modules("inspection")
-
-    assert set(modules) == {"grabber", "localiser", "vision_classifier", "ergodic_control"}
+def test_inspection_excludes_grinding_modules():
+    assert set(compute_default_modules("inspection")) == _INSPECTION | _SHARED
 
 
-def test_grinding_is_a_superset_of_inspection():
-    inspection = set(compute_default_modules("inspection"))
-    grinding = set(compute_default_modules("grinding"))
+def test_grinding_excludes_inspection_modules():
+    assert set(compute_default_modules("grinding")) == {"orienteering_solver"} | _SHARED
 
-    assert inspection < grinding
-    assert grinding == inspection | {"orienteering_solver", "motion_planning"}
+
+def test_both_combines_inspection_and_grinding():
+    assert set(compute_default_modules("both")) == _INSPECTION | {"orienteering_solver"} | _SHARED
 
 
 def test_tactile_sensor_added_only_when_selected():
@@ -30,29 +30,9 @@ def test_tactile_sensor_added_only_when_selected():
     assert "tactile_sensor" in with_tactile
 
 
-def test_unanswered_task_type_falls_back_to_grinding():
-    assert compute_default_modules(None) == compute_default_modules("grinding")
+def test_tactile_sensor_ignored_for_grinding_only():
+    assert "tactile_sensor" not in compute_default_modules("grinding", additional_sensors=["tactile"])
 
 
-def test_resolve_effective_overrides_follows_default_set_without_explicit_override():
-    default_modules = compute_default_modules("inspection")
-
-    effective = resolve_effective_overrides({}, default_modules)
-
-    assert effective["grabber"] is True  # in the inspection default
-    assert effective["orienteering_solver"] is False  # not in the inspection default
-
-
-def test_resolve_effective_overrides_explicit_choice_always_wins():
-    default_modules = compute_default_modules("inspection")
-    module_overrides = {"grabber": False, "orienteering_solver": True}
-
-    effective = resolve_effective_overrides(module_overrides, default_modules)
-
-    assert effective["grabber"] is False  # explicitly off despite being in default
-    assert effective["orienteering_solver"] is True  # explicitly on despite being out of default
-
-
-def test_resolve_effective_overrides_covers_every_registered_module():
-    effective = resolve_effective_overrides({}, [])
-    assert set(effective) == set(MODULES)
+def test_unanswered_pipeline_falls_back_to_both():
+    assert compute_default_modules(None) == compute_default_modules("both")

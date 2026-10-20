@@ -112,41 +112,33 @@ MODULES: Dict[str, dict] = {
     },
 }
 
-# Default module set per task type. "grinding" already implies inspection — there is no
-# grind-only scenario — so it's a superset of "inspection", not a separate branch.
-DEFAULT_MODULES_BY_TASK_TYPE: Dict[str, List[str]] = {
-    "inspection": ["grabber", "localiser", "vision_classifier", "ergodic_control"],
-    "grinding": [
-        "grabber", "localiser", "vision_classifier", "ergodic_control",
-        "orienteering_solver", "motion_planning",
-    ],
+PIPELINES = ("inspection", "grinding", "both")
+
+# Localiser and Motion Planner are shared: in scope for every pipeline until a question drives them.
+_SHARED_MODULES = ["localiser", "motion_planning"]
+_INSPECTION_MODULES = ["grabber", "vision_classifier", "ergodic_control"]
+_GRINDING_MODULES = ["orienteering_solver"]
+
+DEFAULT_MODULES_BY_PIPELINE: Dict[str, List[str]] = {
+    "inspection": _INSPECTION_MODULES + _SHARED_MODULES,
+    "grinding": _GRINDING_MODULES + _SHARED_MODULES,
+    "both": _INSPECTION_MODULES + _GRINDING_MODULES + _SHARED_MODULES,
 }
 
 
-def compute_default_modules(task_type: Optional[str], additional_sensors: Optional[List[str]] = None) -> List[str]:
-    """Pure function: default module set for a task type.
+def normalize_pipeline(pipeline: Optional[str]) -> str:
+    """Unanswered or unknown pipeline falls back to "both" (the full set)."""
+    return pipeline if pipeline in PIPELINES else "both"
 
-    task_type=None (not yet answered) falls back to "grinding" (the full set) for backward
-    compatibility with use cases saved before this question existed. tactile_sensor is added
-    only when tactile sensing was selected (Q3), regardless of task type.
+
+def compute_default_modules(pipeline: Optional[str], additional_sensors: Optional[List[str]] = None) -> List[str]:
+    """Pure function: default module set for a pipeline selection.
+
+    tactile_sensor is added only when tactile sensing was selected (Q3) and the pipeline
+    includes inspection.
     """
-    base = DEFAULT_MODULES_BY_TASK_TYPE.get(task_type, DEFAULT_MODULES_BY_TASK_TYPE["grinding"])
-    modules = list(base)
-    if additional_sensors and "tactile" in additional_sensors:
+    pipeline = normalize_pipeline(pipeline)
+    modules = list(DEFAULT_MODULES_BY_PIPELINE[pipeline])
+    if pipeline != "grinding" and additional_sensors and "tactile" in additional_sensors:
         modules.append("tactile_sensor")
     return modules
-
-
-def resolve_effective_overrides(
-    module_overrides: Dict[str, bool], default_modules: List[str]
-) -> Dict[str, bool]:
-    """Merge explicit per-module overrides with the default module set.
-
-    An explicit override always wins and persists regardless of task type. A
-    module with no explicit override simply follows the default module set —
-    active if it's in scope, disabled (hard filter) if it isn't. This is what
-    makes "Reset to default" meaningful: clearing an override lets a module
-    resume tracking the default set automatically, including across later
-    task-type changes.
-    """
-    return {mid: module_overrides.get(mid, mid in default_modules) for mid in MODULES}

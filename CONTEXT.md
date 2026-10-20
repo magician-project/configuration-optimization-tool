@@ -30,17 +30,17 @@ _Avoid_: automation level, autonomy threshold
 A three-step maturity ladder for any COT capability. _Implemented_: the code path exists and runs. _Verified_: it has been exercised against a representative live environment (e.g. a running ROS 2 node) and produces correct results. _Supported_: a Verified capability COT officially stands behind for a release — documented and safe for a partner to rely on. A capability can be Implemented without being Verified or Supported.
 _Avoid_: tested (too vague — state which rung of the ladder)
 
-**Task type**:
-A use case's answer to whether the robot performs inspection, grinding/rework, or both. Grinding may use defect information from an external inspection source without using MAGICIAN Inspection.
-_Avoid_: task mode, workflow type
-
 **Pipeline selection**:
-The choice of MAGICIAN functionality used by a use case: `inspection`, `grinding`, or `both`. It determines the scope and default module set; it is distinct from the physical task type.
-_Avoid_: task type, workflow type
+The single questionnaire answer stating which MAGICIAN functionality a use case uses: `inspection`, `grinding`, or `both`. It determines the scope and default module set. Grinding does not imply MAGICIAN Inspection: grinding-only may use defect information from an external inspection source.
+_Avoid_: task type, task mode, workflow type
 
 **Default module set**:
 The module ids relevant to a use case, derived from its pipeline selection and specific capability answers such as whether tactile sensing is used. Recomputed from the use-case answers rather than edited as a frozen snapshot.
 _Avoid_: active modules (ambiguous with `ModuleState.status`), enabled modules
+
+**In scope / Out of scope**:
+Whether a module belongs to a use case's default module set. Derived only from questionnaire answers; a partner cannot switch an individual module on or off. An out-of-scope module produces no impacts or flags.
+_Avoid_: enabled/disabled, on/off, override
 
 **Module dependency**:
 A required or conditional input relationship from a provider output to a consumer input. A dependency may be satisfied by an active MAGICIAN module or, when explicitly allowed, by a declared external input.
