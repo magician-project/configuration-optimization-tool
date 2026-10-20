@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Dict, List, Optional
+from urllib.parse import unquote, urlsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -157,6 +158,18 @@ def load_module_readme(module_id: str, root: Path = REPO_ROOT) -> str:
         return path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return README_EMPTY_STATE
+
+
+def resolve_readme_link(module_id: str, href: str, root: Path = REPO_ROOT) -> Optional[Path]:
+    """Existing file inside the repo that a relative README link points to, else None."""
+    readme = module_readme_path(module_id, root)
+    parts = urlsplit(href)
+    if readme is None or parts.scheme or parts.netloc or not parts.path:
+        return None
+    target = (readme.parent / unquote(parts.path)).resolve()
+    if not target.is_file() or not target.is_relative_to(root.resolve()):
+        return None
+    return target
 
 
 def compute_default_modules(pipeline: Optional[str], additional_sensors: Optional[List[str]] = None) -> List[str]:

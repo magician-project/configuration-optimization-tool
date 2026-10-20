@@ -21,10 +21,11 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QWidget, QFrame, QTabWidget, QTextBrowser,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 
 from app.engine.module_dependencies import ExternalInputRequirement
-from app.engine.module_registry import load_module_readme
+from app.engine.module_registry import load_module_readme, resolve_readme_link
 from app.models.use_case import ModuleState
 from gui.components.external_inputs import ExternalInputForm
 
@@ -138,10 +139,20 @@ class ModuleDetail(QDialog):
         docs.setOpenLinks(False)
         docs.setOpenExternalLinks(True)
         docs.setMarkdown(load_module_readme(self._module.module_id))
+        docs.anchorClicked.connect(lambda url, d=docs: self._open_doc_link(d, url))
         tabs.addTab(docs, "Documentation")
         root.addWidget(tabs, stretch=1)
 
         root.addWidget(self._build_footer())
+
+    def _open_doc_link(self, docs: QTextBrowser, url: QUrl) -> None:
+        href = url.toString()
+        if href.startswith("#"):
+            docs.scrollToAnchor(href[1:])
+            return
+        target = resolve_readme_link(self._module.module_id, href)
+        if target is not None:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
 
     def _on_config_changed(self, config: dict) -> None:
         self._module_config = config

@@ -9,6 +9,7 @@ from app.engine.module_registry import (
     README_EMPTY_STATE,
     load_module_readme,
     module_readme_path,
+    resolve_readme_link,
 )
 
 
@@ -55,3 +56,47 @@ def test_readme_that_is_a_directory_gives_empty_state(tmp_path):
     (tmp_path / "modules" / "grabber" / "README.md").mkdir(parents=True)
 
     assert load_module_readme("grabber", root=tmp_path) == README_EMPTY_STATE
+
+
+def _repo(tmp_path):
+    (tmp_path / "modules" / "localiser").mkdir(parents=True)
+    (tmp_path / "CONTEXT.md").write_text("ctx", encoding="utf-8")
+    (tmp_path / "modules" / "README.md").write_text("modules", encoding="utf-8")
+    return tmp_path
+
+
+def test_relative_link_is_resolved_against_the_readme_location(tmp_path):
+    root = _repo(tmp_path)
+
+    assert resolve_readme_link("localiser", "../../CONTEXT.md", root=root) == root / "CONTEXT.md"
+    assert resolve_readme_link("localiser", "../README.md", root=root) == root / "modules" / "README.md"
+
+
+def test_link_fragment_and_percent_encoding_are_handled(tmp_path):
+    root = _repo(tmp_path)
+    (root / "modules" / "my notes.md").write_text("x", encoding="utf-8")
+
+    assert resolve_readme_link("localiser", "../README.md#usage", root=root) == root / "modules" / "README.md"
+    assert resolve_readme_link("localiser", "../my%20notes.md", root=root) == root / "modules" / "my notes.md"
+
+
+@pytest.mark.parametrize("href", [
+    "../../../outside.md",
+    "../../../../etc/passwd",
+    "../missing.md",
+    "#usage",
+    "",
+    "https://example.com/doc.md",
+    "file:///etc/passwd",
+    "C:/Windows/win.ini",
+    "/etc/passwd",
+])
+def test_unresolvable_or_unsafe_links_are_rejected(tmp_path, href):
+    root = _repo(tmp_path)
+    (tmp_path.parent / "outside.md").write_text("x", encoding="utf-8")
+
+    assert resolve_readme_link("localiser", href, root=root) is None
+
+
+def test_link_in_unknown_module_is_rejected(tmp_path):
+    assert resolve_readme_link("does_not_exist", "../README.md", root=_repo(tmp_path)) is None
