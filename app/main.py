@@ -177,6 +177,23 @@ def main() -> None:
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
             height: 0;
         }
+        QScrollBar:horizontal {
+            border: none;
+            background: #f0f2f5;
+            height: 8px;
+            margin: 0;
+        }
+        QScrollBar::handle:horizontal {
+            background: #c4c9d4;
+            border-radius: 4px;
+            min-width: 30px;
+        }
+        QScrollBar::handle:horizontal:hover {
+            background: #9ca3af;
+        }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            width: 0;
+        }
         QToolTip {
             background: #1f2937;
             color: white;
