@@ -98,7 +98,7 @@ class ModuleDetail(QDialog):
         impacts_layout = QVBoxLayout(impacts_tab)
         impacts_layout.setContentsMargins(0, 4, 0, 0)
         self._insert_dynamic_widgets(impacts_layout)
-        tabs.addTab(impacts_tab, "Impacts & Flags")
+        tabs.addTab(impacts_tab, "Impacts && Flags")
 
         # Tab 2: Module Configuration
         if config_questions:
@@ -137,7 +137,6 @@ class ModuleDetail(QDialog):
         # Tab 3: Documentation (module README, also for out-of-scope modules)
         docs = QTextBrowser()
         docs.setOpenLinks(False)
-        docs.setOpenExternalLinks(True)
         docs.setMarkdown(load_module_readme(self._module.module_id))
         docs.anchorClicked.connect(lambda url, d=docs: self._open_doc_link(d, url))
         tabs.addTab(docs, "Documentation")
@@ -149,6 +148,9 @@ class ModuleDetail(QDialog):
         href = url.toString()
         if href.startswith("#"):
             docs.scrollToAnchor(href[1:])
+            return
+        if url.scheme().lower() in {"http", "https"}:
+            QDesktopServices.openUrl(url)
             return
         target = resolve_readme_link(self._module.module_id, href)
         if target is not None:
