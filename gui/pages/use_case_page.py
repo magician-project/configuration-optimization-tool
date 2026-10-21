@@ -444,7 +444,7 @@ class UseCasePage(QWidget):
             self._compute_progress_dlg.on_done(success, result_path)
 
         # Scope may have changed while compute ran; a late result must not undo that.
-        if ms.status == "out_of_scope":
+        if ms.status in ("out_of_scope", "not_assessed"):
             return
 
         if success and result_path:
