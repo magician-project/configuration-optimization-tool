@@ -19,7 +19,8 @@ from app.engine.module_registry import MODULES
 # In-scope tiles are white with a status-coloured top strip; out-of-scope tiles are
 # flat grey with muted text (see _ModuleTile.update_state).
 _STATUS_STYLE = {
-    "ok":            ("#86efac", "#4b5563", "No action needed"),
+    "ok":            ("#93c5fd", "#1d4ed8", "Ready to validate"),
+    "not_assessed":  ("#d1d5db", "#6b7280", "Not assessed"),
     "needs_action":  ("#f59e0b", "#b45309", "Action required"),
     "validated":     ("#34d399", "#15803d", "Validated"),
     "computing":     ("#60a5fa", "#1d4ed8", "Computing…"),
@@ -106,7 +107,7 @@ class ModuleGrid(QWidget):
         out_of_scope = [m for m in MODULE_ORDER if m not in in_scope]
         self._place_tiles(in_scope + out_of_scope)
 
-        needs = validated = deployed = 0
+        needs = validated = deployed = not_assessed = 0
         for mid, tile in self._tiles.items():
             ms: ModuleState | None = modules.get(mid)
             if ms:
@@ -117,6 +118,8 @@ class ModuleGrid(QWidget):
                     validated += 1
                 elif ms.status == "deployed":
                     deployed += 1
+                elif ms.status == "not_assessed":
+                    not_assessed += 1
 
         parts = []
         if needs:
@@ -126,7 +129,7 @@ class ModuleGrid(QWidget):
         if deployed:
             parts.append(f"{deployed} deployed")
         if not parts:
-            parts.append("All modules up to date")
+            parts.append("Not assessed yet" if not_assessed else "All modules up to date")
         self._summary_lbl.setText("   |   ".join(parts))
 
 

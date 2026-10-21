@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 
-from app.engine.module_registry import MODULES, compute_default_modules, normalize_pipeline
+from app.engine.module_registry import MODULES, compute_default_modules, is_assessed, normalize_pipeline
 from app.models.use_case import ExternalSource
 
 # Architecture nodes that are not (yet) configurable COT modules. Register a node here
@@ -109,7 +109,7 @@ class ExternalInputRequirement(BaseModel):
 
 
 class ConfigurationValidation(BaseModel):
-    # valid | valid_with_external_inputs | incomplete | invalid
+    # not_assessed | valid | valid_with_external_inputs | incomplete | invalid
     status: str
     satisfied: List[str] = []
     external_inputs: List[ExternalInputRequirement] = []
@@ -135,6 +135,8 @@ def validate_configuration(
     external_sources: Optional[Dict[str, ExternalSource]] = None,
 ) -> ConfigurationValidation:
     """Pure function: check each in-scope consumer's required inputs against the pipeline scope."""
+    if not is_assessed(pipeline):
+        return ConfigurationValidation(status="not_assessed")
     external_sources = external_sources or {}
     in_scope = set(scope_for(pipeline, additional_sensors))
     result = ConfigurationValidation(status="valid")

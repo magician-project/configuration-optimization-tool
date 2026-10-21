@@ -36,6 +36,7 @@ def _clear(layout) -> None:
 
 class ConfigurationValidationPanel(QFrame):
     configure_requested = Signal(str)   # consumer module_id
+    specification_requested = Signal()  # partner should answer the pipeline selection first
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -54,6 +55,11 @@ class ConfigurationValidationPanel(QFrame):
         title = QLabel("Configuration validation")
         title.setStyleSheet("font-weight: 600; font-size: 12px; color: #111827; border: none;")
         header.addWidget(title)
+        if validation.status == "not_assessed":
+            header.addStretch()
+            self._root.addLayout(header)
+            self._root.addLayout(self._build_not_assessed_row())
+            return
         label, bg, fg = _VALIDATION_STYLE.get(validation.status, (validation.status, "#f3f4f6", "#374151"))
         badge = QLabel(label)
         badge.setStyleSheet(
@@ -86,6 +92,23 @@ class ConfigurationValidationPanel(QFrame):
         lbl.setWordWrap(True)
         lbl.setStyleSheet("color: #92400e; font-size: 11px; border: none;")
         return lbl
+
+    def _build_not_assessed_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        hint = QLabel("Not assessed yet. Choose a pipeline selection in Use Case Specification.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("font-size: 11px; color: #6b7280; border: none;")
+        row.addWidget(hint, stretch=1)
+        btn = QPushButton("Go to Use Case Specification")
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(
+            "QPushButton { border: 1px solid #d1d5db; background: white; color: #162759; "
+            "padding: 2px 10px; border-radius: 4px; font-size: 11px; }"
+        )
+        btn.clicked.connect(self.specification_requested)
+        row.addWidget(btn)
+        return row
 
     def _build_row(self, req: ExternalInputRequirement) -> QHBoxLayout:
         row = QHBoxLayout()
@@ -170,6 +193,22 @@ class ExternalInputForm(QFrame):
         row.addStretch()
         row.addWidget(save)
         vbox.addLayout(row)
+
+        # The dialog is rebuilt after every save, so this line always shows what is stored.
+        saved = QLabel(self._saved_text(req))
+        saved.setTextFormat(Qt.TextFormat.PlainText)
+        saved.setWordWrap(True)
+        saved.setStyleSheet(
+            f"font-size: 11px; color: {'#065f46' if req.complete else '#92400e'}; border: none;"
+        )
+        vbox.addWidget(saved)
+
+    @staticmethod
+    def _saved_text(req: ExternalInputRequirement) -> str:
+        if not req.source_name.strip():
+            return "Not saved yet"
+        agreed = "contract agreed" if req.contract_agreed else "contract not agreed yet"
+        return f"Saved \u2014 source: {req.source_name} \u00b7 {agreed}"
 
     @staticmethod
     def _fields_label(title: str, fields: List[str]) -> QLabel:

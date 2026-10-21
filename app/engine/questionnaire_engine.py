@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 from app.models.questionnaire import QuestionnaireAnswers
 from app.models.use_case import ModuleImpact, Flag, ModuleState, ConfidenceScore, UseCase
-from app.engine.module_registry import ALWAYS_NEEDS_ACTION, MODULES, compute_default_modules
+from app.engine.module_registry import MODULES, compute_default_modules, is_assessed
 from app.engine.module_dependencies import validate_configuration
 
 # Per classifier and Q5 material: "verify" where a MAGICIAN baseline exists; anything not listed (e.g. "other") needs "retrain".
@@ -966,10 +966,11 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
     """
     module_impacts = result["module_impacts"]
     use_case.confidence = ConfidenceScore(**result["confidence"])
+    assessed = is_assessed(use_case.answers.q_pipeline)
 
     use_case.default_modules = compute_default_modules(
         use_case.answers.q_pipeline, use_case.answers.q3_additional_sensors
-    )
+    ) if assessed else []
 
     for mid, info in MODULES.items():
         data = module_impacts[mid]
@@ -981,23 +982,22 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
             for f in current.flags:
                 prev_acked[f.id] = f.acknowledged
 
-        new_impacts = [ModuleImpact(**i) for i in data["impacts"]]
+        new_impacts = [ModuleImpact(**i) for i in data["impacts"]] if assessed else []
         new_flags: List[Flag] = []
         seen_flag_ids: set = set()
-        for f in data["flags"]:
+        for f in data["flags"] if assessed else []:
             if f["id"] not in seen_flag_ids:
                 seen_flag_ids.add(f["id"])
                 flag = Flag(**f)
                 flag.acknowledged = prev_acked.get(flag.id, False)
                 new_flags.append(flag)
 
-        if mid not in use_case.default_modules:
+        if not assessed:
+            new_status = "not_assessed"
+        elif mid not in use_case.default_modules:
             new_status = "out_of_scope"
         else:
             new_status = "needs_action" if new_impacts else "ok"
-            # Ergodic Control always requires configuration before compute
-            if mid in ALWAYS_NEEDS_ACTION and new_status == "ok":
-                new_status = "needs_action"
 
         use_case.modules[mid] = ModuleState(
             module_id=mid,
@@ -1032,7 +1032,7 @@ def sync_external_input_status(use_case: UseCase) -> None:
         if mid in pending:
             if ms.status == "ok":
                 ms.status = "needs_action"
-        elif ms.status == "needs_action" and not ms.impacts and mid not in ALWAYS_NEEDS_ACTION:
+        elif ms.status == "needs_action" and not ms.impacts:
             ms.status = "ok"
 
 

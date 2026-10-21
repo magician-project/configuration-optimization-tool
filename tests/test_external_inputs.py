@@ -26,3 +26,53 @@ def test_source_name_markup_is_escaped_in_overview(qapp):
     texts = [lbl.text() for lbl in panel.findChildren(QLabel)]
     assert any("Partner &lt;AOI&gt;" in t for t in texts)
     assert not any("<AOI>" in t for t in texts)
+
+
+def _form(source: ExternalSource):
+    from gui.components.external_inputs import ExternalInputForm
+
+    [req] = validate_configuration("grinding", external_sources={"estimation_to_orienteering_solver": source}).external_inputs
+    return ExternalInputForm(req)
+
+
+def _label_texts(widget) -> list:
+    return [lbl.text() for lbl in widget.findChildren(QLabel)]
+
+
+def test_form_says_nothing_is_saved_yet_for_a_new_requirement(qapp):
+    assert "Not saved yet" in _label_texts(_form(ExternalSource()))
+
+
+def test_form_confirms_a_saved_source_with_agreed_contract(qapp):
+    form = _form(ExternalSource(source_name="Partner AOI", contract_agreed=True))
+
+    assert "Saved \u2014 source: Partner AOI \u00b7 contract agreed" in _label_texts(form)
+
+
+def test_form_says_what_is_missing_when_the_contract_is_not_agreed(qapp):
+    form = _form(ExternalSource(source_name="Partner AOI"))
+
+    assert "Saved \u2014 source: Partner AOI \u00b7 contract not agreed yet" in _label_texts(form)
+
+
+def test_not_assessed_panel_shows_a_hint_and_no_validity_badge(qapp):
+    panel = ConfigurationValidationPanel()
+
+    panel.update_validation(validate_configuration(None))
+
+    texts = _label_texts(panel)
+    assert any("Choose a pipeline selection" in t for t in texts)
+    assert not any(t in ("Valid", "Incomplete", "Invalid") for t in texts)
+
+
+def test_not_assessed_panel_button_requests_the_specification_tab(qapp):
+    from PySide6.QtWidgets import QPushButton
+
+    panel = ConfigurationValidationPanel()
+    panel.update_validation(validate_configuration(None))
+    requested = []
+    panel.specification_requested.connect(lambda: requested.append(True))
+
+    next(b for b in panel.findChildren(QPushButton)).click()
+
+    assert requested == [True]

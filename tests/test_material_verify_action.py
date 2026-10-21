@@ -17,7 +17,7 @@ RETRAIN_FLAG_ID = {"tactile_sensor": "flag_retrain", "vision_classifier": "flag_
 
 
 def _answers(materials) -> QuestionnaireAnswers:
-    return QuestionnaireAnswers(q3_additional_sensors=["tactile"], q5_materials=materials)
+    return QuestionnaireAnswers(q_pipeline="both", q3_additional_sensors=["tactile"], q5_materials=materials)
 
 
 def _module(materials, module_id) -> dict:

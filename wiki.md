@@ -81,7 +81,9 @@ Clicking a tile opens the module detail dialog, where engineers can:
 - Validate the module (required before compute)
 - Trigger the offline compute step
 
-**Ergodic Control** is the only module that starts in `needs_action` by default (regardless of questionnaire answers), because trajectory planning always requires configuration.
+**Not assessed**: until the pipeline selection is answered, every tile shows "Not assessed" and the validation panel points to the Use Case Specification tab.
+
+A module without any open item is shown as **Ready to validate** (internal status `ok`); it can be validated and computed. **Action required** (`needs_action`) is shown only when there is a concrete open item: an impact, an unacknowledged flag, or an external input without an agreed source.
 
 ---
 

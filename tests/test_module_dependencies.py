@@ -55,8 +55,12 @@ def test_external_source_kept_for_out_of_scope_dependency_is_not_counted():
     assert validate_configuration("both", external_sources=sources).status == "valid"
 
 
-def test_unanswered_pipeline_is_treated_as_both():
-    assert validate_configuration(None).status == "valid"
+def test_unanswered_pipeline_is_not_assessed():
+    result = validate_configuration(None)
+
+    assert result.status == "not_assessed"
+    assert result.external_inputs == []
+    assert result.satisfied == []
 
 
 def _grinding_use_case():
@@ -80,7 +84,7 @@ def test_consumer_of_missing_external_input_needs_action():
     assert uc.modules["localiser"].status == "ok"
 
 
-def test_agreeing_the_external_source_keeps_the_solver_actionable():
+def test_agreeing_the_external_source_makes_the_solver_ready_to_validate():
     from app.engine.questionnaire_engine import sync_external_input_status
 
     uc = _grinding_use_case()
@@ -90,8 +94,19 @@ def test_agreeing_the_external_source_keeps_the_solver_actionable():
 
     sync_external_input_status(uc)
 
-    # The solver always needs validation/compute, so agreeing the source must not remove that route.
-    assert uc.modules["orienteering_solver"].status == "needs_action"
+    assert uc.modules["orienteering_solver"].status == "ok"
+
+
+def test_in_scope_module_without_open_item_is_ready_to_validate():
+    from app.engine.questionnaire_engine import apply_impacts_to_modules, compute_impacts
+
+    uc = _grinding_use_case()
+    uc.answers.q_pipeline = "both"
+
+    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
+
+    assert uc.modules["orienteering_solver"].status == "ok"
+    assert uc.modules["ergodic_control"].status == "ok"
 
 
 def test_pending_external_input_does_not_reset_advanced_lifecycle_status():
