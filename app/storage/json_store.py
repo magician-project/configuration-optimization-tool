@@ -78,7 +78,7 @@ def _ensure_all_modules(uc: UseCase) -> None:
                 module_id=mid,
                 module_name=info["name"],
                 description=info["description"],
-                status="ok",
+                status="not_assessed",  # _reconcile_scope derives the real status
             )
     # Always recomputed on load — use cases saved before this field existed (or not
     # re-saved since) would otherwise be stuck with the Pydantic default `[]`.

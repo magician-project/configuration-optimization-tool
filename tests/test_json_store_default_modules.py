@@ -65,6 +65,18 @@ def test_not_assessed_modules_enter_scope_once_the_pipeline_is_answered():
     assert uc.modules["orienteering_solver"].status == "out_of_scope"
 
 
+def test_module_missing_from_a_stored_use_case_gets_its_impacts_derived():
+    uc = _legacy_use_case()
+    uc.answers = QuestionnaireAnswers(q_pipeline="both", q1_robot_arms="multiple")
+    _ensure_all_modules(uc)
+    del uc.modules["motion_planning"]  # added to the registry after this use case was saved
+
+    _ensure_all_modules(uc)
+
+    assert uc.modules["motion_planning"].status == "needs_action"
+    assert uc.modules["motion_planning"].impacts
+
+
 def test_ensure_all_modules_respects_an_existing_pipeline_answer():
     uc = _legacy_use_case()
     uc.answers = QuestionnaireAnswers(q_pipeline="inspection")
