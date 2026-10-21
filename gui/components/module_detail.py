@@ -3,6 +3,7 @@ ModuleDetail — modal dialog showing a single module's impacts, flags,
 and action buttons (Acknowledge, Validate, Compute, Deploy).
 
 Lifecycle buttons shown based on module status:
+  ok              → (Ready to validate) Acknowledge flags → Mark Validated
   needs_action    → Acknowledge flags → Mark Validated
   validated       → Compute
   computed        → Deploy
@@ -11,6 +12,7 @@ Lifecycle buttons shown based on module status:
   deployed        → Re-deploy
   deploy_failed   → Re-deploy
   out_of_scope    → (module not in the use case's default module set — no buttons)
+  not_assessed    → (pipeline selection unanswered — no buttons)
 """
 
 from __future__ import annotations
@@ -43,7 +45,8 @@ _FLAG_STYLES = {
 }
 
 _STATUS_STYLE = {
-    "ok":            ("No action required", "#f3f4f6", "#374151"),
+    "ok":            ("Ready to validate", "#dbeafe", "#1e40af"),
+    "not_assessed":  ("Not assessed — choose a pipeline selection first", "#f3f4f6", "#4b5563"),
     "needs_action":  ("Action required", "#fef3c7", "#92400e"),
     "validated":     ("Validated — ready to compute", "#d1fae5", "#065f46"),
     "computing":     ("Computing…", "#dbeafe", "#1e40af"),
@@ -325,7 +328,7 @@ class ModuleDetail(QDialog):
         status = self._module.status
         unacked = sum(1 for f in self._module.flags if not f.acknowledged)
 
-        if status == "needs_action":
+        if status in ("ok", "needs_action"):
             if unacked > 0:
                 btn = QPushButton(f"Acknowledge {unacked} flag(s)")
                 btn.setStyleSheet("background: #ef4444; color: white; padding: 6px 14px; border-radius: 4px;")

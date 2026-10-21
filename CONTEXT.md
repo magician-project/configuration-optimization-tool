@@ -53,3 +53,15 @@ The confidence category attached to a dependency or interface: documented, conce
 
 **Configuration validation status**:
 The result of checking active modules and their required inputs: `valid`, `valid_with_external_inputs`, `incomplete`, or `invalid`. `valid_with_external_inputs` means complete for configuration, while receipt and validation of runtime data are a separate handover concern.
+
+**Action required**:
+A module status meaning the partner has at least one concrete open item for that module: an impact to handle, an unacknowledged flag, or an external input without an agreed source. A module with no open item is never "Action required", even if it still has to be validated before compute.
+_Avoid_: using it for "not yet validated"
+
+**Ready to validate**:
+A module status for an in-scope module with no open item (no impact, unacknowledged flag, or pending external input) that the partner can still mark as validated before compute. Applies to every in-scope module, not only a fixed few.
+_Avoid_: no action needed, ok
+
+**Not assessed**:
+The state of a use case whose pipeline selection is unanswered. The pipeline selection is the gate: until it is answered, scope cannot be derived, so no module is shown as in scope, valid, or free of actions, and impacts from other answers are not shown either.
+_Avoid_: valid, no action needed (both claim an assessment that did not happen)

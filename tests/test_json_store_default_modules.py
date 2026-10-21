@@ -20,12 +20,61 @@ def _legacy_use_case() -> UseCase:
 
 def test_ensure_all_modules_recomputes_default_modules_for_legacy_use_cases():
     uc = _legacy_use_case()
+    uc.answers = QuestionnaireAnswers(q_pipeline="both")
     assert uc.default_modules == []
 
     _ensure_all_modules(uc)
 
     assert "orienteering_solver" in uc.default_modules
     assert "motion_planning" in uc.default_modules
+
+
+def test_legacy_use_case_without_pipeline_loads_as_not_assessed():
+    uc = _legacy_use_case()
+    _ensure_all_modules(uc)
+    uc.modules["grabber"].status = "needs_action"
+    uc.modules["localiser"].status = "out_of_scope"
+
+    _ensure_all_modules(uc)
+
+    assert uc.default_modules == []
+    assert {m.status for m in uc.modules.values()} == {"not_assessed"}
+
+
+def test_not_assessed_load_keeps_advanced_lifecycle_status():
+    uc = _legacy_use_case()
+    _ensure_all_modules(uc)
+    uc.modules["ergodic_control"].status = "computed"
+    uc.modules["grabber"].status = "validated"
+
+    _ensure_all_modules(uc)
+
+    assert uc.modules["ergodic_control"].status == "computed"
+    assert uc.modules["grabber"].status == "validated"
+    assert uc.modules["localiser"].status == "not_assessed"
+
+
+def test_not_assessed_modules_enter_scope_once_the_pipeline_is_answered():
+    uc = _legacy_use_case()
+    _ensure_all_modules(uc)
+    uc.answers = QuestionnaireAnswers(q_pipeline="inspection")
+
+    _ensure_all_modules(uc)
+
+    assert uc.modules["grabber"].status == "ok"
+    assert uc.modules["orienteering_solver"].status == "out_of_scope"
+
+
+def test_module_missing_from_a_stored_use_case_gets_its_impacts_derived():
+    uc = _legacy_use_case()
+    uc.answers = QuestionnaireAnswers(q_pipeline="both", q1_robot_arms="multiple")
+    _ensure_all_modules(uc)
+    del uc.modules["motion_planning"]  # added to the registry after this use case was saved
+
+    _ensure_all_modules(uc)
+
+    assert uc.modules["motion_planning"].status == "needs_action"
+    assert uc.modules["motion_planning"].impacts
 
 
 def test_ensure_all_modules_respects_an_existing_pipeline_answer():
@@ -55,15 +104,15 @@ def test_legacy_disabled_status_is_reconciled_with_scope():
     assert uc.modules["grabber"].status in ("ok", "needs_action")
 
 
-def test_legacy_always_required_module_on_ok_is_promoted_to_needs_action():
+def test_legacy_always_required_module_without_open_item_is_demoted_to_ready_to_validate():
     uc = _legacy_use_case()
     uc.answers = QuestionnaireAnswers(q_pipeline="both")
     _ensure_all_modules(uc)
-    uc.modules["orienteering_solver"].status = "ok"  # saved before the solver was always-required
+    uc.modules["orienteering_solver"].status = "needs_action"  # saved while the solver was always-required
     uc.modules["ergodic_control"].status = "validated"
 
     _ensure_all_modules(uc)
 
-    assert uc.modules["orienteering_solver"].status == "needs_action"
+    assert uc.modules["orienteering_solver"].status == "ok"
     assert uc.modules["ergodic_control"].status == "validated"
 

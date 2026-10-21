@@ -69,23 +69,24 @@ def load(use_case_id: str) -> Optional[UseCase]:
 def _ensure_all_modules(uc: UseCase) -> None:
     """Add any modules that exist in the registry but are missing from the stored use case.
     This handles the case where new modules are added after a use case was first saved."""
-    from app.engine.module_registry import ALWAYS_NEEDS_ACTION, MODULES, compute_default_modules
+    from app.engine.module_registry import MODULES, compute_default_modules, is_assessed
     from app.engine.questionnaire_engine import sync_external_input_status
     from app.models.use_case import ModuleState
     for mid, info in MODULES.items():
         if mid not in uc.modules:
-            # Default always-required modules to needs_action
-            status = "needs_action" if mid in ALWAYS_NEEDS_ACTION else "ok"
             uc.modules[mid] = ModuleState(
                 module_id=mid,
                 module_name=info["name"],
                 description=info["description"],
-                status=status,
+                status="not_assessed",  # _reconcile_scope derives the real status
             )
     # Always recomputed on load — use cases saved before this field existed (or not
-    # re-saved since) would otherwise be stuck with the Pydantic default `[]` instead
-    # of the pipeline fallback, leaving every module looking inactive.
-    uc.default_modules = compute_default_modules(uc.answers.q_pipeline, uc.answers.q3_additional_sensors)
+    # re-saved since) would otherwise be stuck with the Pydantic default `[]`.
+    # An unanswered pipeline stays [] (see is_assessed).
+    uc.default_modules = (
+        compute_default_modules(uc.answers.q_pipeline, uc.answers.q3_additional_sensors)
+        if is_assessed(uc.answers.q_pipeline) else []
+    )
     _reconcile_scope(uc)
     sync_external_input_status(uc)
 
@@ -96,9 +97,15 @@ def _reconcile_scope(uc: UseCase) -> None:
     Covers use cases saved before scope was derived from the pipeline selection (including the
     old "disabled" status), without resetting the lifecycle of unaffected modules.
     """
-    from app.engine.module_registry import ALWAYS_NEEDS_ACTION, MODULES
+    from app.engine.module_registry import MODULES, is_assessed
     from app.engine.questionnaire_engine import compute_impacts
     from app.models.use_case import Flag, ModuleImpact
+
+    if not is_assessed(uc.answers.q_pipeline):
+        for mid, ms in uc.modules.items():
+            if mid in MODULES and ms.status in ("ok", "needs_action", "disabled", "out_of_scope"):
+                ms.status, ms.impacts, ms.flags = "not_assessed", [], []
+        return
 
     impacts_by_module = None
     for mid, ms in uc.modules.items():
@@ -107,15 +114,13 @@ def _reconcile_scope(uc: UseCase) -> None:
         if mid not in uc.default_modules:
             if ms.status != "out_of_scope":
                 ms.status, ms.impacts, ms.flags = "out_of_scope", [], []
-        elif ms.status == "ok" and mid in ALWAYS_NEEDS_ACTION:
-            ms.status = "needs_action"
-        elif ms.status in ("disabled", "out_of_scope"):
+        elif ms.status in ("disabled", "out_of_scope", "not_assessed"):
             if impacts_by_module is None:
                 impacts_by_module = compute_impacts(uc.answers, uc.module_answers)["module_impacts"]
             data = impacts_by_module[mid]
             ms.impacts = [ModuleImpact(**i) for i in data["impacts"]]
             ms.flags = [Flag(**f) for f in data["flags"]]
-            ms.status = "needs_action" if ms.impacts or mid in ALWAYS_NEEDS_ACTION else "ok"
+            ms.status = "needs_action" if ms.impacts else "ok"
 
 
 def list_all() -> List[UseCase]:

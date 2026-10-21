@@ -120,9 +120,6 @@ MODULES: Dict[str, dict] = {
 
 PIPELINES = ("inspection", "grinding", "both")
 
-# In scope but always need configuration/validation before compute, even without questionnaire impacts.
-ALWAYS_NEEDS_ACTION = {"ergodic_control", "orienteering_solver"}
-
 # Localiser and Motion Planner are shared: in scope for every pipeline until a question drives them.
 _SHARED_MODULES = ["localiser", "motion_planning"]
 _INSPECTION_MODULES = ["grabber", "vision_classifier", "ergodic_control"]
@@ -133,6 +130,11 @@ DEFAULT_MODULES_BY_PIPELINE: Dict[str, List[str]] = {
     "grinding": _GRINDING_MODULES + _SHARED_MODULES,
     "both": _INSPECTION_MODULES + _GRINDING_MODULES + _SHARED_MODULES,
 }
+
+
+def is_assessed(pipeline: Optional[str]) -> bool:
+    """False while the pipeline selection is unanswered: scope cannot be derived yet."""
+    return pipeline in PIPELINES
 
 
 def normalize_pipeline(pipeline: Optional[str]) -> str:

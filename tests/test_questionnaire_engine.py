@@ -58,13 +58,27 @@ def test_out_of_scope_module_gets_no_impacts_or_flags():
     assert result["module_impacts"]["motion_planning"]["impacts"]
 
 
-def test_apply_impacts_falls_back_to_both_when_pipeline_unanswered():
-    uc = _new_use_case()  # q_pipeline left at its default (None) — backward compatibility
+def test_unanswered_pipeline_leaves_every_module_not_assessed():
+    uc = _new_use_case()
+    uc.answers = QuestionnaireAnswers(q1_robot_arms="multiple")  # would give impacts if scope were known
 
     apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
 
-    assert "orienteering_solver" in uc.default_modules
-    assert "grabber" in uc.default_modules
+    assert uc.default_modules == []
+    assert {m.status for m in uc.modules.values()} == {"not_assessed"}
+    assert all(m.impacts == [] and m.flags == [] for m in uc.modules.values())
+
+
+def test_answering_the_pipeline_brings_not_assessed_modules_into_scope():
+    uc = _new_use_case()
+    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
+    uc.answers = QuestionnaireAnswers(q_pipeline="both", q1_robot_arms="multiple")
+
+    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
+
+    assert uc.modules["grabber"].status == "needs_action"
+    assert uc.modules["orienteering_solver"].status == "needs_action"
+    assert "not_assessed" not in {m.status for m in uc.modules.values()}
 
 
 def test_grinding_only_confidence_ignores_inspection_categories():

@@ -22,6 +22,7 @@ from PySide6.QtCore import Qt, Signal, Slot
 
 from app.models.use_case import UseCase, ComputeResult, ExternalSource
 from app.engine.module_dependencies import validate_configuration
+from app.engine.module_registry import is_assessed
 from app.engine.questionnaire_engine import (
     compute_impacts, apply_impacts_to_modules, consumers_awaiting_external_input,
     sync_external_input_status,
@@ -147,6 +148,7 @@ class UseCasePage(QWidget):
         dash_vbox.setSpacing(8)
         self._validation_panel = ConfigurationValidationPanel()
         self._validation_panel.configure_requested.connect(self._open_module_detail)
+        self._validation_panel.specification_requested.connect(lambda: self._tabs.setCurrentIndex(1))
         dash_vbox.addWidget(self._validation_panel)
         self._module_grid = ModuleGrid()
         self._module_grid.module_selected.connect(self._open_module_detail)
@@ -270,6 +272,9 @@ class UseCasePage(QWidget):
 
         needs = sum(1 for m in self._use_case.modules.values() if m.status == "needs_action")
         total = len(self._use_case.modules)
+        if not is_assessed(parsed.q_pipeline):
+            self._show_banner("Saved — choose a pipeline selection to assess the modules")
+            return
         self._show_banner(f"Saved — {needs} of {total} modules need action")
 
     def _show_banner(self, text: str) -> None:
@@ -367,7 +372,7 @@ class UseCasePage(QWidget):
         if uc is None:
             return
         ms = uc.modules.get(module_id)
-        if ms is None or ms.status == "out_of_scope":
+        if ms is None or ms.status in ("out_of_scope", "not_assessed"):
             return
         if module_id in consumers_awaiting_external_input(uc):
             reply = QMessageBox.question(
@@ -439,7 +444,7 @@ class UseCasePage(QWidget):
             self._compute_progress_dlg.on_done(success, result_path)
 
         # Scope may have changed while compute ran; a late result must not undo that.
-        if ms.status == "out_of_scope":
+        if ms.status in ("out_of_scope", "not_assessed"):
             return
 
         if success and result_path:
