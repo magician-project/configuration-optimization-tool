@@ -47,7 +47,8 @@ class QuestionnaireAnswers(BaseModel):
     q7_mesh_status: Optional[str] = None      # "cad" | "scanning" | "unknown"
 
     # Section D: Defect Detection
-    q8_defects: List[str] = []               # ["dents", "dirt", "surface_damage"]
+    q8_defects: List[str] = []               # ["dents", "dirt", "surface_damage", "other"]
+    q8_other_defect: Optional[str] = None
     # Note: Vision Classifier config (q_clf_*) fields are now stored in
     # UseCase.module_answers["vision_classifier"], not here.
 

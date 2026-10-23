@@ -272,7 +272,17 @@ SCHEMA = {
                 {"value": "dents",          "label": "Dents / Deformations"},
                 {"value": "dirt",           "label": "Dirt / Contamination"},
                 {"value": "surface_damage", "label": "Surface damage"},
+                {"value": "other",          "label": "Other defect types"},
             ],
+            "follow_up": {
+                "condition": {"field": "q8_defects", "operator": "contains", "value": "other"},
+                "question": {
+                    "id": "q8_other_defect",
+                    "type": "text",
+                    "label": "Specify other defect types:",
+                    "placeholder": "e.g., corrosion, cracks...",
+                },
+            },
         },
         {
             "id": "q9_time",

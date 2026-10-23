@@ -85,6 +85,8 @@ def run(answers: dict, output_dir: str) -> dict:
     # ── Defect information from materials ────────────────────────────────────
     materials = answers.get("q5_materials") or []
     defects = answers.get("q8_defects") or []
+    if answers.get("q8_other_defect"):
+        defects = [answers["q8_other_defect"] if d == "other" else d for d in defects]
     outputs["target_materials"] = ",".join(materials) if materials else "unspecified"
     outputs["defect_types"] = ",".join(defects) if defects else "unspecified"
 
