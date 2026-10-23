@@ -39,7 +39,8 @@ influence multiple modules:
 ## Module-specific hardware configuration (Grabber Config tab)
 
 These fields live in `module_answers["grabber"]` (`q_grab_*`), rendered in the
-**Module Configuration** tab of the Grabber detail panel:
+**Module Configuration** tab of the Grabber detail panel. The `?` help in the GUI uses
+plain language and links here for the technical details (CLI flag, defaults):
 
 | Field | CLI flag | Description |
 |---|---|---|

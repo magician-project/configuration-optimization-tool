@@ -62,9 +62,24 @@ SCHEMA = {
             "title": "MAGICIAN functionality used",
             "tooltip": (
                 "Which MAGICIAN functionality does this use case use? This determines which modules "
-                "are in scope. 'Grinding only' leaves MAGICIAN Inspection out of scope: defect "
-                "information must then come from an external inspection system."
+                "are in scope by default."
             ),
+            "help_text": (
+                "**What your choice changes**\n\n"
+                "- **Inspection only:** Grabber, Vision Classifier and Ergodic Control, plus the shared "
+                "Localiser and Motion Planner.\n"
+                "- **Grinding only:** Orienteering Solver, plus the shared modules. MAGICIAN Inspection "
+                "is out of scope, so defect information must come from an external inspection source "
+                "(an *external input requirement*). Agree on the source and data contract with whoever "
+                "provides it.\n"
+                "- **Inspection and grinding (both):** all of the above.\n\n"
+                "The default module set is advisory: you can still adjust the scope afterwards.\n\n"
+                "**Example**\n\n"
+                "A partner inspects parts with their own vision system and only wants MAGICIAN to plan "
+                "the grinding. Choose *Grinding only* and declare their system as the external source "
+                "for defect information."
+            ),
+            "help_link": {"module": "orienteering_solver", "anchor": "external-defect-input-grinding-only"},
             "type": "select",
             "options": [
                 {"value": "inspection", "label": "Inspection only"},
@@ -110,7 +125,7 @@ SCHEMA = {
             "id": "q2_camera_framerate",
             "section": "B",
             "title": "Target frame rate (Hz)",
-            "tooltip": "Target capture frequency. Rates above 10 Hz require RAM-backed storage (--ram flag).",
+            "tooltip": "Target capture frequency. Rates above 10 Hz require RAM-backed storage (memory instead of disk).",
             "type": "number",
             "min": 1,
             "max": 200,
@@ -120,8 +135,8 @@ SCHEMA = {
             "id": "q2_stream_shm",
             "section": "B",
             "title": "Stream frames to shared memory",
-            "tooltip": "Publish camera frames to a POSIX shared-memory segment instead of (or alongside) writing"
-                       "files. Required for the live classifier.",
+            "tooltip": "Publish camera frames to shared memory (fast data sharing between programs on this computer) "
+                       "instead of, or alongside, writing files. Required for the live classifier.",
             "type": "select",
             "options": [
                 {"value": "yes", "label": "Yes — stream to shared memory"},
@@ -274,7 +289,24 @@ SCHEMA = {
             "id": "q10_profit",
             "section": "E",
             "title": "Profit / priority definition",
-            "tooltip": "Choose how to prioritise inspection areas.",
+            "tooltip": (
+                "Profit is the value the planner gives to visiting a defect or area. It decides which "
+                "areas are inspected first when time is limited."
+            ),
+            "help_text": (
+                "**What your choice changes**\n\n"
+                "- **Standard:** the default profit model and service-time lookup for your materials "
+                "and defect types. Nothing extra is needed from you.\n"
+                "- **Custom:** replaces the default model. The planning problem may change to "
+                "Orienteering with Variable Profits (OPVP), the profit calculator must be rewritten, "
+                "and you must supply the profit function specification. This cannot be verified "
+                "automatically, so a domain expert has to sign off.\n\n"
+                "**Example**\n\n"
+                "Weld seams should count twice as much as the surrounding plate because a defect there "
+                "is more critical. That is a custom profit definition: have the responsible domain "
+                "expert confirm the weighting."
+            ),
+            "help_link": {"module": "orienteering_solver", "anchor": "op-variant-selection-logic"},
             "type": "select",
             "options": [
                 {"value": "standard", "label": "Standard profit calculation"},
@@ -296,8 +328,9 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_model",
             "title": "Classifier backbone architecture",
-            "tooltip": "Neural network backbone used for tile classification. resnet18 is a good default; larger"
-                       "models are more accurate but slower.",
+            "tooltip": "The neural network used to classify image tiles. ResNet-18 is a good starting point; larger "
+                       "models can be more accurate but run slower. With a pre-trained model, pick the one it "
+                       "was trained with.",
             "type": "select",
             "options": [
                 {"value": "resnet18",          "label": "ResNet-18 (recommended)"},
@@ -313,8 +346,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_tile_size",
             "title": "Classifier tile size (pixels)",
-            "tooltip": "Side length of the square tiles fed to the classifier. Must match the value used during"
-                       "training. Smaller tiles are faster but capture less context.",
+            "tooltip": "Side length, in pixels, of the square image tiles the classifier looks at. Must match the "
+                       "tile size used during training. Smaller tiles run faster but see less context.",
             "type": "select",
             "options": [
                 {"value": "32",  "label": "32 px (fast, less context)"},
@@ -326,8 +359,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_step_size",
             "title": "Inference tile step size (pixels)",
-            "tooltip": "Pixel stride between tiles during live inference. Smaller values produce denser heatmaps but"
-                       "increase computation.",
+            "tooltip": "Distance, in pixels, between neighbouring tiles during live inspection. Smaller steps give "
+                       "a more detailed defect map but need more computing power. Default: 18.",
             "type": "number",
             "min": 1,
             "max": 128,
@@ -336,8 +369,9 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_threshold",
             "title": "Detection confidence threshold",
-            "tooltip": "Minimum softmax confidence required to register a tile as a defect. Tiles below this are"
-                       "reassigned to the low-confidence class.",
+            "tooltip": "Minimum confidence (0 to 1) for a tile to count as a defect; tiles below it are labelled "
+                       "low-confidence instead. Raise it for fewer false alarms, lower it to miss fewer defects. "
+                       "Default: 0.6.",
             "type": "number",
             "min": 0.0,
             "max": 1.0,
@@ -346,7 +380,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_fps",
             "title": "Target inference frame rate (FPS)",
-            "tooltip": "Maximum frame rate for the live classifier. Set to 0 for unlimited.",
+            "tooltip": "Maximum number of frames per second the live classifier processes. Use 0 for no limit. "
+                       "Default: 23.",
             "type": "number",
             "min": 0.0,
             "default": 23.0,
@@ -354,8 +389,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_majority_voting",
             "title": "Enable majority voting",
-            "tooltip": "Apply a 3×3 spatial majority-vote filter to smooth classifier predictions and suppress"
-                       "isolated false positives.",
+            "tooltip": "Smooths the results: each tile is decided together with its 3\u00d73 neighbours, which "
+                       "removes isolated false alarms. Recommended.",
             "type": "select",
             "options": [
                 {"value": "yes", "label": "Yes (recommended)"},
@@ -365,8 +400,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_two_stage",
             "title": "Enable two-stage ensemble classification",
-            "tooltip": "Use a full model ensemble (binary filter → multi-class) for higher accuracy at the cost of"
-                       "increased GPU usage.",
+            "tooltip": "Runs two models in sequence (first defect or no defect, then which type of defect) for "
+                       "higher accuracy. Needs more GPU power.",
             "type": "select",
             "options": [
                 {"value": "no",  "label": "No — single model (faster)"},
@@ -376,16 +411,16 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_model_path",
             "title": "Path to pre-trained model checkpoint",
-            "tooltip": "Absolute path to an existing .pth file. If provided, training is skipped. Leave empty to"
-                       "generate a training configuration instead.",
+            "tooltip": "Full path to an already trained model file (.pth). If given, no training is needed. "
+                       "Leave empty to prepare a training configuration instead.",
             "type": "text",
             "placeholder": "/path/to/allclass_resnet18.pth",
         },
         {
             "id": "q_clf_dataset_dir",
             "title": "Training dataset directory",
-            "tooltip": "Path to the annotated tile dataset (keras_dataset/ layout). Required only when no pre-trained"
-                       "model is provided.",
+            "tooltip": "Folder with the annotated image tiles used for training (keras_dataset layout). Only "
+                       "needed when no pre-trained model is given.",
             "type": "text",
             "placeholder": "/path/to/keras_dataset/",
             "condition": {"field": "q_clf_model_path", "operator": "empty"},
@@ -393,7 +428,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_epochs",
             "title": "Training epochs",
-            "tooltip": "Number of full passes over the training dataset.",
+            "tooltip": "How many times training goes through the whole dataset. More passes can improve "
+                       "accuracy but take longer. Default: 10.",
             "type": "number",
             "min": 1,
             "default": 10,
@@ -402,7 +438,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_batch_size",
             "title": "Training batch size",
-            "tooltip": "Number of tiles per gradient update. Reduce if GPU memory is insufficient.",
+            "tooltip": "How many tiles are processed at once during training. Lower it if the GPU runs out of "
+                       "memory. Default: 64.",
             "type": "number",
             "min": 1,
             "default": 64,
@@ -411,7 +448,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_learning_rate",
             "title": "Learning rate",
-            "tooltip": "AdamW optimiser learning rate.",
+            "tooltip": "How big each training step is. Smaller values train slower but more stably. The default "
+                       "suits most cases. Default: 0.0005.",
             "type": "number",
             "min": 1e-6,
             "default": 0.0005,
@@ -420,7 +458,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_loss",
             "title": "Training loss function",
-            "tooltip": "focal loss handles class imbalance well; cross_entropy is simpler.",
+            "tooltip": "How training measures its mistakes. Focal loss copes better when some defect types are "
+                       "much rarer than others; cross-entropy is simpler.",
             "type": "select",
             "options": [
                 {"value": "focal",         "label": "Focal loss (recommended for imbalanced classes)"},
@@ -431,8 +470,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_use_lasers",
             "title": "Enable laser distance sensor fusion",
-            "tooltip": "Subscribe to distance sensor topics and fuse depth into detection messages using IDW"
-                       "interpolation.",
+            "tooltip": "Combines the camera detections with the laser distance sensors, so each detection also "
+                       "gets a depth (distance to the surface).",
             "type": "select",
             "options": [
                 {"value": "yes", "label": "Yes — use laser depth fusion"},
@@ -442,7 +481,7 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_laser_topic_1",
             "title": "Laser sensor topic 1",
-            "tooltip": "ROS 2 topic for the first distance sensor.",
+            "tooltip": "Name of the ROS 2 topic (data channel) that delivers the readings of distance sensor 1.",
             "type": "text",
             "placeholder": "magician_grabber/distance1",
             "condition": {"field": "q_clf_use_lasers", "value": "yes"},
@@ -450,7 +489,7 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_laser_topic_2",
             "title": "Laser sensor topic 2",
-            "tooltip": "ROS 2 topic for the second distance sensor.",
+            "tooltip": "Name of the ROS 2 topic (data channel) that delivers the readings of distance sensor 2.",
             "type": "text",
             "placeholder": "magician_grabber/distance2",
             "condition": {"field": "q_clf_use_lasers", "value": "yes"},
@@ -458,7 +497,7 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_laser_topic_3",
             "title": "Laser sensor topic 3",
-            "tooltip": "ROS 2 topic for the third distance sensor.",
+            "tooltip": "Name of the ROS 2 topic (data channel) that delivers the readings of distance sensor 3.",
             "type": "text",
             "placeholder": "magician_grabber/distance3",
             "condition": {"field": "q_clf_use_lasers", "value": "yes"},
@@ -482,6 +521,7 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_laser_px2_x",
             "title": "Laser 2 pixel position — X",
+            "tooltip": "X coordinate (pixels) of laser 2 in the camera image plane.",
             "type": "number",
             "default": 320,
             "condition": {"field": "q_clf_use_lasers", "value": "yes"},
@@ -489,6 +529,7 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_laser_px2_y",
             "title": "Laser 2 pixel position — Y",
+            "tooltip": "Y coordinate (pixels) of laser 2 in the camera image plane.",
             "type": "number",
             "default": 200,
             "condition": {"field": "q_clf_use_lasers", "value": "yes"},
@@ -496,6 +537,7 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_laser_px3_x",
             "title": "Laser 3 pixel position — X",
+            "tooltip": "X coordinate (pixels) of laser 3 in the camera image plane.",
             "type": "number",
             "default": 520,
             "condition": {"field": "q_clf_use_lasers", "value": "yes"},
@@ -503,6 +545,7 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_laser_px3_y",
             "title": "Laser 3 pixel position — Y",
+            "tooltip": "Y coordinate (pixels) of laser 3 in the camera image plane.",
             "type": "number",
             "default": 200,
             "condition": {"field": "q_clf_use_lasers", "value": "yes"},
@@ -510,7 +553,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_laser_idw_power",
             "title": "Laser IDW interpolation power",
-            "tooltip": "Power parameter for Inverse Distance Weighting depth interpolation.",
+            "tooltip": "Controls how strongly nearby lasers count more than distant ones when the depth between "
+                       "lasers is estimated. Default: 2.0.",
             "type": "number",
             "min": 0.1,
             "default": 2.0,
@@ -520,8 +564,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_advanced",
             "title": "Configure advanced polarization channels",
-            "tooltip": "AoLP, DoLP, and unpolarized are extra input channels derived from the 4 Stokes channels. These"
-                       "are baked into the model at training time.",
+            "tooltip": "Extra polarization-based input channels for the model (AoLP, DoLP, unpolarized "
+                       "intensity). They are fixed at training time, so only change them to match the model you use.",
             "type": "select",
             "options": [
                 {"value": "no",  "label": "No — use standard 4-channel input"},
@@ -531,7 +575,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_aolp",
             "title": "Include Angle of Linear Polarization (AoLP) channel",
-            "tooltip": "Adds an AoLP-derived channel to the model input. Must match training configuration.",
+            "tooltip": "Adds the angle of linear polarization as an extra model input. Must match how the model "
+                       "was trained.",
             "type": "select",
             "options": [
                 {"value": "no",  "label": "No"},
@@ -542,7 +587,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_dolp",
             "title": "Include Degree of Linear Polarization (DoLP) channel",
-            "tooltip": "Adds a DoLP-derived channel to the model input. Must match training configuration.",
+            "tooltip": "Adds the degree of linear polarization as an extra model input. Must match how the model "
+                       "was trained.",
             "type": "select",
             "options": [
                 {"value": "no",  "label": "No"},
@@ -553,7 +599,8 @@ VISION_CLASSIFIER_CONFIG = [
         {
             "id": "q_clf_unpolarized",
             "title": "Include unpolarized (mean intensity) channel",
-            "tooltip": "Adds the mean of the 4 polarization channels as an extra input channel.",
+            "tooltip": "Adds the average intensity of the 4 polarization channels as an extra model input. Must "
+                       "match how the model was trained.",
             "type": "select",
             "options": [
                 {"value": "no",  "label": "No"},
@@ -571,19 +618,24 @@ VISION_CLASSIFIER_CONFIG = [
 # detail panel.
 # ─────────────────────────────────────────────────────────────────────────────
 
+_ERGODIC_DOCS = {"module": "ergodic_control", "anchor": "inputs-from-questionnaire"}
+
 ERGODIC_CONTROL_CONFIG = [
     {
         "id": "q_ergodic_mesh_path",
         "title": "Path to 3D mesh file (.stl)",
-        "tooltip": "Absolute path to the .stl surface mesh. Used to project 2D trajectories to 3D end-effector poses.",
+        "tooltip": "Full path to the 3D surface model (.stl) of the workpiece. Used to turn the planned 2D path "
+                   "into 3D robot positions.",
+        "help_link": _ERGODIC_DOCS,
         "type": "text",
         "placeholder": "/path/to/surface.stl",
     },
     {
         "id": "q_ergodic_time_budget",
         "title": "Inspection time budget (seconds)",
-        "tooltip": "Total time available for the inspection trajectory. Controls trajectory density and number of"
-                   "waypoints.",
+        "tooltip": "Total time available for the inspection path. A longer budget lets the planner use more "
+                   "waypoints. Default: 60.",
+        "help_link": _ERGODIC_DOCS,
         "type": "number",
         "min": 1,
         "max": 3600,
@@ -592,7 +644,8 @@ ERGODIC_CONTROL_CONFIG = [
     {
         "id": "q_ergodic_trajectory_density",
         "title": "Trajectory waypoint density",
-        "tooltip": "Sparse = fewer waypoints (faster), Dense = more waypoints (thorough coverage).",
+        "tooltip": "Sparse uses fewer waypoints (faster); dense uses more (more thorough coverage).",
+        "help_link": _ERGODIC_DOCS,
         "type": "select",
         "options": [
             {"value": "sparse", "label": "Sparse — 0.5× waypoints (faster)"},
@@ -603,16 +656,22 @@ ERGODIC_CONTROL_CONFIG = [
     {
         "id": "q_ergodic_sensor_offset",
         "title": "Camera standoff distance (m)",
-        "tooltip": "Distance from end-effector to surface along the surface normal. Typically 0.05 m.",
-        "type": "number",
+        "tooltip": "Distance between the robot tool (end-effector) and the surface, in metres, measured straight "
+                   "out from the surface. Typically 0.05 m.",
+        "help_link": _ERGODIC_DOCS,
+        "type": "number_float",
         "min": 0.0,
         "max": 1.0,
-        "default": 0,
+        "decimals": 3,
+        "step": 0.01,
+        "default": 0.05,
     },
     {
         "id": "q_ergodic_use_historical",
         "title": "Use historical inspection data",
-        "tooltip": "Incorporate defect locations from previous inspections as a prior distribution.",
+        "tooltip": "Uses defect locations from earlier inspections to focus the new inspection on places where "
+                   "defects were found before.",
+        "help_link": _ERGODIC_DOCS,
         "type": "select",
         "options": [
             {"value": "yes", "label": "Yes — use historical defect data (recommended)"},
@@ -622,7 +681,9 @@ ERGODIC_CONTROL_CONFIG = [
     {
         "id": "q_ergodic_use_welding_priors",
         "title": "Use welding process priors",
-        "tooltip": "Add PLC welding data (spatter-prone weld seam locations) as high-probability regions in the prior.",
+        "tooltip": "Uses welding-process data from the PLC (places where weld spatter is likely) to focus the "
+                   "inspection on those areas.",
+        "help_link": _ERGODIC_DOCS,
         "type": "select",
         "options": [
             {"value": "yes", "label": "Yes — include welding priors (recommended)"},
@@ -632,8 +693,9 @@ ERGODIC_CONTROL_CONFIG = [
     {
         "id": "q_ergodic_pdf_resolution",
         "title": "PDF grid resolution",
-        "tooltip": "Resolution of the 2D probability density function grid. Higher = more accurate but slower"
-                   "computation.",
+        "tooltip": "Level of detail of the grid that describes where defects are likely. Finer grids are more "
+                   "accurate but slower to compute.",
+        "help_link": _ERGODIC_DOCS,
         "type": "select",
         "options": [
             {"value": "16",  "label": "16 × 16 (fastest)"},
@@ -645,20 +707,28 @@ ERGODIC_CONTROL_CONFIG = [
     {
         "id": "q_ergodic_kalman_process_noise",
         "title": "Kalman process noise σ²",
-        "tooltip": "Process noise variance. Higher = more trust in the motion model, less trust in the previous state.",
-        "type": "number",
+        "tooltip": "How uncertain the planner assumes its earlier estimate of the defect locations is. Higher "
+                   "values make it adapt faster to new detections. Advanced setting.",
+        "help_link": _ERGODIC_DOCS,
+        "type": "number_float",
         "min": 0.0,
         "max": 10.0,
-        "default": 0,
+        "decimals": 3,
+        "step": 0.05,
+        "default": 0.1,
     },
     {
         "id": "q_ergodic_kalman_measurement_noise",
         "title": "Kalman measurement noise σ²",
-        "tooltip": "Measurement noise variance. Higher = less trust in camera detections.",
-        "type": "number",
+        "tooltip": "How noisy the camera detections are assumed to be. Higher values mean the planner trusts "
+                   "detections less. Advanced setting.",
+        "help_link": _ERGODIC_DOCS,
+        "type": "number_float",
         "min": 0.0,
         "max": 10.0,
-        "default": 0,
+        "decimals": 3,
+        "step": 0.05,
+        "default": 0.5,
     },
 ]
 
@@ -672,13 +742,16 @@ ERGODIC_CONTROL_CONFIG = [
 # network address, lighting mode, and operational flags.
 # ─────────────────────────────────────────────────────────────────────────────
 
+_GRABBER_DOCS = {"module": "grabber", "anchor": "module-specific-hardware-configuration-grabber-config-tab"}
+
 GRABBER_CONFIG = [
     # ─ Camera tuning ──────────────────────────────────────────────────────────────────
     {
         "id": "q_grab_exposure",
         "title": "Camera exposure time (\u00b5s)",
-        "tooltip": "Exposure time in microseconds (--exposure flag). Capped at 50 000 \u00b5s for hardware safety."
-                   "Maps to GlobalConfig.exposure.",
+        "tooltip": "How long the camera sensor collects light for each frame, in microseconds (\u00b5s). Raise it for "
+                   "darker scenes; too high blurs moving parts. Maximum 50 000 \u00b5s. Default: 5000.",
+        "help_link": _GRABBER_DOCS,
         "type": "number",
         "min": 1,
         "max": 50000,
@@ -687,7 +760,9 @@ GRABBER_CONFIG = [
     {
         "id": "q_grab_gain",
         "title": "Camera gain",
-        "tooltip": "Analogue gain of the GigE camera sensor (--gain flag). Maps to GlobalConfig.gain.",
+        "tooltip": "Amplifies the camera signal. Raise it for dark images, but a higher gain also adds image "
+                   "noise. Default: 1.0.",
+        "help_link": _GRABBER_DOCS,
         "type": "number",
         "min": 0.0,
         "default": 1.0,
@@ -695,8 +770,9 @@ GRABBER_CONFIG = [
     {
         "id": "q_grab_blacklevel",
         "title": "Camera black-level offset",
-        "tooltip": "Black-level offset applied to raw pixel values (--blacklevel flag). Maps to"
-                   "GlobalConfig.blackLevel.",
+        "tooltip": "Brightness offset applied to the raw camera image so that black looks truly black. Leave at "
+                   "0.0 unless dark areas look washed out or clipped.",
+        "help_link": _GRABBER_DOCS,
         "type": "number",
         "min": 0.0,
         "default": 0.0,
@@ -705,16 +781,19 @@ GRABBER_CONFIG = [
     {
         "id": "q_grab_arduino_path",
         "title": "Arduino serial port",
-        "tooltip": "Serial device path for the Arduino that controls distance sensors and the lighting ring (--arduino"
-                   "flag). Default: /dev/ttyUSB0.",
+        "tooltip": "Port name where the Arduino (distance sensors and lighting ring) is connected to the "
+                   "computer. Change it only if the device shows up under a different name. "
+                   "Default: /dev/ttyUSB0.",
+        "help_link": _GRABBER_DOCS,
         "type": "text",
         "placeholder": "/dev/ttyUSB0",
     },
     {
         "id": "q_grab_lighting_mode",
         "title": "Lighting controller mode",
-        "tooltip": "How the Arduino-controlled LED ring reacts on each captured frame. Maps to the --rlight / --dlight"
-                   "/ --tlight / --trigger flags.",
+        "tooltip": "How the lighting ring behaves while frames are captured: off, cycling through the lights, "
+                   "reacting to distance, following a pattern, or switching on a manual trigger after each frame.",
+        "help_link": _GRABBER_DOCS,
         "type": "select",
         "options": [
             {"value": "none",    "label": "No automatic lighting control"},
@@ -728,8 +807,9 @@ GRABBER_CONFIG = [
     {
         "id": "q_grab_teensy_path",
         "title": "Teensy serial port",
-        "tooltip": "Serial device path for the Teensy microcontroller that reads the accelerometer (--teensy flag)."
-                   "Default: /dev/ttyACM0.",
+        "tooltip": "Port name where the Teensy board (reads the accelerometer) is connected to the computer. "
+                   "Change it only if the device shows up under a different name. Default: /dev/ttyACM0.",
+        "help_link": _GRABBER_DOCS,
         "type": "text",
         "placeholder": "/dev/ttyACM0",
     },
@@ -737,15 +817,18 @@ GRABBER_CONFIG = [
     {
         "id": "q_grab_force_sensor_ip",
         "title": "ATI NetFT sensor IP address",
-        "tooltip": "IP address of the ATI NetFT force/torque sensor (--atiip flag). Maps to GlobalConfig.atiIP."
-                   "Default: 192.168.137.201.",
+        "tooltip": "Network (IP) address of the ATI force/torque sensor. Must match the address configured on "
+                   "the sensor. Default: 192.168.137.201.",
+        "help_link": _GRABBER_DOCS,
         "type": "text",
         "placeholder": "192.168.137.201",
     },
     {
         "id": "q_grab_force_sensor_port",
         "title": "ATI NetFT sensor UDP port",
-        "tooltip": "UDP port of the ATI NetFT sensor (--atiport flag). Maps to GlobalConfig.atiPort. Default: 49152.",
+        "tooltip": "Network port used to talk to the ATI force/torque sensor. Only change it if the sensor was "
+                   "set up with a different port. Default: 49152.",
+        "help_link": _GRABBER_DOCS,
         "type": "number",
         "min": 1,
         "max": 65535,
@@ -755,8 +838,9 @@ GRABBER_CONFIG = [
     {
         "id": "q_grab_tactile_stream",
         "title": "Tactile shared memory stream name",
-        "tooltip": "POSIX SHM stream name for tactile data (--tactilestream flag). Maps to"
-                   "GlobalConfig.tactileStreamName. Default: stream_tactile.",
+        "tooltip": "Name under which tactile sensor data is shared with other programs on this computer. Change "
+                   "it only if a consuming program expects a different name. Default: stream_tactile.",
+        "help_link": _GRABBER_DOCS,
         "type": "text",
         "placeholder": "stream_tactile",
     },
@@ -764,8 +848,9 @@ GRABBER_CONFIG = [
     {
         "id": "q_grab_run_duration",
         "title": "Maximum capture duration (seconds)",
-        "tooltip": "Hard stop time in seconds (--duration flag). Leave blank to run until manually stopped (--forever,"
-                   "which is the default).",
+        "tooltip": "Stops capturing automatically after this many seconds. Use 0 to keep capturing until you "
+                   "stop it manually. Default: 0 (no limit).",
+        "help_link": _GRABBER_DOCS,
         "type": "number",
         "min": 1,
         "max": 86400,
@@ -774,7 +859,9 @@ GRABBER_CONFIG = [
     {
         "id": "q_grab_countdown",
         "title": "Countdown before capture starts (seconds)",
-        "tooltip": "Number of seconds to count down before acquisition begins (--countdown flag). 0 to skip.",
+        "tooltip": "Seconds to wait before capturing starts, for example to get into position. Use 0 to start "
+                   "immediately. Default: 0.",
+        "help_link": _GRABBER_DOCS,
         "type": "number",
         "min": 0,
         "max": 60,
@@ -783,7 +870,9 @@ GRABBER_CONFIG = [
     {
         "id": "q_grab_compress",
         "title": "Compress camera frames to PNG",
-        "tooltip": "Save frames as .png instead of raw .pnm (--compress flag). PNG is smaller but slower to write.",
+        "tooltip": "PNG gives smaller files; raw PNM is faster to write but larger. Choose raw when frame rate "
+                   "matters more than disk space.",
+        "help_link": _GRABBER_DOCS,
         "type": "select",
         "options": [
             {"value": "no",  "label": "No \u2014 raw PNM (faster, larger files)"},
@@ -793,7 +882,8 @@ GRABBER_CONFIG = [
     {
         "id": "q_grab_silent",
         "title": "Suppress progress output",
-        "tooltip": "Do not print per-frame progress messages to stdout (--silent flag).",
+        "tooltip": "Hides the progress message that is normally printed for every captured frame.",
+        "help_link": _GRABBER_DOCS,
         "type": "select",
         "options": [
             {"value": "no",  "label": "No \u2014 show progress"},
@@ -803,8 +893,9 @@ GRABBER_CONFIG = [
     {
         "id": "q_grab_unixtime",
         "title": "Use Unix epoch timestamps",
-        "tooltip": "Write Unix epoch (integer seconds) instead of human-readable timestamps in output files"
-                   "(--unixtime flag).",
+        "tooltip": "Stores timestamps in output files as a plain number (seconds since 1 January 1970) instead "
+                   "of readable dates. Useful for automated processing.",
+        "help_link": _GRABBER_DOCS,
         "type": "select",
         "options": [
             {"value": "no",  "label": "No \u2014 human-readable timestamps"},
@@ -813,22 +904,25 @@ GRABBER_CONFIG = [
     },
 ]
 
+_LOCALISER_DOCS = {"module": "localiser", "anchor": "inputs-module_answerslocaliser"}
+
 LOCALISER_CONFIG = [
     {
         "id": "q_local_setup",
         "title": "Calibration setup name",
-        "tooltip": "Name of the Setup entry in the Localiser's calibration database (calibration_data.yaml) that "
-                   "this use case targets. COT cannot read the live database, so this must match whatever name "
-                   "the operator used during Registration.",
+        "tooltip": "Name of the calibration setup this use case uses, as entered by the operator during "
+                   "Registration. It must match exactly; this tool cannot check it against the live database.",
+        "help_link": _LOCALISER_DOCS,
         "type": "text",
         "placeholder": "cell_a",
     },
     {
         "id": "q_local_setup_registered",
         "title": "Has this setup already been registered?",
-        "tooltip": "\"No\" means Registration (CAD/TCP point-pair collection) is still needed for this setup, which "
-                   "requires a mesh. \"Yes\" means an existing calibrated transform is being reused and no mesh is "
-                   "needed.",
+        "tooltip": "Choose No if this setup is not calibrated yet: Registration (matching CAD points to robot "
+                   "positions) is then needed, which requires a mesh. Choose Yes to reuse an existing "
+                   "calibration; no mesh is needed.",
+        "help_link": _LOCALISER_DOCS,
         "type": "select",
         "options": [
             {"value": "no",  "label": "No \u2014 new setup, needs Registration"},
@@ -839,45 +933,54 @@ LOCALISER_CONFIG = [
     {
         "id": "q_local_mesh_path",
         "title": "Workpiece CAD mesh path",
-        "tooltip": "STL file used by the Registration UI to pick CAD/TCP point pairs. Only required when the "
-                   "setup above still needs to be registered.",
+        "tooltip": "Full path to the workpiece CAD model (.stl) used during Registration. Only needed when the "
+                   "setup above is not registered yet.",
+        "help_link": _LOCALISER_DOCS,
         "type": "text",
         "placeholder": "/data/meshes/fender.stl",
     },
     {
         "id": "q_local_database_file",
         "title": "Calibration database file",
-        "tooltip": "Path to the calibration_data.yaml the broadcaster reads at startup. Note: the current "
-                   "registrator implementation always writes to the package default regardless of this value.",
+        "tooltip": "Path to the calibration file (calibration_data.yaml) that is read at startup. Note: the "
+                   "current registration tool always writes to its default location, whatever is entered here.",
+        "help_link": _LOCALISER_DOCS,
         "type": "text",
         "placeholder": "calibration_data.yaml",
     },
     {
         "id": "q_local_robot_base_link",
         "title": "Robot base link",
-        "tooltip": "Parent/output TF frame. Default: base_link.",
+        "tooltip": "Name of the robot's base coordinate frame; the workpiece position is expressed relative to "
+                   "it. Default: base_link.",
+        "help_link": _LOCALISER_DOCS,
         "type": "text",
         "placeholder": "base_link",
     },
     {
         "id": "q_local_robot_ee_link",
         "title": "Robot end-effector link",
-        "tooltip": "TCP frame sampled during Registration. Default: tcp.",
+        "tooltip": "Name of the robot tool coordinate frame (TCP) whose position is recorded during "
+                   "Registration. Default: tcp.",
+        "help_link": _LOCALISER_DOCS,
         "type": "text",
         "placeholder": "tcp",
     },
     {
         "id": "q_local_mesh_link",
         "title": "Mesh TF frame",
-        "tooltip": "Child TF frame / workpiece identifier. Default: fender.",
+        "tooltip": "Name of the coordinate frame that represents the workpiece, used to identify it. "
+                   "Default: fender.",
+        "help_link": _LOCALISER_DOCS,
         "type": "text",
         "placeholder": "fender",
     },
     {
         "id": "q_local_motion_mode",
         "title": "Broadcast mode",
-        "tooltip": "Static and dynamic broadcasting are mutually exclusive. Dynamic mode adds a live slider "
-                   "displacement to the calibrated transform.",
+        "tooltip": "Static keeps the calibrated workpiece position fixed. Dynamic also follows a live slider, "
+                   "shifting the position as the slider moves. You can only use one of the two.",
+        "help_link": _LOCALISER_DOCS,
         "type": "select",
         "options": [
             {"value": "static",  "label": "Static \u2014 republish the calibrated transform unchanged"},
@@ -888,8 +991,9 @@ LOCALISER_CONFIG = [
     {
         "id": "q_local_slider_topic",
         "title": "Slider position topic",
-        "tooltip": "std_msgs/Float64 topic carrying the absolute slider position in metres. Default: "
-                   "/slider/position_y.",
+        "tooltip": "Name of the ROS 2 topic (data channel) that reports the slider's absolute position in "
+                   "metres. Default: /slider/position_y.",
+        "help_link": _LOCALISER_DOCS,
         "type": "text",
         "placeholder": "/slider/position_y",
         "condition": {"field": "q_local_motion_mode", "value": "dynamic"},
@@ -897,7 +1001,9 @@ LOCALISER_CONFIG = [
     {
         "id": "q_local_slider_bias",
         "title": "Slider bias (m)",
-        "tooltip": "Slider value corresponding to the calibrated pose; the published offset is value - slider_bias.",
+        "tooltip": "Slider position (in metres) at which the workpiece sits at its calibrated pose. The applied "
+                   "shift is the current slider value minus this bias.",
+        "help_link": _LOCALISER_DOCS,
         "type": "number_float",
         "min": -10.0,
         "max": 10.0,
@@ -907,8 +1013,10 @@ LOCALISER_CONFIG = [
     {
         "id": "q_local_publish_rate_hz",
         "title": "Dynamic TF publish rate (Hz)",
-        "tooltip": "Update rate for the slider-corrected dynamic TF broadcast.",
-"type": "number",
+        "tooltip": "How many times per second the slider-corrected workpiece position is updated. "
+                   "Default: 30 Hz.",
+        "help_link": _LOCALISER_DOCS,
+        "type": "number",
         "min": 1,
         "max": 240,
         "default": 30,
@@ -925,26 +1033,32 @@ LOCALISER_CONFIG = [
 # of COT_MOTION_PLANNER.md — real /motion_planner ROS 2 node parameters.
 # ─────────────────────────────────────────────────────────────────────────────
 
+_MP_DOCS = {"module": "motion_planning", "anchor": "inputs-module_answersmotion_planning"}
+
 MOTION_PLANNER_CONFIG = [
     # ─ Reference frames ─────────────────────────────────────────────────────
     {
         "id": "q_mp_base_link",
         "title": "Robot base link",
-        "tooltip": "Robot reference frame the planner transforms poses into. Default: base_link.",
+        "tooltip": "Name of the robot's base coordinate frame; poses are converted into it. Default: base_link.",
+        "help_link": _MP_DOCS,
         "type": "text",
         "placeholder": "base_link",
     },
     {
         "id": "q_mp_ee_link",
         "title": "End-effector link",
-        "tooltip": "Controlled TCP frame. Default: tcp.",
+        "tooltip": "Name of the robot tool coordinate frame (TCP) that is controlled. Default: tcp.",
+        "help_link": _MP_DOCS,
         "type": "text",
         "placeholder": "tcp",
     },
     {
         "id": "q_mp_ft_link",
         "title": "Force/torque sensor frame",
-        "tooltip": "Frame the force/torque sensor is mounted at. Defaults to the end-effector link if left blank.",
+        "tooltip": "Name of the coordinate frame where the force/torque sensor is mounted. If left blank, the tool "
+                   "frame is used.",
+        "help_link": _MP_DOCS,
         "type": "text",
         "placeholder": "tcp",
     },
@@ -952,9 +1066,9 @@ MOTION_PLANNER_CONFIG = [
     {
         "id": "q_mp_integration_dt",
         "title": "Planner sampling period (s)",
-        "tooltip": "Planner/output sampling period (integration_dt). Default: 0.001 s. Note: an external/legacy "
-                   "params file may still call this `integration_timestep` \u2014 COT's generated file always uses "
-                   "the correct `integration_dt` name.",
+        "tooltip": "Time step of the planner output, in seconds. Smaller values give smoother motion but need "
+                   "more computation. Default: 0.001 s.",
+        "help_link": _MP_DOCS,
         "type": "number_float",
         "min": 0.0001,
         "max": 1.0,
@@ -966,7 +1080,9 @@ MOTION_PLANNER_CONFIG = [
     {
         "id": "q_mp_proportional_gain",
         "title": "Z-admittance proportional gain",
-        "tooltip": "Proportional gain of the Z-axis admittance PI controller. Default: 1/3600 (\u2248 0.000278).",
+        "tooltip": "How strongly the Z-axis force controller reacts to the current force error (proportional "
+                   "gain). Default: 1/3600 (\u2248 0.000278).",
+        "help_link": _MP_DOCS,
         "type": "number_float",
         "min": 0.0,
         "decimals": 6,
@@ -976,7 +1092,9 @@ MOTION_PLANNER_CONFIG = [
     {
         "id": "q_mp_integral_gain",
         "title": "Z-admittance integral gain",
-        "tooltip": "Integral gain of the Z-axis admittance PI controller. Default: 4.6.",
+        "tooltip": "How strongly the Z-axis force controller reacts to a force error that persists over time "
+                   "(integral gain). Default: 4.6.",
+        "help_link": _MP_DOCS,
         "type": "number_float",
         "min": 0.0,
         "default": 4.6,
@@ -984,7 +1102,9 @@ MOTION_PLANNER_CONFIG = [
     {
         "id": "q_mp_integral_bound",
         "title": "Integral displacement bound (m)",
-        "tooltip": "Maximum integral displacement for the admittance controller. Default: 0.02 m.",
+        "tooltip": "Upper limit, in metres, on the displacement the integral part of the force controller may "
+                   "build up. Default: 0.02 m.",
+        "help_link": _MP_DOCS,
         "type": "number_float",
         "min": 0.0,
         "default": 0.02,
@@ -992,7 +1112,9 @@ MOTION_PLANNER_CONFIG = [
     {
         "id": "q_mp_integral_velocity_bound",
         "title": "Integral correction rate bound (m/s)",
-        "tooltip": "Maximum integral correction rate for the admittance controller. Default: 0.01 m/s.",
+        "tooltip": "Upper limit, in metres per second, on how fast the integral part of the force controller "
+                   "may correct. Default: 0.01 m/s.",
+        "help_link": _MP_DOCS,
         "type": "number_float",
         "min": 0.0,
         "default": 0.01,
@@ -1001,21 +1123,27 @@ MOTION_PLANNER_CONFIG = [
     {
         "id": "q_mp_mini58_topic",
         "title": "Mini58 force sensor topic",
-        "tooltip": "std_msgs/Float64 wrench topic for the ATI Mini58 sensor. Default: /ati_ft_sensor/wrench_sensed.",
+        "tooltip": "Name of the ROS 2 topic (data channel) that delivers the ATI Mini58 force/torque readings. "
+                   "Default: /ati_ft_sensor/wrench_sensed.",
+        "help_link": _MP_DOCS,
         "type": "text",
         "placeholder": "/ati_ft_sensor/wrench_sensed",
     },
     {
         "id": "q_mp_nano17_topic",
         "title": "Nano17 force sensor topic",
-        "tooltip": "Wrench topic for the ATI Nano17 sensor. Default: /magician_grabber/wrench_sensed.",
+        "tooltip": "Name of the ROS 2 topic (data channel) that delivers the ATI Nano17 force/torque readings. "
+                   "Default: /magician_grabber/wrench_sensed.",
+        "help_link": _MP_DOCS,
         "type": "text",
         "placeholder": "/magician_grabber/wrench_sensed",
     },
     {
         "id": "q_mp_impedance_sensor",
         "title": "Impedance/admittance force source",
-        "tooltip": "Which force source feeds impedance/admittance control.",
+        "tooltip": "Where the force measurement for impedance/admittance control comes from: the planner's own "
+                   "force estimate (default) or one of the ATI sensors.",
+        "help_link": _MP_DOCS,
         "type": "select",
         "options": [
             {"value": "force_estimate", "label": "Force estimate (default)"},
@@ -1028,7 +1156,9 @@ MOTION_PLANNER_CONFIG = [
     {
         "id": "q_mp_debug_prints",
         "title": "Enable debug prints",
-        "tooltip": "Diagnostic logging to stdout (debug_prints). Default: false.",
+        "tooltip": "Prints extra diagnostic messages while the planner runs. Only needed when troubleshooting. "
+                   "Default: off.",
+        "help_link": _MP_DOCS,
         "type": "select",
         "options": [
             {"value": "no",  "label": "No"},
@@ -1039,7 +1169,9 @@ MOTION_PLANNER_CONFIG = [
     {
         "id": "q_mp_debug_lib",
         "title": "Enable library debug logging",
-        "tooltip": "Diagnostic logging from the underlying motion library (debug_lib). Default: false.",
+        "tooltip": "Prints extra diagnostic messages from the underlying motion library. Only needed when "
+                   "troubleshooting. Default: off.",
+        "help_link": _MP_DOCS,
         "type": "select",
         "options": [
             {"value": "no",  "label": "No"},

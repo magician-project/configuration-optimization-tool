@@ -41,6 +41,13 @@ reload service call.
 | Custom profit function | `OPVP` |
 | Default | `OP` |
 
+## External defect input (grinding only)
+
+With the pipeline selection "Grinding only", MAGICIAN Inspection is out of scope and
+nothing inside MAGICIAN provides the defect information this module needs. The
+partner must then supply defects from an agreed external inspection source and data
+contract (an *external input requirement*, declared in the module dialog).
+
 ## Outputs (written to `result.json`)
 
 | Key | Type | Description |

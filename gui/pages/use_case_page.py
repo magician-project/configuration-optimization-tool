@@ -108,6 +108,7 @@ class UseCasePage(QWidget):
         q_vbox.addWidget(self._confidence_bar)
         self._form = QuestionnaireForm()
         self._form.answers_changed.connect(self._on_answers_changed)
+        self._form.help_link_requested.connect(self._open_module_detail)
         q_vbox.addWidget(self._form, stretch=1)
 
         # Save bar (shown only when dirty)
@@ -287,7 +288,7 @@ class UseCasePage(QWidget):
     # Module actions
     # ------------------------------------------------------------------
 
-    def _open_module_detail(self, module_id: str) -> None:
+    def _open_module_detail(self, module_id: str, doc_anchor: Optional[str] = None) -> None:
         if self._use_case is None:
             return
         ms = self._use_case.modules.get(module_id)
@@ -298,6 +299,8 @@ class UseCasePage(QWidget):
             ms, module_config=module_config,
             external_inputs=self._external_inputs_for(module_id), parent=self,
         )
+        if doc_anchor is not None:
+            dlg.show_documentation(doc_anchor)
         dlg.action_requested.connect(self._handle_module_action)
         dlg.module_config_changed.connect(self._on_module_config_changed)
         dlg.external_source_changed.connect(self._on_external_source_changed)

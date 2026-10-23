@@ -27,7 +27,7 @@ from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 
 from app.engine.module_dependencies import ExternalInputRequirement
-from app.engine.module_registry import load_module_readme, resolve_readme_link
+from app.engine.module_registry import heading_anchor, load_module_readme, resolve_readme_link
 from app.models.use_case import ModuleState
 from gui.components.external_inputs import ExternalInputForm
 
@@ -122,6 +122,7 @@ class ModuleDetail(QDialog):
             self._config_form = QuestionnaireForm(questions=config_questions)
             self._config_form.load_answers(self._module_config)
             self._config_form.answers_changed.connect(self._on_config_changed)
+            self._config_form.help_link_requested.connect(self._on_help_link_requested)
             config_layout.addWidget(self._config_form, stretch=1)
 
             # Save button
@@ -144,14 +145,38 @@ class ModuleDetail(QDialog):
         docs.setMarkdown(load_module_readme(self._module.module_id))
         docs.anchorClicked.connect(lambda url, d=docs: self._open_doc_link(d, url))
         tabs.addTab(docs, "Documentation")
+        self._tabs = tabs
+        self._docs = docs
         root.addWidget(tabs, stretch=1)
 
         root.addWidget(self._build_footer())
 
+    def show_documentation(self, anchor: Optional[str] = None) -> None:
+        """Switch to the Documentation tab, scrolled to the README section `anchor` if it exists."""
+        self._tabs.setCurrentWidget(self._docs)
+        if anchor:
+            self._scroll_to_heading(self._docs, anchor)
+
+    @staticmethod
+    def _scroll_to_heading(docs: QTextBrowser, anchor: str) -> None:
+        # Qt's markdown import creates no anchors for headings, so match them by GitHub-style slug.
+        block = docs.document().begin()
+        while block.isValid():
+            if block.blockFormat().headingLevel() and heading_anchor(block.text()) == anchor:
+                cursor = docs.textCursor()
+                cursor.setPosition(block.position())
+                docs.setTextCursor(cursor)
+                docs.ensureCursorVisible()
+                bar = docs.verticalScrollBar()
+                bar.setValue(bar.value() + docs.cursorRect().top())
+                return
+            block = block.next()
+        docs.scrollToAnchor(anchor)
+
     def _open_doc_link(self, docs: QTextBrowser, url: QUrl) -> None:
         href = url.toString()
         if href.startswith("#"):
-            docs.scrollToAnchor(href[1:])
+            self._scroll_to_heading(docs, href[1:])
             return
         if url.scheme().lower() in {"http", "https"}:
             QDesktopServices.openUrl(url)
@@ -159,6 +184,10 @@ class ModuleDetail(QDialog):
         target = resolve_readme_link(self._module.module_id, href)
         if target is not None:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
+
+    def _on_help_link_requested(self, module_id: str, anchor: str) -> None:
+        if module_id == self._module.module_id:
+            self.show_documentation(anchor)
 
     def _on_config_changed(self, config: dict) -> None:
         self._module_config = config
