@@ -36,8 +36,21 @@ SCHEMA = {
             "section": "A",
             "title": "Number of robot arms",
             "tooltip": (
-                "Select whether your setup uses a single robot arm or multiple coordinated arms. "
-                "Multiple arms are needed for tasks requiring parallel operations."
+                "How many robot arms work together on one task. This counts arms per robot role, not the "
+                "total in your setup: inspection and grinding each run on their own robot anyway."
+            ),
+            "help_text": (
+                "**What your choice changes**\n\n"
+                "- **Single:** each task (inspection, grinding) is done by one arm.\n"
+                "- **Multiple:** several arms work on the same task and must be coordinated. The Grabber "
+                "handles parallel sensor streams, the Orienteering Solver plans for a team of arms, "
+                "Ergodic Control splits the path across arms and the Motion Planner needs one planner "
+                "per arm.\n\n"
+                "Inspection and grinding together (Both) always use two robots, the Sensing Robot and the "
+                "Cleaning Robot. That alone is not \"multiple\": choose Single if each robot has one arm.\n\n"
+                "**Example**\n\n"
+                "Both, with one Sensing Robot and one Cleaning Robot: choose Single. Inspection only, with "
+                "two arms scanning the same part at once: choose Multiple."
             ),
             "type": "select",
             "options": [
@@ -49,7 +62,7 @@ SCHEMA = {
                 "question": {
                     "id": "q1_num_arms",
                     "type": "number",
-                    "label": "How many robot arms?",
+                    "label": "How many arms work together?",
                     "min": 2,
                     "max": 10,
                     "default": 2,
