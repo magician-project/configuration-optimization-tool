@@ -35,7 +35,6 @@ _ACTION_COLOURS = {
     "retrain":     ("#7c3aed", "#ede9fe"),   # purple
     "reconfigure": ("#ea580c", "#ffedd5"),   # orange
     "review":      ("#6b7280", "#f3f4f6"),   # gray
-    "verify":      ("#0369a1", "#e0f2fe"),   # blue
 }
 
 _FLAG_STYLES = {

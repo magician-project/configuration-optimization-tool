@@ -9,7 +9,7 @@ class ModuleImpact(BaseModel):
     characteristic: str
     affects: str
     what_changes: str
-    action_type: str   # "retrain" | "reconfigure" | "review" | "verify"
+    action_type: str   # "retrain" | "reconfigure" | "review"
     reason: str        # which question triggered this
 
 

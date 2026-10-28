@@ -36,7 +36,6 @@ _ACTION_TYPE_COLOURS = {
     "retrain":     ("#6d28d9", "#ede9fe"),
     "reconfigure": ("#c2410c", "#ffedd5"),
     "review":      ("#374151", "#f3f4f6"),
-    "verify":      ("#0369a1", "#e0f2fe"),
 }
 
 MODULE_ORDER = ["grabber", "orienteering_solver", "localiser", "tactile_sensor", "vision_classifier", "ergodic_control", "motion_planning"]
