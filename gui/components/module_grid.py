@@ -210,15 +210,14 @@ class ModuleGrid(QWidget):
         frame = QFrame()
         frame.setObjectName("moduleGroup")
         frame.setStyleSheet(
-            "QFrame#moduleGroup { background: rgba(255, 255, 255, 120); "
-            "border: 1px dashed #b8c2cf; border-radius: 10px; }"
+            "QFrame#moduleGroup { background: #e6ebf2; border: 1.5px solid #9aa8bb; border-radius: 12px; }"
         )
         frame_layout = QVBoxLayout(frame)
         frame_layout.setContentsMargins(10, 8, 10, 10)
         frame_layout.setSpacing(6)
         title = QLabel(info["name"].upper())
         title.setStyleSheet(
-            "font-size: 10px; font-weight: 700; color: #6b7280; background: transparent; border: none;"
+            "font-size: 11px; font-weight: 700; color: #334155; background: transparent; border: none;"
         )
         frame_layout.addWidget(title)
 

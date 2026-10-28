@@ -15,6 +15,32 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 
 from app.engine.module_dependencies import ConfigurationValidation, ExternalInputRequirement
+from gui.components.question_help_dialog import QuestionHelpDialog
+
+_VALIDATION_HELP_SUMMARY = (
+    "Checks whether every module that is in scope gets the inputs it needs, from another "
+    "MAGICIAN module or from an external source you name."
+)
+
+_VALIDATION_HELP_DETAILS = """\
+It only looks at the pipeline selection and the external sources you filled in. It does not \
+check your other answers, the quality of the data, or whether the data really arrives.
+
+**Statuses**
+
+- **Valid**: every in-scope module gets its inputs from another in-scope MAGICIAN module.
+- **Valid (external inputs)**: complete, but some inputs come from outside MAGICIAN, for example \
+the defect list when only grinding is used. Name the source and agree the contract in the detail \
+of the module that needs it.
+- **Incomplete**: something is still open: an external source without a name or an agreed \
+contract, or a dependency the module owners still have to confirm.
+- **Invalid**: a module needs an input that no active module provides and that cannot come from \
+outside.
+- **Not assessed**: the pipeline selection is not answered yet, so COT cannot tell which modules \
+are in scope.
+
+The arrows on the module dashboard only show how modules relate. They do not change this status.
+"""
 
 # status -> (label, background, text colour)
 _VALIDATION_STYLE = {
@@ -55,6 +81,7 @@ class ConfigurationValidationPanel(QFrame):
         title = QLabel("Configuration validation")
         title.setStyleSheet("font-weight: 600; font-size: 12px; color: #111827; border: none;")
         header.addWidget(title)
+        header.addWidget(self._build_help_button())
         if validation.status == "not_assessed":
             header.addStretch()
             self._root.addLayout(header)
@@ -85,6 +112,26 @@ class ConfigurationValidationPanel(QFrame):
             self._root.addWidget(self._note(f"Owner confirmation needed for dependency '{dep_id}'."))
         for dep_id in validation.blocking:
             self._root.addWidget(self._note(f"Required input '{dep_id}' has no provider and cannot come from outside."))
+
+    def _build_help_button(self) -> QPushButton:
+        btn = QPushButton("?")
+        btn.setObjectName("validation_help")
+        btn.setToolTip(_VALIDATION_HELP_SUMMARY)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setFixedSize(16, 16)
+        # Same look as the "?" next to the questionnaire questions
+        btn.setStyleSheet(
+            "QPushButton { color: #162759; background: #e0e7ff; border: 1px solid #818cf8; "
+            "border-radius: 8px; font-size: 10px; font-weight: bold; padding: 0; } "
+            "QPushButton:hover { background: #c7d2fe; }"
+        )
+        btn.clicked.connect(self._show_help)
+        return btn
+
+    def _show_help(self) -> None:
+        dlg = QuestionHelpDialog("Configuration validation", _VALIDATION_HELP_SUMMARY, _VALIDATION_HELP_DETAILS, parent=self)
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dlg.open()
 
     @staticmethod
     def _note(text: str) -> QLabel:
