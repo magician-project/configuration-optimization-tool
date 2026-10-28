@@ -114,12 +114,12 @@ class ConfigurationValidationPanel(QFrame):
             self._root.addWidget(self._note(f"Required input '{dep_id}' has no provider and cannot come from outside."))
 
     def _build_help_button(self) -> QPushButton:
-        btn = QPushButton("?")
+        btn = QPushButton("i")
         btn.setObjectName("validation_help")
         btn.setToolTip(_VALIDATION_HELP_SUMMARY)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setFixedSize(16, 16)
-        # Same look as the "?" next to the questionnaire questions
+        # Same round style as the "?" next to the questions; "i" because it explains what is shown
         btn.setStyleSheet(
             "QPushButton { color: #162759; background: #e0e7ff; border: 1px solid #818cf8; "
             "border-radius: 8px; font-size: 10px; font-weight: bold; padding: 0; } "

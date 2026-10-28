@@ -109,6 +109,13 @@ def test_help_explains_every_status_and_what_is_not_checked(qapp):
     assert "arrows" in text.lower()
 
 
+def test_help_button_is_an_info_icon(qapp):
+    panel = ConfigurationValidationPanel()
+    panel.update_validation(validate_configuration("both"))
+
+    assert panel.findChild(QPushButton, "validation_help").text() == "i"
+
+
 def test_help_button_survives_a_refresh(qapp):
     panel = ConfigurationValidationPanel()
 
