@@ -59,25 +59,29 @@ def test_edges_are_derived_from_the_dependency_register(monkeypatch):
     assert _pairs(visible_dependency_edges(["localiser", "vision_classifier"])) == [("localiser", "vision_classifier")]
 
 
-def test_all_noted_relations_between_cot_modules_are_visible_for_a_full_scope():
+def test_documented_relations_between_cot_modules_are_visible_for_a_full_scope():
     pairs = set(_pairs(visible_dependency_edges(_cot_scope("both", ["tactile"]))))
 
-    assert pairs >= {
+    assert pairs == {
         ("grabber", "tactile_sensor"),
         ("grabber", "vision_classifier"),
-        ("localiser", "vision_classifier"),
         ("tactile_sensor", "orienteering_solver"),
         ("vision_classifier", "orienteering_solver"),
         ("orienteering_solver", "motion_planning"),
-        ("orienteering_solver", "ergodic_control"),
     }
+
+
+def test_localiser_and_ergodic_control_have_no_arrows():
+    edges = visible_dependency_edges(_cot_scope("both", ["tactile"]))
+
+    assert all(not {"localiser", "ergodic_control"} & {e.provider, e.consumer} for e in edges)
 
 
 def test_edge_is_verified_only_for_documented_and_verified_dependencies():
     edges = {(e.provider, e.consumer): e for e in visible_dependency_edges(_cot_scope("both", ["tactile"]))}
 
     assert edges[("grabber", "vision_classifier")].verified
-    assert not edges[("localiser", "vision_classifier")].verified
+    assert not edges[("orienteering_solver", "motion_planning")].verified
 
 
 def test_display_only_edges_do_not_change_the_configuration_validation():

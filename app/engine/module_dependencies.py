@@ -59,7 +59,11 @@ class VisibleEdge(NamedTuple):
 
 
 def _conceptual_edge(provider: str, consumer: str) -> Dependency:
-    """Relation from the architecture notes (meeting 2026-10-14) whose interface is not verified."""
+    """Relation from the MAGICIAN documentation whose interface is not verified.
+
+    Tactile/Vision -> Orienteering Solver simplify an indirect flow via the Estimation Algorithm,
+    which is not a COT module and therefore not drawn.
+    """
     return Dependency(
         id=f"{provider}_to_{consumer}",
         provider=provider, consumer=consumer,
@@ -112,11 +116,9 @@ DEPENDENCIES: List[Dependency] = [
         external_input_allowed=False,
         evidence_status="documented", validation_status="verified",
     ),
-    _conceptual_edge("localiser", "vision_classifier"),
     _conceptual_edge("tactile_sensor", "orienteering_solver"),
     _conceptual_edge("vision_classifier", "orienteering_solver"),
     _conceptual_edge("orienteering_solver", "motion_planning"),
-    _conceptual_edge("orienteering_solver", "ergodic_control"),
 ]
 
 
