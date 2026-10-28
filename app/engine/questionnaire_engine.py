@@ -4,19 +4,6 @@ from app.models.use_case import ModuleImpact, Flag, ModuleState, ConfidenceScore
 from app.engine.module_registry import MODULES, compute_default_modules, is_assessed
 from app.engine.module_dependencies import validate_configuration
 
-# Per classifier and Q5 material: "verify" where a MAGICIAN baseline exists; anything not listed (e.g. "other") needs "retrain".
-MATERIAL_ACTIONS: Dict[str, Dict[str, str]] = {
-    "tactile_sensor": {"metal": "verify", "wood": "verify", "plastic": "verify"},
-    "vision_classifier": {"metal": "verify", "wood": "verify", "plastic": "verify"},
-}
-
-
-def _material_action(module_id: str, materials: List[str]) -> str:
-    """"retrain" wins over "verify" as soon as one selected material has no baseline."""
-    table = MATERIAL_ACTIONS[module_id]
-    return "verify" if all(table.get(m) == "verify" for m in materials) else "retrain"
-
-
 def _defect_names(answers: QuestionnaireAnswers) -> List[str]:
     """Selected Q8 defect types with "other" replaced by the free-text answer."""
     other = answers.q8_other_defect or "(other \u2014 unspecified)"
@@ -290,12 +277,6 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             mat_list = [m for m in mat_list if m != "other"] + ["(other — unspecified)"]
         mat_text = ", ".join(mat_list)
 
-        def retrain_text(module_id: str) -> str:
-            other = answers.q5_other_material or "(other — unspecified)"
-            names = [other if m == "other" else m for m in answers.q5_materials
-                     if MATERIAL_ACTIONS[module_id].get(m) != "verify"]
-            return ", ".join(names)
-
         result["orienteering_solver"]["impacts"].append(_impact(
             characteristic="Material",
             affects="DefectProfitCalculator, Defect Information",
@@ -318,91 +299,50 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
                 action_type="reconfigure",
                 reason="Q5: Material(s) selected",
             ))
-        if _material_action("tactile_sensor", answers.q5_materials) == "verify":
-            result["tactile_sensor"]["impacts"].append(_impact(
-                characteristic="Different materials, object sizes, dirt/dent types, and time constraints",
-                affects="Input",
-                what_changes=(
-                    f"Verify that the existing pretrained Tactile Classifier model still performs "
-                    f"for: {mat_text}. MAGICIAN already tests these materials, so a baseline is "
-                    "available and a full retrain is not needed. Check against your dataset, "
-                    "lighting and setup."
-                ),
-                action_type="verify",
-                reason="Q5: Material(s) with MAGICIAN baseline selected",
-            ))
-            result["tactile_sensor"]["flags"].append(_flag(
-                id="flag_verify_material",
-                type="warning",
-                message=(
-                    "Material has a MAGICIAN baseline — verify the existing pretrained tactile "
-                    "model still meets your needs before deployment."
-                ),
-                module_id="tactile_sensor",
-            ))
-        else:
-            result["tactile_sensor"]["impacts"].append(_impact(
-                characteristic="Different materials, object sizes, dirt/dent types, and time constraints",
-                affects="Input",
-                what_changes=(
-                    f"Tactile Classifier ML model must be retrained on labeled data for: {retrain_text('tactile_sensor')}. "
-                    "Retraining pipeline: Pre_calculations → Neural_network (CNN-LSTM) → Ensemble. "
-                    "Collect new material-specific tactile data before retraining."
-                ),
-                action_type="retrain",
-                reason="Q5: New material(s) selected",
-            ))
-            result["tactile_sensor"]["flags"].append(_flag(
-                id="flag_retrain",
-                type="error",
-                message=(
-                    "New material selected — vision and tactile classifiers must be retrained "
-                    "on data covering this material."
-                ),
-                module_id="tactile_sensor",
-            ))
-        if _material_action("vision_classifier", answers.q5_materials) == "verify":
-            result["vision_classifier"]["impacts"].append(_impact(
-                characteristic="(implicit) Verify vision model on known material data",
-                affects="Input",
-                what_changes=(
-                    f"Verify that the existing pretrained Vision Classifier model still performs "
-                    f"for: {mat_text}. MAGICIAN already tests these materials, so a baseline is "
-                    "available and a full retrain is not needed. Check against your dataset, "
-                    "lighting and setup."
-                ),
-                action_type="verify",
-                reason="Q5: Material(s) with MAGICIAN baseline selected",
-            ))
-            result["vision_classifier"]["flags"].append(_flag(
-                id="flag_verify_material_vision",
-                type="warning",
-                message=(
-                    "Material has a MAGICIAN baseline — verify the existing pretrained vision "
-                    "model still meets your needs before deployment."
-                ),
-                module_id="vision_classifier",
-            ))
-        else:
-            result["vision_classifier"]["impacts"].append(_impact(
-                characteristic="(implicit) Retrain vision model on new material data",
-                affects="Input",
-                what_changes=(
-                    f"Vision Classifier model must be retrained on images of: {retrain_text('vision_classifier')}. "
-                    "Update Vision Model Name parameter in the Configuration Module after retraining."
-                ),
-                action_type="retrain",
-                reason="Q5: New material(s) selected — vision retraining required",
-            ))
-            result["vision_classifier"]["flags"].append(_flag(
-                id="flag_retrain_vision",
-                type="error",
-                message=(
-                    "New material selected — vision classifier must be retrained "
-                    "on data covering this material."
-                ),
-                module_id="vision_classifier",
-            ))
+        # Retrain for every material: even a material MAGICIAN already tests can come with different shapes/geometry.
+        result["tactile_sensor"]["impacts"].append(_impact(
+            characteristic="Different materials, object sizes, dirt/dent types, and time constraints",
+            affects="Input",
+            what_changes=(
+                f"Tactile Classifier ML model must be retrained on labeled data for: {mat_text}. "
+                "This also applies to materials MAGICIAN already tests: the shapes and geometry of "
+                "your objects may differ from the baseline. "
+                "Retraining pipeline: Pre_calculations → Neural_network (CNN-LSTM) → Ensemble. "
+                "Collect material-specific tactile data before retraining."
+            ),
+            action_type="retrain",
+            reason="Q5: Material(s) selected",
+        ))
+        result["vision_classifier"]["impacts"].append(_impact(
+            characteristic="(implicit) Retrain vision model on material data",
+            affects="Input",
+            what_changes=(
+                f"Vision Classifier model must be retrained on images of: {mat_text}. "
+                "This also applies to materials MAGICIAN already tests: the shapes and geometry of "
+                "your objects may differ from the baseline. "
+                "Update Vision Model Name parameter in the Configuration Module after retraining."
+            ),
+            action_type="retrain",
+            reason="Q5: Material(s) selected — vision retraining required",
+        ))
+        result["tactile_sensor"]["flags"].append(_flag(
+            id="flag_retrain",
+            type="error",
+            message=(
+                "Material selected — vision and tactile classifiers must be retrained "
+                "on data covering this material and your object shapes."
+            ),
+            module_id="tactile_sensor",
+        ))
+        result["vision_classifier"]["flags"].append(_flag(
+            id="flag_retrain_vision",
+            type="error",
+            message=(
+                "Material selected — vision classifier must be retrained "
+                "on data covering this material and your object shapes."
+            ),
+            module_id="vision_classifier",
+        ))
         total_characteristics += 4
 
     # ------------------------------------------------------------------
