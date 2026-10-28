@@ -136,13 +136,34 @@ def test_grid_draws_arrows_only_between_in_scope_modules(qapp):
     assert grid.dependency_edges() == [VisibleEdge("grabber", "vision_classifier")]
 
 
-def test_grid_draws_no_arrows_while_not_assessed(qapp):
+def test_grid_draws_the_full_architecture_while_not_assessed(qapp):
     grid = ModuleGrid()
 
     grid.update_modules(_all_states("not_assessed"))
 
-    assert grid.dependency_edges() == []
-    assert grid.group_edges() == []
+    assert VisibleEdge("grabber", "vision_classifier") in grid.dependency_edges()
+    assert VisibleEdge("grabber", "tactile_sensor") in grid.dependency_edges()
+    assert {(e.provider_group, e.consumer_group) for e in grid.group_edges()} == {
+        ("defect_detection", "task_planning"), ("task_planning", "motion_planning"),
+    }
+
+
+def test_grid_draws_arrows_before_any_module_state_is_loaded(qapp):
+    grid = ModuleGrid()
+
+    grid.update_modules({})
+
+    assert len(grid.group_edges()) == 2
+    assert grid.dependency_edges()
+
+
+def test_not_assessed_does_not_hide_arrows_but_out_of_scope_still_does(qapp):
+    grid = ModuleGrid()
+
+    grid.update_modules(_all_states("not_assessed", tactile_sensor="out_of_scope"))
+
+    assert VisibleEdge("grabber", "tactile_sensor") not in grid.dependency_edges()
+    assert VisibleEdge("grabber", "vision_classifier") in grid.dependency_edges()
 
 
 def test_grid_draws_group_arrows_between_group_frames(qapp):
