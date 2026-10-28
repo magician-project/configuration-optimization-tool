@@ -247,11 +247,9 @@ class ModuleGrid(QWidget):
         def is_out_of_scope(module_id: str) -> bool:
             return getattr(modules.get(module_id), "status", None) == "out_of_scope"
 
-        # not_assessed modules are not in scope yet, so they get no arrows either
-        drawn = [
-            m for m in self._tiles
-            if not is_out_of_scope(m) and m in modules and modules[m].status != "not_assessed"
-        ]
+        # Only out-of-scope modules lose their arrows (ADR-0004). While the pipeline selection is
+        # unanswered nothing is out of scope yet, so the full architecture is shown.
+        drawn = [m for m in self._tiles if not is_out_of_scope(m)]
         self._edges = visible_dependency_edges(drawn)
         self._group_edges = visible_group_edges(drawn)
         self._arrows.set_edges(self._edges, self._group_edges)
