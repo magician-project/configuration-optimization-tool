@@ -11,12 +11,12 @@ from PySide6.QtWidgets import (
     QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
     QLabel, QFrame, QSizePolicy, QGraphicsDropShadowEffect, QScrollArea,
 )
-from PySide6.QtCore import Qt, Signal, QEvent, QLineF, QPointF, QRectF
+from PySide6.QtCore import Qt, Signal, QEvent, QLineF, QPoint, QPointF, QRect, QRectF
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 
 from app.models.use_case import ModuleState
-from app.engine.module_dependencies import VisibleEdge, visible_dependency_edges
-from app.engine.module_registry import MODULES
+from app.engine.module_dependencies import GroupEdge, VisibleEdge, visible_dependency_edges, visible_group_edges
+from app.engine.module_registry import MODULE_GROUPS, MODULES
 
 # (strip_colour, accent/text, status label)
 # In-scope tiles are white with a status-coloured top strip; out-of-scope tiles are
@@ -41,28 +41,27 @@ _ACTION_TYPE_COLOURS = {
     "review":      ("#374151", "#f3f4f6"),
 }
 
-MODULE_ORDER = ["grabber", "orienteering_solver", "localiser", "tactile_sensor", "vision_classifier", "ergodic_control", "motion_planning"]
-
-
 class _DependencyArrows(QWidget):
-    """Transparent overlay painting provider -> consumer arrows between tile borders."""
+    """Transparent overlay painting provider -> consumer arrows over the tiles and group frames."""
 
     _COLOUR = QColor("#6b7280")
     _UNVERIFIED_COLOUR = QColor("#9ca3af")
-    _HEAD = 8.0
 
-    def __init__(self, tiles: dict, parent: QWidget) -> None:
+    def __init__(self, tiles: dict, group_frames: dict, parent: QWidget) -> None:
         super().__init__(parent)
         self._tiles = tiles
+        self._group_frames = group_frames
         self._edges: list[VisibleEdge] = []
+        self._group_edges: list[GroupEdge] = []
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setStyleSheet("background: transparent;")
         parent.installEventFilter(self)
-        for tile in tiles.values():
-            tile.installEventFilter(self)
+        for widget in (*tiles.values(), *group_frames.values()):
+            widget.installEventFilter(self)
 
-    def set_edges(self, edges: list[VisibleEdge]) -> None:
+    def set_edges(self, edges: list[VisibleEdge], group_edges: list[GroupEdge]) -> None:
         self._edges = edges
+        self._group_edges = group_edges
         self.update()
 
     def eventFilter(self, obj, event) -> bool:
@@ -72,6 +71,10 @@ class _DependencyArrows(QWidget):
             self.raise_()
             self.update()
         return False
+
+    def _rect_of(self, widget: QWidget) -> QRectF:
+        """Widget rectangle in the overlay's coordinates (tiles sit inside group frames)."""
+        return QRectF(QRect(widget.mapTo(self.parentWidget(), QPoint(0, 0)), widget.size()))
 
     @staticmethod
     def _border_point(rect: QRectF, towards: QPointF) -> QPointF:
@@ -90,35 +93,40 @@ class _DependencyArrows(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         for edge in self._edges:
-            src_tile, dst_tile = self._tiles.get(edge.provider), self._tiles.get(edge.consumer)
-            if src_tile is None or dst_tile is None:
-                continue
-            colour = self._COLOUR if edge.verified else self._UNVERIFIED_COLOUR
-            pen = QPen(colour, 1.8)
-            if not edge.verified:
-                pen.setStyle(Qt.PenStyle.DashLine)
-            painter.setPen(pen)
-            painter.setBrush(colour)
-            src, dst = QRectF(src_tile.geometry()), QRectF(dst_tile.geometry())
-            start = self._border_point(src, dst.center())
-            end = self._border_point(dst, src.center())
-            line = QLineF(start, end)
-            if line.length() < 2:
-                continue
-            painter.drawLine(line)
-            # Arrow head is always solid, even on a dashed line
-            pen.setStyle(Qt.PenStyle.SolidLine)
-            painter.setPen(pen)
-            angle = math.atan2(line.dy(), line.dx())
-            head = QPolygonF([
-                end,
-                QPointF(end.x() - self._HEAD * math.cos(angle - math.pi / 7),
-                        end.y() - self._HEAD * math.sin(angle - math.pi / 7)),
-                QPointF(end.x() - self._HEAD * math.cos(angle + math.pi / 7),
-                        end.y() - self._HEAD * math.sin(angle + math.pi / 7)),
-            ])
-            painter.drawPolygon(head)
+            src, dst = self._tiles.get(edge.provider), self._tiles.get(edge.consumer)
+            if src is not None and dst is not None:
+                self._draw_arrow(painter, self._rect_of(src), self._rect_of(dst), edge.verified, 1.8, 8.0)
+        for edge in self._group_edges:
+            src, dst = self._group_frames.get(edge.provider_group), self._group_frames.get(edge.consumer_group)
+            if src is not None and dst is not None:
+                self._draw_arrow(painter, self._rect_of(src), self._rect_of(dst), edge.verified, 2.6, 11.0)
         painter.end()
+
+    def _draw_arrow(
+        self, painter: QPainter, src: QRectF, dst: QRectF, verified: bool, width: float, head_size: float,
+    ) -> None:
+        start = self._border_point(src, dst.center())
+        end = self._border_point(dst, src.center())
+        line = QLineF(start, end)
+        if line.length() < 2:
+            return
+        colour = self._COLOUR if verified else self._UNVERIFIED_COLOUR
+        pen = QPen(colour, width)
+        pen.setStyle(Qt.PenStyle.SolidLine if verified else Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(colour)
+        painter.drawLine(line)
+        # Arrow head is always solid, even on a dashed line
+        pen.setStyle(Qt.PenStyle.SolidLine)
+        painter.setPen(pen)
+        angle = math.atan2(line.dy(), line.dx())
+        painter.drawPolygon(QPolygonF([
+            end,
+            QPointF(end.x() - head_size * math.cos(angle - math.pi / 7),
+                    end.y() - head_size * math.sin(angle - math.pi / 7)),
+            QPointF(end.x() - head_size * math.cos(angle + math.pi / 7),
+                    end.y() - head_size * math.sin(angle + math.pi / 7)),
+        ]))
 
 
 class ModuleGrid(QWidget):
@@ -127,12 +135,29 @@ class ModuleGrid(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._tiles: dict[str, _ModuleTile] = {}
+        self._group_frames: dict[str, QFrame] = {}
+        self._group_grids: dict[str, QGridLayout] = {}
+        self._group_order: dict[str, list[str]] = {}
         self._edges: list[VisibleEdge] = []
+        self._group_edges: list[GroupEdge] = []
         self._build_ui()
 
     def dependency_edges(self) -> list[VisibleEdge]:
-        """Edges currently drawn as arrows (provider -> consumer)."""
+        """Module arrows currently drawn (provider -> consumer, within a group)."""
         return list(self._edges)
+
+    def group_edges(self) -> list[GroupEdge]:
+        """Group arrows currently drawn between group frames."""
+        return list(self._group_edges)
+
+    def tile(self, module_id: str) -> "_ModuleTile":
+        return self._tiles[module_id]
+
+    def group_frame(self, group_id: str) -> QFrame:
+        return self._group_frames[group_id]
+
+    def group_module_order(self, group_id: str) -> list[str]:
+        return list(self._group_order[group_id])
 
     def _build_ui(self) -> None:
         vbox = QVBoxLayout(self)
@@ -158,25 +183,19 @@ class ModuleGrid(QWidget):
         summary_layout.addWidget(hint)
         vbox.addWidget(summary_frame)
 
-        # Tile grid: 3 columns
-        self._grid = QGridLayout()
-        # Wide enough gaps for the dependency arrows to be readable
-        self._grid.setSpacing(28)
-        for mid in MODULE_ORDER:
-            info = MODULES[mid]
-            tile = _ModuleTile(mid, info["name"], info["description"])
-            tile.clicked.connect(lambda _mid=mid: self.module_selected.emit(_mid))
-            self._tiles[mid] = tile
-        self._place_tiles(MODULE_ORDER)
-
-        # Stretch below the last row so tiles align top
-        self._grid.setRowStretch(3, 1)
+        # One frame per architecture group, stacked in flow order. The wide gap between frames
+        # leaves room for the group arrows.
+        groups_layout = QVBoxLayout()
+        groups_layout.setSpacing(40)
+        for group_id, info in MODULE_GROUPS.items():
+            groups_layout.addWidget(self._build_group_frame(group_id, info))
+        groups_layout.addStretch()  # keeps the frames aligned to the top
 
         # Scrollable so tiles keep their minimum height instead of overlapping in a short window
         tiles_container = QWidget()
         tiles_container.setStyleSheet("background: transparent;")
-        tiles_container.setLayout(self._grid)
-        self._arrows = _DependencyArrows(self._tiles, tiles_container)
+        tiles_container.setLayout(groups_layout)
+        self._arrows = _DependencyArrows(self._tiles, self._group_frames, tiles_container)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -184,22 +203,64 @@ class ModuleGrid(QWidget):
         scroll.setWidget(tiles_container)
         vbox.addWidget(scroll, stretch=1)
 
-    def _place_tiles(self, order: list[str]) -> None:
-        for mid in order:
-            self._grid.removeWidget(self._tiles[mid])
-        for i, mid in enumerate(order):
-            self._grid.addWidget(self._tiles[mid], i // 3, i % 3)
+    def _build_group_frame(self, group_id: str, info: dict) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("moduleGroup")
+        frame.setStyleSheet(
+            "QFrame#moduleGroup { background: rgba(255, 255, 255, 90); "
+            "border: 1px dashed #cbd5e1; border-radius: 10px; }"
+        )
+        frame_layout = QVBoxLayout(frame)
+        frame_layout.setContentsMargins(12, 8, 12, 12)
+        frame_layout.setSpacing(8)
+        title = QLabel(info["name"].upper())
+        title.setStyleSheet(
+            "font-size: 10px; font-weight: 700; color: #6b7280; background: transparent; border: none;"
+        )
+        frame_layout.addWidget(title)
+
+        grid = QGridLayout()
+        # Wide horizontal gaps leave room for the module arrows
+        grid.setHorizontalSpacing(40)
+        grid.setVerticalSpacing(14)
+        for col in range(3):
+            grid.setColumnStretch(col, 1)
+        frame_layout.addLayout(grid)
+
+        for module_id in info["modules"]:
+            module = MODULES[module_id]
+            tile = _ModuleTile(module_id, module["name"], module["description"], frame)
+            tile.clicked.connect(lambda _mid=module_id: self.module_selected.emit(_mid))
+            self._tiles[module_id] = tile
+        self._group_frames[group_id] = frame
+        self._group_grids[group_id] = grid
+        self._place_group_tiles(group_id, info["modules"])
+        return frame
+
+    def _place_group_tiles(self, group_id: str, order: list[str]) -> None:
+        grid = self._group_grids[group_id]
+        for module_id in order:
+            grid.removeWidget(self._tiles[module_id])
+        for i, module_id in enumerate(order):
+            grid.addWidget(self._tiles[module_id], i // 3, i % 3)
+        self._group_order[group_id] = list(order)
 
     def update_modules(self, modules: dict) -> None:
-        # In-scope modules first so the out-of-scope ones sit together at the end.
-        in_scope = [m for m in MODULE_ORDER if getattr(modules.get(m), "status", None) != "out_of_scope"]
-        out_of_scope = [m for m in MODULE_ORDER if m not in in_scope]
-        self._place_tiles(in_scope + out_of_scope)
+        def is_out_of_scope(module_id: str) -> bool:
+            return getattr(modules.get(module_id), "status", None) == "out_of_scope"
+
+        # In-scope modules first so the out-of-scope ones sit together at the end of their group.
+        for group_id, info in MODULE_GROUPS.items():
+            self._place_group_tiles(group_id, sorted(info["modules"], key=is_out_of_scope))
 
         # not_assessed modules are not in scope yet, so they get no arrows either
-        drawn = [m for m in in_scope if m in modules and modules[m].status != "not_assessed"]
+        drawn = [
+            m for m in self._tiles
+            if not is_out_of_scope(m) and m in modules and modules[m].status != "not_assessed"
+        ]
         self._edges = visible_dependency_edges(drawn)
-        self._arrows.set_edges(self._edges)
+        self._group_edges = visible_group_edges(drawn)
+        self._arrows.set_edges(self._edges, self._group_edges)
 
         needs = validated = deployed = not_assessed = 0
         for mid, tile in self._tiles.items():

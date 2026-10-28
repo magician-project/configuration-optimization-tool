@@ -14,7 +14,9 @@ from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple
 
 from pydantic import BaseModel
 
-from app.engine.module_registry import MODULES, compute_default_modules, is_assessed, normalize_pipeline
+from app.engine.module_registry import (
+    MODULES, compute_default_modules, group_of, is_assessed, normalize_pipeline,
+)
 from app.models.use_case import ExternalSource
 
 # Architecture nodes that are not (yet) configurable COT modules. Register a node here
@@ -58,11 +60,18 @@ class VisibleEdge(NamedTuple):
     verified: bool
 
 
+class GroupEdge(NamedTuple):
+    provider_group: str
+    consumer_group: str
+    verified: bool
+
+
 def _conceptual_edge(provider: str, consumer: str) -> Dependency:
     """Relation from the MAGICIAN documentation whose interface is not verified.
 
     Tactile/Vision -> Orienteering Solver simplify an indirect flow via the Estimation Algorithm,
-    which is not a COT module and therefore not drawn.
+    which is not a COT module and therefore not drawn. Orienteering Solver -> Motion Planner
+    simplifies the flow via the Supervisor. Across groups they are drawn as one group arrow.
     """
     return Dependency(
         id=f"{provider}_to_{consumer}",
@@ -162,17 +171,35 @@ def scope_for(pipeline: Optional[str], additional_sensors: Optional[List[str]] =
     return compute_default_modules(pipeline, additional_sensors) + _NON_COT_NODES_BY_PIPELINE[pipeline]
 
 
-def visible_dependency_edges(in_scope_modules: Iterable[str]) -> List[VisibleEdge]:
-    """Edges to draw: dependencies between two in-scope COT modules, display-only ones included.
+def _drawable_dependencies(in_scope_modules: Iterable[str]) -> List[Dependency]:
+    """Dependencies between two in-scope COT modules, display-only ones included.
 
-    Non-COT nodes and out-of-scope modules never produce an edge (ADR-0004).
+    Non-COT nodes and out-of-scope modules never qualify (ADR-0004).
     """
     drawn = {m for m in in_scope_modules if m in MODULES}
+    return [dep for dep in DEPENDENCIES if dep.provider in drawn and dep.consumer in drawn]
+
+
+def visible_dependency_edges(in_scope_modules: Iterable[str]) -> List[VisibleEdge]:
+    """Module arrows: drawable dependencies between two modules of the same group."""
     return [
         VisibleEdge(dep.provider, dep.consumer, dep.verified)
-        for dep in DEPENDENCIES
-        if dep.provider in drawn and dep.consumer in drawn
+        for dep in _drawable_dependencies(in_scope_modules)
+        if group_of(dep.provider) == group_of(dep.consumer)
     ]
+
+
+def visible_group_edges(in_scope_modules: Iterable[str]) -> List[GroupEdge]:
+    """Group arrows: drawable dependencies across groups, collapsed to one arrow per group pair.
+
+    A group arrow is verified only when every dependency behind it is.
+    """
+    verified_by_pair: Dict[Tuple[str, str], bool] = {}
+    for dep in _drawable_dependencies(in_scope_modules):
+        pair = (group_of(dep.provider), group_of(dep.consumer))
+        if pair[0] != pair[1]:
+            verified_by_pair[pair] = verified_by_pair.get(pair, True) and dep.verified
+    return [GroupEdge(provider, consumer, verified) for (provider, consumer), verified in verified_by_pair.items()]
 
 
 def validate_configuration(

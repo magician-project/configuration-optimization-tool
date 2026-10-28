@@ -4,7 +4,11 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 import app.engine.module_dependencies as deps
-from app.engine.module_dependencies import Dependency, VisibleEdge, scope_for, validate_configuration, visible_dependency_edges
+from app.engine.module_dependencies import (
+    Dependency, VisibleEdge, scope_for, validate_configuration,
+    visible_dependency_edges, visible_group_edges,
+)
+from app.engine.module_registry import MODULE_GROUPS, MODULES
 from app.models.use_case import ModuleState
 from gui.components.module_grid import ModuleGrid
 
@@ -16,15 +20,28 @@ def qapp():
 
 
 def _cot_scope(pipeline, sensors=None):
-    return [n for n in scope_for(pipeline, sensors) if n in deps.MODULES]
+    return [n for n in scope_for(pipeline, sensors) if n in MODULES]
 
 
 def _pairs(edges):
     return [(e.provider, e.consumer) for e in edges]
 
 
-def test_edge_between_two_in_scope_cot_modules_is_visible():
+def test_every_module_belongs_to_exactly_one_group():
+    grouped = [m for group in MODULE_GROUPS.values() for m in group["modules"]]
+
+    assert sorted(grouped) == sorted(MODULES)
+
+
+def test_edge_within_a_group_is_a_module_arrow():
     assert ("grabber", "vision_classifier") in _pairs(visible_dependency_edges(_cot_scope("inspection")))
+
+
+def test_module_arrows_only_connect_modules_of_the_same_group():
+    edges = visible_dependency_edges(_cot_scope("both", ["tactile"]))
+
+    group_of = {m: g for g, info in MODULE_GROUPS.items() for m in info["modules"]}
+    assert edges and all(group_of[e.provider] == group_of[e.consumer] for e in edges)
 
 
 def test_tactile_edge_follows_the_additional_sensors_answer():
@@ -42,36 +59,48 @@ def test_out_of_scope_module_has_no_incoming_or_outgoing_edges():
 
 
 def test_non_cot_nodes_are_never_drawn():
-    edges = visible_dependency_edges(_cot_scope("both") + ["estimation_algorithm", "dmp_motion_planner"])
+    scope = _cot_scope("both") + ["estimation_algorithm", "dmp_motion_planner"]
 
-    assert all(n in deps.MODULES for e in edges for n in (e.provider, e.consumer))
+    assert all(n in MODULES for e in visible_dependency_edges(scope) for n in (e.provider, e.consumer))
+    assert all(
+        g in MODULE_GROUPS for e in visible_group_edges(scope) for g in (e.provider_group, e.consumer_group)
+    )
 
 
 def test_edges_are_derived_from_the_dependency_register(monkeypatch):
     monkeypatch.setattr(deps, "DEPENDENCIES", [
         Dependency(
-            id="localiser_to_vision", provider="localiser", consumer="vision_classifier",
+            id="grabber_to_localiser", provider="grabber", consumer="localiser",
             provider_output="pose", consumer_input="pose", external_input_allowed=False,
             evidence_status="proposed", validation_status="owner_confirmation_needed",
         ),
     ])
 
-    assert _pairs(visible_dependency_edges(["localiser", "vision_classifier"])) == [("localiser", "vision_classifier")]
+    assert _pairs(visible_dependency_edges(["grabber", "localiser"])) == [("grabber", "localiser")]
 
 
-def test_documented_relations_between_cot_modules_are_visible_for_a_full_scope():
-    pairs = set(_pairs(visible_dependency_edges(_cot_scope("both", ["tactile"]))))
+def test_dependencies_between_groups_collapse_into_group_arrows():
+    edges = visible_group_edges(_cot_scope("both", ["tactile"]))
 
-    assert pairs == {
-        ("grabber", "tactile_sensor"),
-        ("grabber", "vision_classifier"),
-        ("tactile_sensor", "orienteering_solver"),
-        ("vision_classifier", "orienteering_solver"),
-        ("orienteering_solver", "motion_planning"),
-    }
+    assert sorted((e.provider_group, e.consumer_group) for e in edges) == [
+        ("defect_detection", "task_planning"),
+        ("task_planning", "motion_planning"),
+    ]
 
 
-def test_localiser_and_ergodic_control_have_no_arrows():
+def test_group_arrow_appears_once_even_with_several_underlying_dependencies():
+    edges = visible_group_edges(_cot_scope("both", ["tactile"]))
+
+    assert [(e.provider_group, e.consumer_group) for e in edges].count(("defect_detection", "task_planning")) == 1
+
+
+def test_group_arrow_needs_connected_in_scope_modules_on_both_sides():
+    edges = visible_group_edges(["grabber", "vision_classifier", "localiser", "motion_planning", "ergodic_control"])
+
+    assert edges == []
+
+
+def test_localiser_and_ergodic_control_have_no_module_arrows():
     edges = visible_dependency_edges(_cot_scope("both", ["tactile"]))
 
     assert all(not {"localiser", "ergodic_control"} & {e.provider, e.consumer} for e in edges)
@@ -81,7 +110,12 @@ def test_edge_is_verified_only_for_documented_and_verified_dependencies():
     edges = {(e.provider, e.consumer): e for e in visible_dependency_edges(_cot_scope("both", ["tactile"]))}
 
     assert edges[("grabber", "vision_classifier")].verified
-    assert not edges[("orienteering_solver", "motion_planning")].verified
+
+
+def test_group_arrow_is_verified_only_when_every_underlying_dependency_is():
+    [edge] = [e for e in visible_group_edges(_cot_scope("both")) if e.consumer_group == "task_planning"]
+
+    assert not edge.verified
 
 
 def test_display_only_edges_do_not_change_the_configuration_validation():
@@ -96,6 +130,10 @@ def test_display_only_edges_do_not_change_the_configuration_validation():
 
 def _state(mid, status):
     return ModuleState(module_id=mid, module_name=mid, description="d", status=status)
+
+
+def _all_states(status="ok", **overrides):
+    return {m: _state(m, overrides.get(m, status)) for m in MODULES}
 
 
 def test_grid_draws_arrows_only_between_in_scope_modules(qapp):
@@ -113,6 +151,34 @@ def test_grid_draws_arrows_only_between_in_scope_modules(qapp):
 def test_grid_draws_no_arrows_while_not_assessed(qapp):
     grid = ModuleGrid()
 
-    grid.update_modules({m: _state(m, "not_assessed") for m in ("grabber", "vision_classifier")})
+    grid.update_modules(_all_states("not_assessed"))
 
     assert grid.dependency_edges() == []
+    assert grid.group_edges() == []
+
+
+def test_grid_draws_group_arrows_between_group_frames(qapp):
+    grid = ModuleGrid()
+
+    grid.update_modules(_all_states(tactile_sensor="out_of_scope"))
+
+    assert {(e.provider_group, e.consumer_group) for e in grid.group_edges()} == {
+        ("defect_detection", "task_planning"), ("task_planning", "motion_planning"),
+    }
+
+
+def test_grid_places_each_tile_inside_the_frame_of_its_group(qapp):
+    grid = ModuleGrid()
+
+    for group_id, info in MODULE_GROUPS.items():
+        frame = grid.group_frame(group_id)
+        for module_id in info["modules"]:
+            assert grid.tile(module_id).parent() is frame
+
+
+def test_grid_places_out_of_scope_tiles_last_within_their_group(qapp):
+    grid = ModuleGrid()
+
+    grid.update_modules(_all_states(grabber="out_of_scope"))
+
+    assert grid.group_module_order("defect_detection")[-1] == "grabber"
