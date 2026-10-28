@@ -177,12 +177,9 @@ class ModuleGrid(QWidget):
         self._summary_lbl.setStyleSheet("color: #6b7280; font-size: 12px;")
         summary_layout.addWidget(self._summary_lbl)
         summary_layout.addStretch()
-        legend = QLabel("Arrow: provides input to  ·  dashed = conceptual, not yet verified")
+        legend = QLabel("Arrow: provides input to  ·  dashed = not yet verified")
         legend.setStyleSheet("color: #9ca3af; font-size: 11px;")
         summary_layout.addWidget(legend)
-        hint = QLabel("Click a tile to manage")
-        hint.setStyleSheet("color: #9ca3af; font-size: 11px;")
-        summary_layout.addWidget(hint)
         vbox.addWidget(summary_frame)
 
         # One frame per architecture group, side by side in flow order like the MAGICIAN diagram.
@@ -193,10 +190,14 @@ class ModuleGrid(QWidget):
         for group_id, info in MODULE_GROUPS.items():
             groups_layout.addWidget(self._build_group_frame(group_id, info), stretch=info["columns"])
 
-        # Scrollable so tiles keep their minimum size instead of overlapping in a small window
+        # Scrollable so tiles keep their minimum size instead of overlapping in a small window.
+        # The stretch below keeps the frames as tall as their content.
         tiles_container = QWidget()
         tiles_container.setStyleSheet("background: transparent;")
-        tiles_container.setLayout(groups_layout)
+        container_layout = QVBoxLayout(tiles_container)
+        container_layout.setContentsMargins(3, 3, 3, 3)
+        container_layout.addLayout(groups_layout)
+        container_layout.addStretch()
         self._arrows = _DependencyArrows(self._tiles, self._group_frames, tiles_container)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -209,8 +210,8 @@ class ModuleGrid(QWidget):
         frame = QFrame()
         frame.setObjectName("moduleGroup")
         frame.setStyleSheet(
-            "QFrame#moduleGroup { background: rgba(255, 255, 255, 90); "
-            "border: 1px dashed #cbd5e1; border-radius: 10px; }"
+            "QFrame#moduleGroup { background: rgba(255, 255, 255, 120); "
+            "border: 1px dashed #b8c2cf; border-radius: 10px; }"
         )
         frame_layout = QVBoxLayout(frame)
         frame_layout.setContentsMargins(10, 8, 10, 10)
@@ -225,23 +226,20 @@ class ModuleGrid(QWidget):
         # Wide horizontal gaps leave room for the module arrows
         grid.setHorizontalSpacing(36)
         grid.setVerticalSpacing(10)
-        frame_layout.addLayout(grid, stretch=1)
+        frame_layout.addLayout(grid)
 
-        # Fixed cells, filled column by column: tiles keep their place whatever their status.
-        # A single-row group aligns its tile to the top, like the first row of its neighbours.
+        # Fixed cells, filled column by column: tiles keep their place whatever their status
         modules = info["modules"]
         rows = -(-len(modules) // info["columns"])
-        alignment = Qt.AlignmentFlag.AlignTop if rows == 1 else Qt.Alignment()
         for i, module_id in enumerate(modules):
             module = MODULES[module_id]
-            tile = _ModuleTile(module_id, module["name"], module["description"], frame)
+            tile = _ModuleTile(module_id, module["name"], frame)
             tile.clicked.connect(lambda _mid=module_id: self.module_selected.emit(_mid))
             self._tiles[module_id] = tile
-            grid.addWidget(tile, i % rows, i // rows, alignment)
-        for row in range(rows):
-            grid.setRowStretch(row, 1)
+            grid.addWidget(tile, i % rows, i // rows)
         for col in range(info["columns"]):
             grid.setColumnStretch(col, 1)
+        frame_layout.addStretch()  # keeps the tiles at the top of a frame that matches its taller neighbour
         self._group_frames[group_id] = frame
         self._group_grids[group_id] = grid
         return frame
@@ -288,16 +286,14 @@ class ModuleGrid(QWidget):
 class _ModuleTile(QFrame):
     clicked = Signal()
 
-    def __init__(self, module_id: str, name: str, description: str, parent=None) -> None:
+    def __init__(self, module_id: str, name: str, parent=None) -> None:
         super().__init__(parent)
         self._module_id = module_id
         self._name = name
-        self._description = description
         self._strip_colour = "#d1d5db"
         self._out_of_scope = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(120)
-        self.setMaximumHeight(210)
+        self.setMinimumHeight(84)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self._build_ui()
         self._set_background("white")
@@ -355,23 +351,23 @@ class _ModuleTile(QFrame):
         header.addWidget(self._flag_badge, 0, Qt.AlignmentFlag.AlignTop)
         vbox.addLayout(header)
 
+        # Status: coloured dot plus the status word, so it never relies on colour alone
+        status_row = QHBoxLayout()
+        status_row.setSpacing(5)
+        self._status_dot = QLabel("●")
+        self._status_dot.setStyleSheet("font-size: 9px; color: #d1d5db; background: transparent;")
+        status_row.addWidget(self._status_dot)
         self._status_lbl = QLabel("ok")
         self._status_lbl.setStyleSheet("font-size: 11px; color: #6b7280; background: transparent;")
-        vbox.addWidget(self._status_lbl)
+        status_row.addWidget(self._status_lbl)
+        status_row.addStretch()
+        vbox.addLayout(status_row)
 
         # Action type badges row
         self._badges_row = QHBoxLayout()
         self._badges_row.setSpacing(4)
         self._badges_row.setContentsMargins(0, 2, 0, 2)
         vbox.addLayout(self._badges_row)
-
-        # Impacts summary
-        self._impacts_lbl = QLabel()
-        self._impacts_lbl.setStyleSheet(
-            "font-size: 11px; color: #6b7280; background: transparent;"
-        )
-        self._impacts_lbl.setWordWrap(True)
-        vbox.addWidget(self._impacts_lbl)
 
         vbox.addStretch()
 
@@ -389,13 +385,11 @@ class _ModuleTile(QFrame):
             "font-weight: 600; font-size: 13px; background: transparent; "
             f"color: {'#9ca3af' if self._out_of_scope else '#111827'};"
         )
-        self._impacts_lbl.setStyleSheet(
-            f"font-size: 11px; color: {'#b0b7c3' if self._out_of_scope else '#6b7280'}; background: transparent;"
-        )
         self._status_lbl.setText(status_text)
         self._status_lbl.setStyleSheet(
             f"font-size: 11px; font-weight: 600; color: {accent}; background: transparent;"
         )
+        self._status_dot.setStyleSheet(f"font-size: 9px; color: {strip}; background: transparent;")
 
         # Flag badge
         unacked = sum(1 for f in ms.flags if not f.acknowledged)
@@ -431,17 +425,6 @@ class _ModuleTile(QFrame):
                 )
                 self._badges_row.addWidget(badge)
         self._badges_row.addStretch()
-
-        # Impacts summary text: one impact keeps the tile compact, the detail dialog lists the rest
-        if ms.impacts:
-            lines = [f"·  {ms.impacts[0].characteristic}"]
-            if len(ms.impacts) > 1:
-                lines.append(f"   +{len(ms.impacts) - 1} more")
-            self._impacts_lbl.setText("\n".join(lines))
-        else:
-            self._impacts_lbl.setText(
-                self._description[:70] + "…" if len(self._description) > 70 else self._description
-            )
 
     def enterEvent(self, event) -> None:
         self._apply_shadow(blur=22, offset=5, alpha=35)
