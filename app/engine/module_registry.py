@@ -121,15 +121,16 @@ MODULES: Dict[str, dict] = {
 
 PIPELINES = ("inspection", "grinding", "both")
 
-# Architecture groups from the MAGICIAN diagram, in flow order. Modules are listed in display order
-# (Grabber between its two classifiers so both of its arrows are short).
+# Architecture groups from the MAGICIAN diagram, in flow order. Modules fill `columns` columns
+# top to bottom, so a provider listed first sits left of the modules that consume it.
 MODULE_GROUPS: Dict[str, dict] = {
     "defect_detection": {
         "name": "Defect Detection",
-        "modules": ["tactile_sensor", "grabber", "vision_classifier", "localiser"],
+        "modules": ["grabber", "localiser", "tactile_sensor", "vision_classifier"],
+        "columns": 2,
     },
-    "task_planning": {"name": "Task Planning", "modules": ["orienteering_solver"]},
-    "motion_planning": {"name": "Motion Planning", "modules": ["motion_planning", "ergodic_control"]},
+    "task_planning": {"name": "Task Planning", "modules": ["orienteering_solver"], "columns": 1},
+    "motion_planning": {"name": "Motion Planning", "modules": ["motion_planning", "ergodic_control"], "columns": 1},
 }
 
 

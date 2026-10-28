@@ -176,9 +176,33 @@ def test_grid_places_each_tile_inside_the_frame_of_its_group(qapp):
             assert grid.tile(module_id).parent() is frame
 
 
-def test_grid_places_out_of_scope_tiles_last_within_their_group(qapp):
+def test_grid_lays_groups_out_left_to_right_in_flow_order(qapp):
+    grid = ModuleGrid()
+    grid.resize(1000, 600)
+    grid.update_modules(_all_states())
+    grid.show()
+    qapp.processEvents()
+
+    frames = [grid.group_frame(g) for g in MODULE_GROUPS]
+    lefts = [f.mapTo(grid, f.rect().topLeft()).x() for f in frames]
+    tops = {f.mapTo(grid, f.rect().topLeft()).y() for f in frames}
+    assert lefts == sorted(lefts) and len(set(lefts)) == len(lefts)
+    assert len(tops) == 1
+
+
+def test_provider_tile_sits_left_of_its_consumers_within_a_group(qapp):
     grid = ModuleGrid()
 
-    grid.update_modules(_all_states(grabber="out_of_scope"))
+    grabber_col = grid.tile_cell("grabber")[1]
+    assert grid.tile_cell("tactile_sensor")[1] > grabber_col
+    assert grid.tile_cell("vision_classifier")[1] > grabber_col
 
-    assert grid.group_module_order("defect_detection")[-1] == "grabber"
+
+def test_out_of_scope_tile_keeps_its_place(qapp):
+    grid = ModuleGrid()
+    before = {m: grid.tile_cell(m) for m in MODULES}
+
+    grid.update_modules(_all_states(grabber="out_of_scope", tactile_sensor="out_of_scope"))
+
+    assert {m: grid.tile_cell(m) for m in MODULES} == before
+

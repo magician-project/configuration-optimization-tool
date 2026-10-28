@@ -16,7 +16,7 @@ from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 
 from app.models.use_case import ModuleState
 from app.engine.module_dependencies import GroupEdge, VisibleEdge, visible_dependency_edges, visible_group_edges
-from app.engine.module_registry import MODULE_GROUPS, MODULES
+from app.engine.module_registry import MODULE_GROUPS, MODULES, group_of
 
 # (strip_colour, accent/text, status label)
 # In-scope tiles are white with a status-coloured top strip; out-of-scope tiles are
@@ -137,7 +137,6 @@ class ModuleGrid(QWidget):
         self._tiles: dict[str, _ModuleTile] = {}
         self._group_frames: dict[str, QFrame] = {}
         self._group_grids: dict[str, QGridLayout] = {}
-        self._group_order: dict[str, list[str]] = {}
         self._edges: list[VisibleEdge] = []
         self._group_edges: list[GroupEdge] = []
         self._build_ui()
@@ -156,8 +155,11 @@ class ModuleGrid(QWidget):
     def group_frame(self, group_id: str) -> QFrame:
         return self._group_frames[group_id]
 
-    def group_module_order(self, group_id: str) -> list[str]:
-        return list(self._group_order[group_id])
+    def tile_cell(self, module_id: str) -> tuple[int, int]:
+        """(row, column) of a tile inside its group frame."""
+        grid = self._group_grids[group_of(module_id)]
+        row, column, _, _ = grid.getItemPosition(grid.indexOf(self._tiles[module_id]))
+        return row, column
 
     def _build_ui(self) -> None:
         vbox = QVBoxLayout(self)
@@ -183,15 +185,15 @@ class ModuleGrid(QWidget):
         summary_layout.addWidget(hint)
         vbox.addWidget(summary_frame)
 
-        # One frame per architecture group, stacked in flow order. The wide gap between frames
-        # leaves room for the group arrows.
-        groups_layout = QVBoxLayout()
-        groups_layout.setSpacing(40)
+        # One frame per architecture group, side by side in flow order like the MAGICIAN diagram.
+        # The wide gap between frames leaves room for the group arrows; a frame is as wide as
+        # the columns it holds.
+        groups_layout = QHBoxLayout()
+        groups_layout.setSpacing(44)
         for group_id, info in MODULE_GROUPS.items():
-            groups_layout.addWidget(self._build_group_frame(group_id, info))
-        groups_layout.addStretch()  # keeps the frames aligned to the top
+            groups_layout.addWidget(self._build_group_frame(group_id, info), stretch=info["columns"])
 
-        # Scrollable so tiles keep their minimum height instead of overlapping in a short window
+        # Scrollable so tiles keep their minimum size instead of overlapping in a small window
         tiles_container = QWidget()
         tiles_container.setStyleSheet("background: transparent;")
         tiles_container.setLayout(groups_layout)
@@ -211,8 +213,8 @@ class ModuleGrid(QWidget):
             "border: 1px dashed #cbd5e1; border-radius: 10px; }"
         )
         frame_layout = QVBoxLayout(frame)
-        frame_layout.setContentsMargins(12, 8, 12, 12)
-        frame_layout.setSpacing(8)
+        frame_layout.setContentsMargins(10, 8, 10, 10)
+        frame_layout.setSpacing(6)
         title = QLabel(info["name"].upper())
         title.setStyleSheet(
             "font-size: 10px; font-weight: 700; color: #6b7280; background: transparent; border: none;"
@@ -221,37 +223,32 @@ class ModuleGrid(QWidget):
 
         grid = QGridLayout()
         # Wide horizontal gaps leave room for the module arrows
-        grid.setHorizontalSpacing(40)
-        grid.setVerticalSpacing(14)
-        for col in range(3):
-            grid.setColumnStretch(col, 1)
-        frame_layout.addLayout(grid)
+        grid.setHorizontalSpacing(36)
+        grid.setVerticalSpacing(10)
+        frame_layout.addLayout(grid, stretch=1)
 
-        for module_id in info["modules"]:
+        # Fixed cells, filled column by column: tiles keep their place whatever their status.
+        # A single-row group aligns its tile to the top, like the first row of its neighbours.
+        modules = info["modules"]
+        rows = -(-len(modules) // info["columns"])
+        alignment = Qt.AlignmentFlag.AlignTop if rows == 1 else Qt.Alignment()
+        for i, module_id in enumerate(modules):
             module = MODULES[module_id]
             tile = _ModuleTile(module_id, module["name"], module["description"], frame)
             tile.clicked.connect(lambda _mid=module_id: self.module_selected.emit(_mid))
             self._tiles[module_id] = tile
+            grid.addWidget(tile, i % rows, i // rows, alignment)
+        for row in range(rows):
+            grid.setRowStretch(row, 1)
+        for col in range(info["columns"]):
+            grid.setColumnStretch(col, 1)
         self._group_frames[group_id] = frame
         self._group_grids[group_id] = grid
-        self._place_group_tiles(group_id, info["modules"])
         return frame
-
-    def _place_group_tiles(self, group_id: str, order: list[str]) -> None:
-        grid = self._group_grids[group_id]
-        for module_id in order:
-            grid.removeWidget(self._tiles[module_id])
-        for i, module_id in enumerate(order):
-            grid.addWidget(self._tiles[module_id], i // 3, i % 3)
-        self._group_order[group_id] = list(order)
 
     def update_modules(self, modules: dict) -> None:
         def is_out_of_scope(module_id: str) -> bool:
             return getattr(modules.get(module_id), "status", None) == "out_of_scope"
-
-        # In-scope modules first so the out-of-scope ones sit together at the end of their group.
-        for group_id, info in MODULE_GROUPS.items():
-            self._place_group_tiles(group_id, sorted(info["modules"], key=is_out_of_scope))
 
         # not_assessed modules are not in scope yet, so they get no arrows either
         drawn = [
@@ -299,7 +296,7 @@ class _ModuleTile(QFrame):
         self._strip_colour = "#d1d5db"
         self._out_of_scope = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(145)
+        self.setMinimumHeight(120)
         self.setMaximumHeight(210)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self._build_ui()
@@ -336,8 +333,8 @@ class _ModuleTile(QFrame):
         content = QWidget()
         content.setStyleSheet("background: transparent;")
         vbox = QVBoxLayout(content)
-        vbox.setContentsMargins(14, 10, 14, 10)
-        vbox.setSpacing(5)
+        vbox.setContentsMargins(12, 8, 12, 8)
+        vbox.setSpacing(4)
         outer.addWidget(content, stretch=1)
 
         # Top: name + flag badge
@@ -345,6 +342,7 @@ class _ModuleTile(QFrame):
         header.setSpacing(8)
 
         self._name_lbl = QLabel(self._name)
+        self._name_lbl.setWordWrap(True)
         self._name_lbl.setStyleSheet("font-weight: 600; font-size: 13px; background: transparent; color: #111827;")
         header.addWidget(self._name_lbl, stretch=1)
 
@@ -354,7 +352,7 @@ class _ModuleTile(QFrame):
             "padding: 0px 6px; font-size: 10px; font-weight: bold; border: none;"
         )
         self._flag_badge.hide()
-        header.addWidget(self._flag_badge)
+        header.addWidget(self._flag_badge, 0, Qt.AlignmentFlag.AlignTop)
         vbox.addLayout(header)
 
         self._status_lbl = QLabel("ok")
@@ -377,12 +375,6 @@ class _ModuleTile(QFrame):
 
         vbox.addStretch()
 
-        # Footer hint
-        self._hint_lbl = QLabel("Click to manage")
-        self._hint_lbl.setStyleSheet("font-size: 10px; color: #d1d5db; background: transparent;")
-        self._hint_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
-        vbox.addWidget(self._hint_lbl)
-
     def update_state(self, ms: ModuleState) -> None:
         self._out_of_scope = ms.status == "out_of_scope"
         strip, accent, status_text = _STATUS_STYLE.get(
@@ -400,7 +392,6 @@ class _ModuleTile(QFrame):
         self._impacts_lbl.setStyleSheet(
             f"font-size: 11px; color: {'#b0b7c3' if self._out_of_scope else '#6b7280'}; background: transparent;"
         )
-        self._hint_lbl.setVisible(not self._out_of_scope)
         self._status_lbl.setText(status_text)
         self._status_lbl.setStyleSheet(
             f"font-size: 11px; font-weight: 600; color: {accent}; background: transparent;"
@@ -413,8 +404,8 @@ class _ModuleTile(QFrame):
             badge_bg = "#ef4444" if has_error else "#f59e0b"
             self._flag_badge.setText(f"{unacked} flag{'s' if unacked > 1 else ''}")
             self._flag_badge.setStyleSheet(
-                f"background: {badge_bg}; color: white; border-radius: 9px; "
-                "padding: 1px 7px; font-size: 10px; font-weight: bold;"
+                f"background: {badge_bg}; color: white; border-radius: 7px; "
+                "padding: 2px 7px; font-size: 10px; font-weight: bold;"
             )
             self._flag_badge.show()
         else:
@@ -441,11 +432,11 @@ class _ModuleTile(QFrame):
                 self._badges_row.addWidget(badge)
         self._badges_row.addStretch()
 
-        # Impacts summary text
+        # Impacts summary text: one impact keeps the tile compact, the detail dialog lists the rest
         if ms.impacts:
-            lines = [f"·  {i.characteristic}" for i in ms.impacts[:2]]
-            if len(ms.impacts) > 2:
-                lines.append(f"   +{len(ms.impacts) - 2} more")
+            lines = [f"·  {ms.impacts[0].characteristic}"]
+            if len(ms.impacts) > 1:
+                lines.append(f"   +{len(ms.impacts) - 1} more")
             self._impacts_lbl.setText("\n".join(lines))
         else:
             self._impacts_lbl.setText(
