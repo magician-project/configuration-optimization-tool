@@ -875,7 +875,7 @@ GRABBER_CONFIG = [
                    "stop it manually. Default: 0 (no limit).",
         "help_link": _GRABBER_DOCS,
         "type": "number",
-        "min": 1,
+        "min": 0,
         "max": 86400,
         "default": 0,
     },

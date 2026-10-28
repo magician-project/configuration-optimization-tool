@@ -67,6 +67,14 @@ def test_question_with_only_a_tooltip_also_gets_the_clickable_help_showing_the_t
     dlg.close()
 
 
+def test_unlimited_capture_duration_default_of_zero_is_kept_by_the_form(qapp):
+    from app.engine.schema import GRABBER_CONFIG
+
+    form = QuestionnaireForm(questions=GRABBER_CONFIG)
+
+    assert form._widgets["q_grab_run_duration"].value() == 0
+
+
 def test_question_without_tooltip_or_help_text_has_no_help_button(qapp):
     question = _question()
     del question["tooltip"]

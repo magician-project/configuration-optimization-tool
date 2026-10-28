@@ -104,6 +104,22 @@ def test_implicitly_concatenated_schema_strings_keep_their_word_spacing():
     assert glued == []
 
 
+def _with_follow_ups(questions):
+    for q in questions:
+        yield q
+        if q.get("follow_up"):
+            yield q["follow_up"]["question"]
+
+
+def test_numeric_defaults_lie_within_their_min_and_max():
+    # A default outside the range is silently clamped by the spin box (e.g. 0 -> 1).
+    for q in _with_follow_ups(_all_questions()):
+        if q.get("type") not in ("number", "number_float", "number_with_unit"):
+            continue
+        default, low, high = q.get("default", 0), q.get("min", 0), q.get("max", 9999)
+        assert low <= default <= high, f"{q['id']}: default {default} outside [{low}, {high}]"
+
+
 def test_pipeline_and_profit_questions_have_full_help():
     by_id = {q["id"]: q for q in SCHEMA["questions"]}
 
