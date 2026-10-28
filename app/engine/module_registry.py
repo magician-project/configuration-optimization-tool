@@ -1,5 +1,6 @@
+import re
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 from urllib.parse import unquote, urlsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -160,6 +161,24 @@ def load_module_readme(module_id: str, root: Path = REPO_ROOT) -> str:
         return path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return README_EMPTY_STATE
+
+
+def heading_anchor(heading: str) -> str:
+    """GitHub-style anchor for a markdown heading ("OP variant selection logic" -> "op-variant-selection-logic")."""
+    text = re.sub(r"[^\w\s-]", "", heading.strip().lower())
+    return re.sub(r"\s", "-", text)
+
+
+def readme_anchors(module_id: str, root: Path = REPO_ROOT) -> Set[str]:
+    """Heading anchors available in a module's README (headings inside code fences are ignored)."""
+    anchors: Set[str] = set()
+    in_fence = False
+    for line in load_module_readme(module_id, root).splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+        elif not in_fence and (match := re.match(r"#{1,6}\s+(.+?)\s*#*\s*$", line)):
+            anchors.add(heading_anchor(match.group(1)))
+    return anchors
 
 
 def resolve_readme_link(module_id: str, href: str, root: Path = REPO_ROOT) -> Optional[Path]:

@@ -66,6 +66,8 @@ def run(answers: dict) -> dict:
 
     # Defect types (comma-separated)
     defects = answers.get("q8_defects") or []
+    if answers.get("q8_other_defect"):
+        defects = [answers["q8_other_defect"] if d == "other" else d for d in defects]
     outputs["defect_types"] = ",".join(defects) if defects else "unspecified"
 
     return outputs

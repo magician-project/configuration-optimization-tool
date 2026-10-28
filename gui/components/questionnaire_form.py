@@ -9,11 +9,12 @@ from __future__ import annotations
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QCheckBox, QLineEdit, QSpinBox, QDoubleSpinBox,
-    QScrollArea, QFrame,
+    QScrollArea, QFrame, QPushButton,
 )
 from PySide6.QtCore import Qt, Signal
 
 from app.engine.schema import SCHEMA
+from gui.components.question_help_dialog import QuestionHelpDialog
 
 
 class _NoScrollComboBox(QComboBox):
@@ -45,6 +46,8 @@ _SECTION_ACCENT = {
 
 class QuestionnaireForm(QScrollArea):
     answers_changed = Signal(dict)
+    # (module_id, readme_anchor) — a question's help panel asked to open module documentation
+    help_link_requested = Signal(str, str)
 
     def __init__(self, parent=None, questions: list | None = None) -> None:
         super().__init__(parent)
@@ -186,16 +189,19 @@ class QuestionnaireForm(QScrollArea):
         title_lbl = QLabel(q["title"])
         title_lbl.setStyleSheet("font-weight: 600; color: #1f2937; font-size: 12px;")
         title_row.addWidget(title_lbl)
-        if q.get("tooltip"):
-            tip_lbl = QLabel("?")
-            tip_lbl.setToolTip(q["tooltip"])
-            tip_lbl.setFixedSize(16, 16)
-            tip_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            tip_lbl.setStyleSheet(
-                "color: #6b7280; background: #f3f4f6; border: 1px solid #d1d5db; "
-                "border-radius: 8px; font-size: 10px; font-weight: bold;"
+        if q.get("help_text") or q.get("tooltip"):
+            help_btn = QPushButton("?")
+            help_btn.setObjectName(f"help_{q['id']}")
+            help_btn.setToolTip(q.get("tooltip") or "Click for more information")
+            help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            help_btn.setFixedSize(16, 16)
+            help_btn.setStyleSheet(
+                "QPushButton { color: #162759; background: #e0e7ff; border: 1px solid #818cf8; "
+                "border-radius: 8px; font-size: 10px; font-weight: bold; padding: 0; } "
+                "QPushButton:hover { background: #c7d2fe; }"
             )
-            title_row.addWidget(tip_lbl)
+            help_btn.clicked.connect(lambda _=False, q=q: self._show_help(q))
+            title_row.addWidget(help_btn)
         title_row.addStretch()
         vbox.addLayout(title_row)
 
@@ -207,6 +213,15 @@ class QuestionnaireForm(QScrollArea):
             vbox.addWidget(follow_up_widget)
 
         return wrapper
+
+    def _show_help(self, q: dict) -> None:
+        # Every panel opens with the short tooltip summary; help_text adds the detail sections.
+        dlg = QuestionHelpDialog(
+            q["title"], q.get("tooltip") or q["title"], q.get("help_text"), q.get("help_link"), parent=self,
+        )
+        dlg.documentation_requested.connect(self.help_link_requested)
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dlg.open()
 
     def _build_input(self, q: dict) -> tuple[QWidget, QWidget | None]:
         qtype = q["type"]

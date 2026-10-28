@@ -26,6 +26,7 @@ to the ROS 2 node, per the partner-provided configuration spec.
 | `q5_materials` | List of material types the sensor will encounter |
 | `q6_object_size` | Object size category (affects training data selection) |
 | `q8_defects` | List of defect types to detect |
+| `q8_other_defect` | Free text naming the defect type when `"other"` is selected |
 
 ## Partner parameter inventory
 

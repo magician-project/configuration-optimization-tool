@@ -17,6 +17,12 @@ def _material_action(module_id: str, materials: List[str]) -> str:
     return "verify" if all(table.get(m) == "verify" for m in materials) else "retrain"
 
 
+def _defect_names(answers: QuestionnaireAnswers) -> List[str]:
+    """Selected Q8 defect types with "other" replaced by the free-text answer."""
+    other = answers.q8_other_defect or "(other \u2014 unspecified)"
+    return [other if d == "other" else d for d in answers.q8_defects]
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -503,7 +509,7 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             "surface_damage": "Surface damage",
         }
         defects_text = ", ".join(
-            defect_labels.get(d, d) for d in answers.q8_defects
+            defect_labels.get(d, d) for d in _defect_names(answers)
         )
         result["orienteering_solver"]["impacts"].append(_impact(
             characteristic="Type defect",
@@ -820,7 +826,7 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
     # q5/q8: Material and defect context informs the prior distribution
     if answers.q5_materials or answers.q8_defects:
         mat_str = ", ".join(answers.q5_materials) if answers.q5_materials else "unspecified"
-        def_str = ", ".join(answers.q8_defects) if answers.q8_defects else "unspecified"
+        def_str = ", ".join(_defect_names(answers)) if answers.q8_defects else "unspecified"
         result["ergodic_control"]["impacts"].append(_impact(
             characteristic="Material / defect context updated",
             affects="Input",

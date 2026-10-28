@@ -47,6 +47,7 @@ The module also uses:
 - `q2_camera_framerate` — Camera FPS (affects Kalman filter update rate)
 - `q5_materials` — Target material types (for context)
 - `q8_defects` — Expected defect types (for context)
+- `q8_other_defect` — Free text naming the defect type when `"other"` is selected
 
 ## Outputs (written to `result.json`)
 

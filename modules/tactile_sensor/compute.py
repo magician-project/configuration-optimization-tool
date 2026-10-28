@@ -25,6 +25,8 @@ def run(answers: dict, output_dir: str) -> dict:
 
     materials = answers.get("q5_materials") or []
     defects = answers.get("q8_defects") or []
+    if answers.get("q8_other_defect"):
+        defects = [answers["q8_other_defect"] if d == "other" else d for d in defects]
     object_size = answers.get("q6_object_size") or "unknown"
 
     outputs["materials"] = ",".join(materials) if materials else "unspecified"
