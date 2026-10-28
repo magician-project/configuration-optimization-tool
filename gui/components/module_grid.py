@@ -44,8 +44,8 @@ _ACTION_TYPE_COLOURS = {
 class _DependencyArrows(QWidget):
     """Transparent overlay painting provider -> consumer arrows over the tiles and group frames."""
 
-    _COLOUR = QColor("#6b7280")
-    _UNVERIFIED_COLOUR = QColor("#9ca3af")
+    _COLOUR = QColor("#64748b")
+    _GAP = 4.0  # distance between an arrow tip or tail and the tile or frame it connects
 
     def __init__(self, tiles: dict, group_frames: dict, parent: QWidget) -> None:
         super().__init__(parent)
@@ -95,37 +95,36 @@ class _DependencyArrows(QWidget):
         for edge in self._edges:
             src, dst = self._tiles.get(edge.provider), self._tiles.get(edge.consumer)
             if src is not None and dst is not None:
-                self._draw_arrow(painter, self._rect_of(src), self._rect_of(dst), edge.verified, 1.8, 8.0)
+                self._draw_arrow(painter, self._rect_of(src), self._rect_of(dst), width=2.0, head_size=9.0)
         for edge in self._group_edges:
             src, dst = self._group_frames.get(edge.provider_group), self._group_frames.get(edge.consumer_group)
             if src is not None and dst is not None:
-                self._draw_arrow(painter, self._rect_of(src), self._rect_of(dst), edge.verified, 2.6, 11.0)
+                self._draw_arrow(painter, self._rect_of(src), self._rect_of(dst), width=2.6, head_size=12.0)
         painter.end()
 
-    def _draw_arrow(
-        self, painter: QPainter, src: QRectF, dst: QRectF, verified: bool, width: float, head_size: float,
-    ) -> None:
-        start = self._border_point(src, dst.center())
-        end = self._border_point(dst, src.center())
-        line = QLineF(start, end)
-        if line.length() < 2:
+    def _draw_arrow(self, painter: QPainter, src: QRectF, dst: QRectF, width: float, head_size: float) -> None:
+        # Stop a few pixels short of both borders so the arrow does not touch the tiles
+        line = QLineF(self._border_point(src, dst.center()), self._border_point(dst, src.center()))
+        if line.length() < 2 * self._GAP + head_size:
             return
-        colour = self._COLOUR if verified else self._UNVERIFIED_COLOUR
-        pen = QPen(colour, width)
-        pen.setStyle(Qt.PenStyle.SolidLine if verified else Qt.PenStyle.DashLine)
+        start = line.pointAt(self._GAP / line.length())
+        tip = line.pointAt(1 - self._GAP / line.length())
+        angle = math.atan2(tip.y() - start.y(), tip.x() - start.x())
+        # The line ends at the base of the head so it never pokes through the point
+        base = QPointF(tip.x() - head_size * 0.8 * math.cos(angle), tip.y() - head_size * 0.8 * math.sin(angle))
+
+        pen = QPen(self._COLOUR, width)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(pen)
-        painter.setBrush(colour)
-        painter.drawLine(line)
-        # Arrow head is always solid, even on a dashed line
-        pen.setStyle(Qt.PenStyle.SolidLine)
-        painter.setPen(pen)
-        angle = math.atan2(line.dy(), line.dx())
+        painter.drawLine(QLineF(start, base))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(self._COLOUR)
         painter.drawPolygon(QPolygonF([
-            end,
-            QPointF(end.x() - head_size * math.cos(angle - math.pi / 7),
-                    end.y() - head_size * math.sin(angle - math.pi / 7)),
-            QPointF(end.x() - head_size * math.cos(angle + math.pi / 7),
-                    end.y() - head_size * math.sin(angle + math.pi / 7)),
+            tip,
+            QPointF(tip.x() - head_size * math.cos(angle - math.pi / 6),
+                    tip.y() - head_size * math.sin(angle - math.pi / 6)),
+            QPointF(tip.x() - head_size * math.cos(angle + math.pi / 6),
+                    tip.y() - head_size * math.sin(angle + math.pi / 6)),
         ]))
 
 
@@ -166,20 +165,20 @@ class ModuleGrid(QWidget):
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(10)
 
-        # Summary strip
+        # Summary bar. Styled by object name so the card look does not cascade onto the label.
         summary_frame = QFrame()
+        summary_frame.setObjectName("summaryBar")
         summary_frame.setStyleSheet(
-            "background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 4px 14px;"
+            "QFrame#summaryBar { background: white; border: 1px solid #e2e8f0; border-radius: 8px; }"
         )
         summary_layout = QHBoxLayout(summary_frame)
-        summary_layout.setContentsMargins(0, 4, 0, 4)
+        summary_layout.setContentsMargins(14, 8, 14, 8)
         self._summary_lbl = QLabel("Loading…")
-        self._summary_lbl.setStyleSheet("color: #6b7280; font-size: 12px;")
+        self._summary_lbl.setStyleSheet(
+            "color: #334155; font-size: 12px; font-weight: 600; background: transparent; border: none;"
+        )
         summary_layout.addWidget(self._summary_lbl)
         summary_layout.addStretch()
-        legend = QLabel("Arrow: provides input to  ·  dashed = not yet verified")
-        legend.setStyleSheet("color: #9ca3af; font-size: 11px;")
-        summary_layout.addWidget(legend)
         vbox.addWidget(summary_frame)
 
         # One frame per architecture group, side by side in flow order like the MAGICIAN diagram.

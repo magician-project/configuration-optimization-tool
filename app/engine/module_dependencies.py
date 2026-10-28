@@ -57,13 +57,11 @@ class Dependency:
 class VisibleEdge(NamedTuple):
     provider: str
     consumer: str
-    verified: bool
 
 
 class GroupEdge(NamedTuple):
     provider_group: str
     consumer_group: str
-    verified: bool
 
 
 def _conceptual_edge(provider: str, consumer: str) -> Dependency:
@@ -183,23 +181,18 @@ def _drawable_dependencies(in_scope_modules: Iterable[str]) -> List[Dependency]:
 def visible_dependency_edges(in_scope_modules: Iterable[str]) -> List[VisibleEdge]:
     """Module arrows: drawable dependencies between two modules of the same group."""
     return [
-        VisibleEdge(dep.provider, dep.consumer, dep.verified)
+        VisibleEdge(dep.provider, dep.consumer)
         for dep in _drawable_dependencies(in_scope_modules)
         if group_of(dep.provider) == group_of(dep.consumer)
     ]
 
 
 def visible_group_edges(in_scope_modules: Iterable[str]) -> List[GroupEdge]:
-    """Group arrows: drawable dependencies across groups, collapsed to one arrow per group pair.
-
-    A group arrow is verified only when every dependency behind it is.
-    """
-    verified_by_pair: Dict[Tuple[str, str], bool] = {}
-    for dep in _drawable_dependencies(in_scope_modules):
-        pair = (group_of(dep.provider), group_of(dep.consumer))
-        if pair[0] != pair[1]:
-            verified_by_pair[pair] = verified_by_pair.get(pair, True) and dep.verified
-    return [GroupEdge(provider, consumer, verified) for (provider, consumer), verified in verified_by_pair.items()]
+    """Group arrows: drawable dependencies across groups, collapsed to one arrow per group pair."""
+    pairs = (
+        (group_of(dep.provider), group_of(dep.consumer)) for dep in _drawable_dependencies(in_scope_modules)
+    )
+    return [GroupEdge(provider, consumer) for provider, consumer in dict.fromkeys(pairs) if provider != consumer]
 
 
 def validate_configuration(

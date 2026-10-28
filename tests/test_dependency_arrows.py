@@ -106,18 +106,6 @@ def test_localiser_and_ergodic_control_have_no_module_arrows():
     assert all(not {"localiser", "ergodic_control"} & {e.provider, e.consumer} for e in edges)
 
 
-def test_edge_is_verified_only_for_documented_and_verified_dependencies():
-    edges = {(e.provider, e.consumer): e for e in visible_dependency_edges(_cot_scope("both", ["tactile"]))}
-
-    assert edges[("grabber", "vision_classifier")].verified
-
-
-def test_group_arrow_is_verified_only_when_every_underlying_dependency_is():
-    [edge] = [e for e in visible_group_edges(_cot_scope("both")) if e.consumer_group == "task_planning"]
-
-    assert not edge.verified
-
-
 def test_display_only_edges_do_not_change_the_configuration_validation():
     result = validate_configuration("both", ["tactile"])
 
@@ -145,7 +133,7 @@ def test_grid_draws_arrows_only_between_in_scope_modules(qapp):
         "tactile_sensor": _state("tactile_sensor", "out_of_scope"),
     })
 
-    assert grid.dependency_edges() == [VisibleEdge("grabber", "vision_classifier", verified=True)]
+    assert grid.dependency_edges() == [VisibleEdge("grabber", "vision_classifier")]
 
 
 def test_grid_draws_no_arrows_while_not_assessed(qapp):

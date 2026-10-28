@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 
 from app.engine.module_dependencies import ConfigurationValidation, ExternalInputRequirement
+from gui.components.info_button import make_info_button
 from gui.components.question_help_dialog import QuestionHelpDialog
 
 _VALIDATION_HELP_SUMMARY = (
@@ -67,7 +68,7 @@ class ConfigurationValidationPanel(QFrame):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setStyleSheet(
-            "QFrame#validationPanel { background: white; border: 1px solid #e5e7eb; border-radius: 6px; }"
+            "QFrame#validationPanel { background: white; border: 1px solid #e2e8f0; border-radius: 8px; }"
         )
         self.setObjectName("validationPanel")
         self._root = QVBoxLayout(self)
@@ -114,17 +115,7 @@ class ConfigurationValidationPanel(QFrame):
             self._root.addWidget(self._note(f"Required input '{dep_id}' has no provider and cannot come from outside."))
 
     def _build_help_button(self) -> QPushButton:
-        btn = QPushButton("i")
-        btn.setObjectName("validation_help")
-        btn.setToolTip(_VALIDATION_HELP_SUMMARY)
-        btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setFixedSize(16, 16)
-        # Same round style as the "?" next to the questions; "i" because it explains what is shown
-        btn.setStyleSheet(
-            "QPushButton { color: #162759; background: #e0e7ff; border: 1px solid #818cf8; "
-            "border-radius: 8px; font-size: 10px; font-weight: bold; padding: 0; } "
-            "QPushButton:hover { background: #c7d2fe; }"
-        )
+        btn = make_info_button("validation_help", _VALIDATION_HELP_SUMMARY)
         btn.clicked.connect(self._show_help)
         return btn
 
