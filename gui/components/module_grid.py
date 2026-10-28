@@ -5,14 +5,17 @@ Emits module_selected(module_id) when a tile is clicked.
 
 from __future__ import annotations
 
+import math
+
 from PySide6.QtWidgets import (
     QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
     QLabel, QFrame, QSizePolicy, QGraphicsDropShadowEffect, QScrollArea,
 )
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, Signal, QEvent, QLineF, QPointF, QRectF
+from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 
 from app.models.use_case import ModuleState
+from app.engine.module_dependencies import visible_dependency_edges
 from app.engine.module_registry import MODULES
 
 # (strip_colour, accent/text, status label)
@@ -41,13 +44,88 @@ _ACTION_TYPE_COLOURS = {
 MODULE_ORDER = ["grabber", "orienteering_solver", "localiser", "tactile_sensor", "vision_classifier", "ergodic_control", "motion_planning"]
 
 
+class _DependencyArrows(QWidget):
+    """Transparent overlay painting provider -> consumer arrows between tile borders."""
+
+    _COLOUR = QColor("#6b7280")
+    _HEAD = 8.0
+
+    def __init__(self, tiles: dict, parent: QWidget) -> None:
+        super().__init__(parent)
+        self._tiles = tiles
+        self._edges: list[tuple[str, str]] = []
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setStyleSheet("background: transparent;")
+        parent.installEventFilter(self)
+        for tile in tiles.values():
+            tile.installEventFilter(self)
+
+    def set_edges(self, edges: list[tuple[str, str]]) -> None:
+        self._edges = edges
+        self.update()
+
+    def eventFilter(self, obj, event) -> bool:
+        if event.type() in (QEvent.Type.Resize, QEvent.Type.Move, QEvent.Type.Show):
+            if obj is self.parentWidget():
+                self.setGeometry(self.parentWidget().rect())
+            self.raise_()
+            self.update()
+        return False
+
+    @staticmethod
+    def _border_point(rect: QRectF, towards: QPointF) -> QPointF:
+        """Where the line from the rect's centre to `towards` leaves the rect."""
+        centre = rect.center()
+        dx, dy = towards.x() - centre.x(), towards.y() - centre.y()
+        if dx == 0 and dy == 0:
+            return centre
+        scale = min(
+            (rect.width() / 2) / abs(dx) if dx else float("inf"),
+            (rect.height() / 2) / abs(dy) if dy else float("inf"),
+        )
+        return QPointF(centre.x() + dx * scale, centre.y() + dy * scale)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(self._COLOUR, 1.8)
+        painter.setPen(pen)
+        painter.setBrush(self._COLOUR)
+        for provider, consumer in self._edges:
+            src_tile, dst_tile = self._tiles.get(provider), self._tiles.get(consumer)
+            if src_tile is None or dst_tile is None:
+                continue
+            src, dst = QRectF(src_tile.geometry()), QRectF(dst_tile.geometry())
+            start = self._border_point(src, dst.center())
+            end = self._border_point(dst, src.center())
+            line = QLineF(start, end)
+            if line.length() < 2:
+                continue
+            painter.drawLine(line)
+            angle = math.atan2(line.dy(), line.dx())
+            head = QPolygonF([
+                end,
+                QPointF(end.x() - self._HEAD * math.cos(angle - math.pi / 7),
+                        end.y() - self._HEAD * math.sin(angle - math.pi / 7)),
+                QPointF(end.x() - self._HEAD * math.cos(angle + math.pi / 7),
+                        end.y() - self._HEAD * math.sin(angle + math.pi / 7)),
+            ])
+            painter.drawPolygon(head)
+        painter.end()
+
+
 class ModuleGrid(QWidget):
     module_selected = Signal(str)   # module_id
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._tiles: dict[str, _ModuleTile] = {}
+        self._edges: list[tuple[str, str]] = []
         self._build_ui()
+
+    def dependency_edges(self) -> list[tuple[str, str]]:
+        """(provider, consumer) pairs currently drawn as arrows."""
+        return list(self._edges)
 
     def _build_ui(self) -> None:
         vbox = QVBoxLayout(self)
@@ -72,7 +150,8 @@ class ModuleGrid(QWidget):
 
         # Tile grid: 3 columns
         self._grid = QGridLayout()
-        self._grid.setSpacing(12)
+        # Wide enough gaps for the dependency arrows to be readable
+        self._grid.setSpacing(28)
         for mid in MODULE_ORDER:
             info = MODULES[mid]
             tile = _ModuleTile(mid, info["name"], info["description"])
@@ -87,6 +166,7 @@ class ModuleGrid(QWidget):
         tiles_container = QWidget()
         tiles_container.setStyleSheet("background: transparent;")
         tiles_container.setLayout(self._grid)
+        self._arrows = _DependencyArrows(self._tiles, tiles_container)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -105,6 +185,11 @@ class ModuleGrid(QWidget):
         in_scope = [m for m in MODULE_ORDER if getattr(modules.get(m), "status", None) != "out_of_scope"]
         out_of_scope = [m for m in MODULE_ORDER if m not in in_scope]
         self._place_tiles(in_scope + out_of_scope)
+
+        # not_assessed modules are not in scope yet, so they get no arrows either
+        drawn = [m for m in in_scope if m in modules and modules[m].status != "not_assessed"]
+        self._edges = visible_dependency_edges(drawn)
+        self._arrows.set_edges(self._edges)
 
         needs = validated = deployed = not_assessed = 0
         for mid, tile in self._tiles.items():

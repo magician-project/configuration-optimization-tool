@@ -10,7 +10,7 @@ or a module, add an entry below — validate_configuration() needs no change.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -127,6 +127,19 @@ def scope_for(pipeline: Optional[str], additional_sensors: Optional[List[str]] =
     """Every architecture node in scope: the COT default module set plus non-COT nodes."""
     pipeline = normalize_pipeline(pipeline)
     return compute_default_modules(pipeline, additional_sensors) + _NON_COT_NODES_BY_PIPELINE[pipeline]
+
+
+def visible_dependency_edges(in_scope_modules: Iterable[str]) -> List[Tuple[str, str]]:
+    """(provider, consumer) pairs to draw: dependencies between two in-scope COT modules.
+
+    Non-COT nodes and out-of-scope modules never produce an edge (ADR-0004).
+    """
+    drawn = {m for m in in_scope_modules if m in MODULES}
+    return [
+        (dep.provider, dep.consumer)
+        for dep in DEPENDENCIES
+        if dep.provider in drawn and dep.consumer in drawn
+    ]
 
 
 def validate_configuration(
