@@ -1,5 +1,6 @@
 """
-ModuleGrid — shows all 6 modules as clickable tiles with status colours.
+ModuleGrid — shows the modules as clickable tiles, grouped by architecture phase, with arrows
+for the dependencies between in-scope modules.
 Emits module_selected(module_id) when a tile is clicked.
 """
 

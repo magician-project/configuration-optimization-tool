@@ -34,7 +34,7 @@ The desktop GUI opens directly. No server process is needed.
 1. Create a **use case** (e.g. "Boat hull inspection") from the home screen
 2. Fill in the **questionnaire** — questions across 5 sections (robot setup, sensors, materials, defects, time constraints)
 3. Save answers → COT runs its rule-based impact engine and updates the **Module Dashboard**
-4. Each module tile shows the required action type (`retrain` / `reconfigure` / `review`) and any flags
+4. Each module tile shows its status and the required action types (`retrain` / `reconfigure` / `review`) and any flags; modules are grouped by architecture phase, with arrows showing how they relate
 5. Click a tile to see the full impact list, acknowledge flags, and configure module-specific parameters
 6. Mark the module as **validated**, then run the offline **Compute** step to derive exact ROS parameter values
 7. Once all impacted modules are computed and validated, **Deploy to ROS** fires the changes to the ROS 2 framework
