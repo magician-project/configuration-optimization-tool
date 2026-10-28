@@ -45,6 +45,10 @@ _Avoid_: enabled/disabled, on/off, override
 **Module dependency**:
 A required or conditional input relationship from a provider output to a consumer input. A dependency may be satisfied by an active MAGICIAN module or, when explicitly allowed, by a declared external input.
 
+**Module group**:
+A phase of the MAGICIAN architecture that a COT module belongs to: Defect Detection, Task Planning, or Motion Planning. Groups are fixed architecture metadata, not derived from questionnaire answers. On the dashboard, a dependency between two modules of the same group is drawn as a module arrow; dependencies between groups collapse into one group arrow. Arrows only show how modules relate; they do not detect conflicts or block configurations.
+_Avoid_: category, section, phase (ambiguous with capability level)
+
 **External input requirement**:
 A required consumer input for which the normal MAGICIAN provider is inactive and an external source is allowed. For the initial grinding-only scenario, this is defect information required by the Orienteering Solver.
 

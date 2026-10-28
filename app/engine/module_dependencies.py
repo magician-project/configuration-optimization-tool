@@ -10,11 +10,13 @@ or a module, add an entry below — validate_configuration() needs no change.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple
 
 from pydantic import BaseModel
 
-from app.engine.module_registry import MODULES, compute_default_modules, is_assessed, normalize_pipeline
+from app.engine.module_registry import (
+    MODULES, compute_default_modules, group_of, is_assessed, normalize_pipeline,
+)
 from app.models.use_case import ExternalSource
 
 # Architecture nodes that are not (yet) configurable COT modules. Register a node here
@@ -44,10 +46,45 @@ class Dependency:
     external_schema: Optional[str] = None
     external_minimum_fields: Tuple[str, ...] = ()
     external_conditional_fields: Tuple[str, ...] = ()
+    # Shown as an arrow on the dashboard only; never evaluated by validate_configuration().
+    display_only: bool = False
+
+    @property
+    def verified(self) -> bool:
+        return self.evidence_status == "documented" and self.validation_status == "verified"
 
 
-# Only required, unconditional dependencies: conditional ones are added once a questionnaire
-# answer can evaluate their condition (otherwise they would leave every configuration incomplete).
+class VisibleEdge(NamedTuple):
+    provider: str
+    consumer: str
+
+
+class GroupEdge(NamedTuple):
+    provider_group: str
+    consumer_group: str
+
+
+def _conceptual_edge(provider: str, consumer: str) -> Dependency:
+    """Relation from the MAGICIAN documentation whose interface is not verified.
+
+    Tactile/Vision -> Orienteering Solver simplify an indirect flow via the Estimation Algorithm,
+    which is not a COT module and therefore not drawn. Orienteering Solver -> Motion Planner
+    simplifies the flow via the Supervisor. Across groups they are drawn as one group arrow.
+    """
+    return Dependency(
+        id=f"{provider}_to_{consumer}",
+        provider=provider, consumer=consumer,
+        provider_output="unspecified", consumer_input="unspecified",
+        external_input_allowed=False,
+        evidence_status="conceptual", validation_status="owner_confirmation_needed",
+        display_only=True,
+    )
+
+
+# Only required, unconditional dependencies are validated: conditional ones are added once a
+# questionnaire answer can evaluate their condition (otherwise they would leave every
+# configuration incomplete). Dependencies with display_only=True are drawn on the dashboard
+# but skipped by validation.
 DEPENDENCIES: List[Dependency] = [
     Dependency(
         id="grabber_to_vision_classifier",
@@ -86,6 +123,9 @@ DEPENDENCIES: List[Dependency] = [
         external_input_allowed=False,
         evidence_status="documented", validation_status="verified",
     ),
+    _conceptual_edge("tactile_sensor", "orienteering_solver"),
+    _conceptual_edge("vision_classifier", "orienteering_solver"),
+    _conceptual_edge("orienteering_solver", "motion_planning"),
 ]
 
 
@@ -129,6 +169,32 @@ def scope_for(pipeline: Optional[str], additional_sensors: Optional[List[str]] =
     return compute_default_modules(pipeline, additional_sensors) + _NON_COT_NODES_BY_PIPELINE[pipeline]
 
 
+def _drawable_dependencies(in_scope_modules: Iterable[str]) -> List[Dependency]:
+    """Dependencies between two in-scope COT modules, display-only ones included.
+
+    Non-COT nodes and out-of-scope modules never qualify (ADR-0004).
+    """
+    drawn = {m for m in in_scope_modules if m in MODULES}
+    return [dep for dep in DEPENDENCIES if dep.provider in drawn and dep.consumer in drawn]
+
+
+def visible_dependency_edges(in_scope_modules: Iterable[str]) -> List[VisibleEdge]:
+    """Module arrows: drawable dependencies between two modules of the same group."""
+    return [
+        VisibleEdge(dep.provider, dep.consumer)
+        for dep in _drawable_dependencies(in_scope_modules)
+        if group_of(dep.provider) == group_of(dep.consumer)
+    ]
+
+
+def visible_group_edges(in_scope_modules: Iterable[str]) -> List[GroupEdge]:
+    """Group arrows: drawable dependencies across groups, collapsed to one arrow per group pair."""
+    pairs = (
+        (group_of(dep.provider), group_of(dep.consumer)) for dep in _drawable_dependencies(in_scope_modules)
+    )
+    return [GroupEdge(provider, consumer) for provider, consumer in dict.fromkeys(pairs) if provider != consumer]
+
+
 def validate_configuration(
     pipeline: Optional[str],
     additional_sensors: Optional[List[str]] = None,
@@ -142,11 +208,11 @@ def validate_configuration(
     result = ConfigurationValidation(status="valid")
 
     for dep in DEPENDENCIES:
-        if dep.consumer not in in_scope:
+        if dep.display_only or dep.consumer not in in_scope:
             continue
 
         if dep.provider in in_scope:
-            if dep.evidence_status == "documented" and dep.validation_status == "verified":
+            if dep.verified:
                 result.satisfied.append(dep.id)
             else:
                 result.owner_confirmation_needed.append(dep.id)

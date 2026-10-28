@@ -121,6 +121,22 @@ MODULES: Dict[str, dict] = {
 
 PIPELINES = ("inspection", "grinding", "both")
 
+# Architecture groups from the MAGICIAN diagram, in flow order. Modules fill `columns` columns
+# top to bottom, so a provider listed first sits left of the modules that consume it.
+MODULE_GROUPS: Dict[str, dict] = {
+    "defect_detection": {
+        "name": "Defect Detection",
+        "modules": ["grabber", "localiser", "tactile_sensor", "vision_classifier"],
+        "columns": 2,
+    },
+    "task_planning": {"name": "Task Planning", "modules": ["orienteering_solver"], "columns": 1},
+    "motion_planning": {"name": "Motion Planning", "modules": ["motion_planning", "ergodic_control"], "columns": 1},
+}
+
+
+def group_of(module_id: str) -> Optional[str]:
+    return next((gid for gid, info in MODULE_GROUPS.items() if module_id in info["modules"]), None)
+
 # Localiser and Motion Planner are shared: in scope for every pipeline until a question drives them.
 _SHARED_MODULES = ["localiser", "motion_planning"]
 _INSPECTION_MODULES = ["grabber", "vision_classifier", "ergodic_control"]

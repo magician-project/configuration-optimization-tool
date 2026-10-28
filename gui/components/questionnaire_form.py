@@ -9,11 +9,12 @@ from __future__ import annotations
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QCheckBox, QLineEdit, QSpinBox, QDoubleSpinBox,
-    QScrollArea, QFrame, QPushButton,
+    QScrollArea, QFrame,
 )
 from PySide6.QtCore import Qt, Signal
 
 from app.engine.schema import SCHEMA
+from gui.components.info_button import make_info_button
 from gui.components.question_help_dialog import QuestionHelpDialog
 
 
@@ -190,16 +191,7 @@ class QuestionnaireForm(QScrollArea):
         title_lbl.setStyleSheet("font-weight: 600; color: #1f2937; font-size: 12px;")
         title_row.addWidget(title_lbl)
         if q.get("help_text") or q.get("tooltip"):
-            help_btn = QPushButton("?")
-            help_btn.setObjectName(f"help_{q['id']}")
-            help_btn.setToolTip(q.get("tooltip") or "Click for more information")
-            help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            help_btn.setFixedSize(16, 16)
-            help_btn.setStyleSheet(
-                "QPushButton { color: #162759; background: #e0e7ff; border: 1px solid #818cf8; "
-                "border-radius: 8px; font-size: 10px; font-weight: bold; padding: 0; } "
-                "QPushButton:hover { background: #c7d2fe; }"
-            )
+            help_btn = make_info_button(f"help_{q['id']}", q.get("tooltip") or "Click for more information")
             help_btn.clicked.connect(lambda _=False, q=q: self._show_help(q))
             title_row.addWidget(help_btn)
         title_row.addStretch()

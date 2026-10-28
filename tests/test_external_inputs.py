@@ -4,11 +4,13 @@ rich-text label, so markup in it must be shown literally.
 """
 
 import pytest
-from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtCore import QCoreApplication, QEvent
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 
 from app.engine.module_dependencies import validate_configuration
 from app.models.use_case import ExternalSource
 from gui.components.external_inputs import ConfigurationValidationPanel
+from gui.components.question_help_dialog import QuestionHelpDialog
 
 
 @pytest.fixture(scope="module")
@@ -73,6 +75,52 @@ def test_not_assessed_panel_button_requests_the_specification_tab(qapp):
     requested = []
     panel.specification_requested.connect(lambda: requested.append(True))
 
-    next(b for b in panel.findChildren(QPushButton)).click()
+    next(b for b in panel.findChildren(QPushButton) if b.text().startswith("Go to")).click()
 
     assert requested == [True]
+
+
+def _open_help(panel):
+    from PySide6.QtWidgets import QPushButton, QTextBrowser
+
+    panel.findChild(QPushButton, "validation_help").click()
+    dialog = panel.findChild(QuestionHelpDialog)
+    return dialog, dialog.findChild(QTextBrowser).toPlainText()
+
+
+@pytest.mark.parametrize("pipeline", [None, "both", "grinding"])
+def test_panel_offers_help_in_every_state(qapp, pipeline):
+    panel = ConfigurationValidationPanel()
+    panel.update_validation(validate_configuration(pipeline))
+
+    dialog, _ = _open_help(panel)
+
+    assert dialog.windowTitle() == "Configuration validation"
+
+
+def test_help_explains_every_status_and_what_is_not_checked(qapp):
+    panel = ConfigurationValidationPanel()
+    panel.update_validation(validate_configuration("both"))
+
+    _, text = _open_help(panel)
+
+    for status in ("Valid", "Valid (external inputs)", "Incomplete", "Invalid", "Not assessed"):
+        assert status in text
+    assert "arrows" in text.lower()
+
+
+def test_help_button_is_an_info_icon(qapp):
+    panel = ConfigurationValidationPanel()
+    panel.update_validation(validate_configuration("both"))
+
+    assert panel.findChild(QPushButton, "validation_help").text() == "i"
+
+
+def test_help_button_survives_a_refresh(qapp):
+    panel = ConfigurationValidationPanel()
+
+    panel.update_validation(validate_configuration("both"))
+    panel.update_validation(validate_configuration("grinding"))
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    assert len(panel.findChildren(QPushButton, "validation_help")) == 1

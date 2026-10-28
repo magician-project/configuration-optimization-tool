@@ -66,7 +66,11 @@ Alongside impacts, the engine raises **flags** for cases where automated guidanc
 
 ## Module Dashboard
 
-The Module Dashboard shows all six MAGICIAN modules as tiles. Each tile communicates the module's current status and any active flags at a glance. The full module lifecycle is:
+The Module Dashboard shows the seven MAGICIAN modules as tiles, grouped by architecture phase: **Defect Detection**, **Task Planning** and **Motion Planning**, from left to right like the MAGICIAN architecture diagram. Each tile shows the module's name, current status (a coloured dot plus the status word), unacknowledged flags, and the action types (retrain / reconfigure / review). Impact details and the module description are in the detail dialog. A tile keeps its place in its group; an out-of-scope module stays visible in grey.
+
+Arrows show how modules relate. An arrow between two tiles means the module at the start provides input to the module at the end. Dependencies between modules of different groups are collapsed into one arrow between the group frames. Arrows come from the dependency register (`DEPENDENCIES` in `app/engine/module_dependencies.py`) and only connect in-scope modules. They are display only: they never detect conflicts or change the configuration validation status. The **i** next to *Configuration validation* explains what each status means.
+
+The full module lifecycle is:
 
 ```
 ok → needs_action → validated → computing → computed → deploying → deployed
