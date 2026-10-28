@@ -10,7 +10,7 @@ or a module, add an entry below — validate_configuration() needs no change.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -44,10 +44,36 @@ class Dependency:
     external_schema: Optional[str] = None
     external_minimum_fields: Tuple[str, ...] = ()
     external_conditional_fields: Tuple[str, ...] = ()
+    # Shown as an arrow on the dashboard only; never evaluated by validate_configuration().
+    display_only: bool = False
+
+    @property
+    def verified(self) -> bool:
+        return self.evidence_status == "documented" and self.validation_status == "verified"
 
 
-# Only required, unconditional dependencies: conditional ones are added once a questionnaire
-# answer can evaluate their condition (otherwise they would leave every configuration incomplete).
+class VisibleEdge(NamedTuple):
+    provider: str
+    consumer: str
+    verified: bool
+
+
+def _conceptual_edge(provider: str, consumer: str) -> Dependency:
+    """Relation from the architecture notes (meeting 2026-10-14) whose interface is not verified."""
+    return Dependency(
+        id=f"{provider}_to_{consumer}",
+        provider=provider, consumer=consumer,
+        provider_output="unspecified", consumer_input="unspecified",
+        external_input_allowed=False,
+        evidence_status="conceptual", validation_status="owner_confirmation_needed",
+        display_only=True,
+    )
+
+
+# Only required, unconditional dependencies are validated: conditional ones are added once a
+# questionnaire answer can evaluate their condition (otherwise they would leave every
+# configuration incomplete). Dependencies with display_only=True are drawn on the dashboard
+# but skipped by validation.
 DEPENDENCIES: List[Dependency] = [
     Dependency(
         id="grabber_to_vision_classifier",
@@ -86,6 +112,11 @@ DEPENDENCIES: List[Dependency] = [
         external_input_allowed=False,
         evidence_status="documented", validation_status="verified",
     ),
+    _conceptual_edge("localiser", "vision_classifier"),
+    _conceptual_edge("tactile_sensor", "orienteering_solver"),
+    _conceptual_edge("vision_classifier", "orienteering_solver"),
+    _conceptual_edge("orienteering_solver", "motion_planning"),
+    _conceptual_edge("orienteering_solver", "ergodic_control"),
 ]
 
 
@@ -129,14 +160,14 @@ def scope_for(pipeline: Optional[str], additional_sensors: Optional[List[str]] =
     return compute_default_modules(pipeline, additional_sensors) + _NON_COT_NODES_BY_PIPELINE[pipeline]
 
 
-def visible_dependency_edges(in_scope_modules: Iterable[str]) -> List[Tuple[str, str]]:
-    """(provider, consumer) pairs to draw: dependencies between two in-scope COT modules.
+def visible_dependency_edges(in_scope_modules: Iterable[str]) -> List[VisibleEdge]:
+    """Edges to draw: dependencies between two in-scope COT modules, display-only ones included.
 
     Non-COT nodes and out-of-scope modules never produce an edge (ADR-0004).
     """
     drawn = {m for m in in_scope_modules if m in MODULES}
     return [
-        (dep.provider, dep.consumer)
+        VisibleEdge(dep.provider, dep.consumer, dep.verified)
         for dep in DEPENDENCIES
         if dep.provider in drawn and dep.consumer in drawn
     ]
@@ -155,11 +186,11 @@ def validate_configuration(
     result = ConfigurationValidation(status="valid")
 
     for dep in DEPENDENCIES:
-        if dep.consumer not in in_scope:
+        if dep.display_only or dep.consumer not in in_scope:
             continue
 
         if dep.provider in in_scope:
-            if dep.evidence_status == "documented" and dep.validation_status == "verified":
+            if dep.verified:
                 result.satisfied.append(dep.id)
             else:
                 result.owner_confirmation_needed.append(dep.id)

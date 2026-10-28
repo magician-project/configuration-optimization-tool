@@ -15,7 +15,7 @@ from PySide6.QtCore import Qt, Signal, QEvent, QLineF, QPointF, QRectF
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 
 from app.models.use_case import ModuleState
-from app.engine.module_dependencies import visible_dependency_edges
+from app.engine.module_dependencies import VisibleEdge, visible_dependency_edges
 from app.engine.module_registry import MODULES
 
 # (strip_colour, accent/text, status label)
@@ -48,19 +48,20 @@ class _DependencyArrows(QWidget):
     """Transparent overlay painting provider -> consumer arrows between tile borders."""
 
     _COLOUR = QColor("#6b7280")
+    _UNVERIFIED_COLOUR = QColor("#9ca3af")
     _HEAD = 8.0
 
     def __init__(self, tiles: dict, parent: QWidget) -> None:
         super().__init__(parent)
         self._tiles = tiles
-        self._edges: list[tuple[str, str]] = []
+        self._edges: list[VisibleEdge] = []
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setStyleSheet("background: transparent;")
         parent.installEventFilter(self)
         for tile in tiles.values():
             tile.installEventFilter(self)
 
-    def set_edges(self, edges: list[tuple[str, str]]) -> None:
+    def set_edges(self, edges: list[VisibleEdge]) -> None:
         self._edges = edges
         self.update()
 
@@ -88,13 +89,16 @@ class _DependencyArrows(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        pen = QPen(self._COLOUR, 1.8)
-        painter.setPen(pen)
-        painter.setBrush(self._COLOUR)
-        for provider, consumer in self._edges:
-            src_tile, dst_tile = self._tiles.get(provider), self._tiles.get(consumer)
+        for edge in self._edges:
+            src_tile, dst_tile = self._tiles.get(edge.provider), self._tiles.get(edge.consumer)
             if src_tile is None or dst_tile is None:
                 continue
+            colour = self._COLOUR if edge.verified else self._UNVERIFIED_COLOUR
+            pen = QPen(colour, 1.8)
+            if not edge.verified:
+                pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(colour)
             src, dst = QRectF(src_tile.geometry()), QRectF(dst_tile.geometry())
             start = self._border_point(src, dst.center())
             end = self._border_point(dst, src.center())
@@ -102,6 +106,9 @@ class _DependencyArrows(QWidget):
             if line.length() < 2:
                 continue
             painter.drawLine(line)
+            # Arrow head is always solid, even on a dashed line
+            pen.setStyle(Qt.PenStyle.SolidLine)
+            painter.setPen(pen)
             angle = math.atan2(line.dy(), line.dx())
             head = QPolygonF([
                 end,
@@ -120,11 +127,11 @@ class ModuleGrid(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._tiles: dict[str, _ModuleTile] = {}
-        self._edges: list[tuple[str, str]] = []
+        self._edges: list[VisibleEdge] = []
         self._build_ui()
 
-    def dependency_edges(self) -> list[tuple[str, str]]:
-        """(provider, consumer) pairs currently drawn as arrows."""
+    def dependency_edges(self) -> list[VisibleEdge]:
+        """Edges currently drawn as arrows (provider -> consumer)."""
         return list(self._edges)
 
     def _build_ui(self) -> None:
@@ -143,6 +150,9 @@ class ModuleGrid(QWidget):
         self._summary_lbl.setStyleSheet("color: #6b7280; font-size: 12px;")
         summary_layout.addWidget(self._summary_lbl)
         summary_layout.addStretch()
+        legend = QLabel("Arrow: provides input to  ·  dashed = conceptual, not yet verified")
+        legend.setStyleSheet("color: #9ca3af; font-size: 11px;")
+        summary_layout.addWidget(legend)
         hint = QLabel("Click a tile to manage")
         hint.setStyleSheet("color: #9ca3af; font-size: 11px;")
         summary_layout.addWidget(hint)
