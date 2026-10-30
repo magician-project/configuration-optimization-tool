@@ -1,3 +1,14 @@
+---
+type: roadmap
+period: 2026-07 to 2027-06
+tags:
+  - roadmap
+  - planning
+related:
+  - "[[CONTEXT]]"
+  - "[[magician_integration_plan]]"
+---
+
 # COT 12-Month Development Roadmap
 **Period:** July 2026 – June 2027  
 **Capacity:** ~16 hours / month (solo developer) · ~48 h per quarter  
@@ -93,14 +104,14 @@ Q4  Apr – Jun 2027   Production-ready — Docker, contributor guide, hardening
 
 ### Q2-D — Module Parameter Sync
 - Check each module's `generate_config.py` against its upstream repo for any parameter changes since the initial integration
-- Update parameter tables in `magician_integration_plan.md` to reflect current state
+- Update parameter tables in [[magician_integration_plan]] to reflect current state
 - **Done when:** All five `generate_config.py` implementations match the current upstream parameter schemas
 
 ### Q2-E — ROS 2 Execution Readiness
 - Validate that the generated `params.yaml` files are accepted by `ros2 run --params-file` without errors for grabber and localiser
 - Validate that `ros2 service call` commands emitted by each `ros_interface.py` use the correct service names and message types against the actual running nodes
 - Document the manual verification steps (node name, topic, expected response) in each module's `README.md`
-- Update the Constraints & Principles table: ROS adapter moves from "Implemented, not yet Verified" to "Verified" (see `CONTEXT.md` for the maturity ladder)
+- Update the Constraints & Principles table: ROS adapter moves from "Implemented, not yet Verified" to "Verified" (see [[CONTEXT]] for the maturity ladder)
 - **Done when:** A developer can take the generated artifacts from any module and launch the corresponding ROS 2 node without manual parameter editing
 
 ---
@@ -141,7 +152,7 @@ Q4  Apr – Jun 2027   Production-ready — Docker, contributor guide, hardening
 ### Q4-A — Module Template & Contributor Guide
 - Create `modules/_template/` with annotated `compute.py`, `generate_config.py`, `ros_interface.py`, and `README.md`
 - Document the schema extension pattern and questionnaire engine impact rule pattern
-- Update top-level `modules/README.md` to reference the template
+- Update top-level [[modules/README]] to reference the template
 - **Done when:** A new contributor can add a module by following the template with no prior codebase knowledge
 
 ### Q4-B — Docker Packaging
@@ -180,7 +191,7 @@ Q4  Apr – Jun 2027   Production-ready — Docker, contributor guide, hardening
 ## Backlog (deferred, not scheduled)
 
 - **Multi-user / auth** — use case ownership, login, shared access
-- **Verified / Supported ROS 2 adapter** — `app/ros/ros2_adapter.py` is already *Implemented* (it fires real `ros2 param set` / `service call` subprocess commands); it is not yet *Verified* against a live ROS 2 environment or *Supported* as a release capability. Q2-E is the work that moves it up the maturity ladder — see `CONTEXT.md` for the Implemented/Verified/Supported terms.
+- **Verified / Supported ROS 2 adapter** — `app/ros/ros2_adapter.py` is already *Implemented* (it fires real `ros2 param set` / `service call` subprocess commands); it is not yet *Verified* against a live ROS 2 environment or *Supported* as a release capability. Q2-E is the work that moves it up the maturity ladder — see [[CONTEXT]] for the Implemented/Verified/Supported terms.
 - **Cloud hosting** — make the tool accessible outside the local machine
 - **Automated retraining trigger** — invoke `trainMagicianVisionClassifierTorch.py` from COT compute
 - **Database backend** — replace JSON file storage with SQLite or PostgreSQL
@@ -194,7 +205,7 @@ Q4  Apr – Jun 2027   Production-ready — Docker, contributor guide, hardening
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| Upstream repos change parameter names | Medium | Each module's `generate_config.py` is the single update point; `magician_integration_plan.md` serves as reference |
+| Upstream repos change parameter names | Medium | Each module's `generate_config.py` is the single update point; [[magician_integration_plan]] serves as reference |
 | Module parameter research takes longer than expected | Medium | Q1 milestones include research time; defer non-critical params to Q2-D sync |
 | 16 h/month is insufficient for a quarter milestone | Medium | Quarters have flex across 3 months; defer polish within the quarter rather than blocking |
 | New modules added mid-roadmap | Low | Q4-A template provides a clear onboarding path |
