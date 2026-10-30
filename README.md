@@ -1,3 +1,13 @@
+---
+type: overview
+tags:
+  - overview
+related:
+  - "[[wiki]]"
+  - "[[CONTEXT]]"
+  - "[[ROADMAP]]"
+---
+
 # Configuration Optimization Tool (COT)
 
 Decision-support desktop application for configuring MAGICIAN robot modules to new use cases.  

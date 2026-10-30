@@ -1,3 +1,16 @@
+---
+type: glossary
+aliases:
+  - glossary
+  - domeintaal
+tags:
+  - glossary
+  - domain
+related:
+  - "[[0003-separate-pipeline-selection-from-task-type]]"
+  - "[[0004-module-scope-is-derived-without-manual-override]]"
+---
+
 # Configuration Optimization Tool (COT)
 
 Translates questionnaire answers about a MAGICIAN use case into per-module configuration and ROS 2 deployment commands.

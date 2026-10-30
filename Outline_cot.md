@@ -1,3 +1,13 @@
+---
+type: outline
+tags:
+  - outline
+  - concept
+related:
+  - "[[CONTEXT]]"
+  - "[[ROADMAP]]"
+---
+
 # Configuration Optimization Tool (COT) - Outline
 
 ## Table of Contents

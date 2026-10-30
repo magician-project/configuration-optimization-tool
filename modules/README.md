@@ -1,3 +1,10 @@
+---
+type: overview
+tags:
+  - overview
+  - modules
+---
+
 # Modules
 
 Each subdirectory in this folder corresponds to one MAGICIAN ROS 2 module.

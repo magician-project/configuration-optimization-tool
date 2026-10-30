@@ -1,3 +1,16 @@
+---
+type: plan
+status: planning
+modules:
+  - grabber
+  - vision_classifier
+tags:
+  - plan
+  - integration
+related:
+  - "[[ROADMAP]]"
+---
+
 # Magician Grabber & Vision Classifier — COT Integration Plan
 
 **Status:** Planning  

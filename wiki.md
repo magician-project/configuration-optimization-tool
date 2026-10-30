@@ -1,3 +1,14 @@
+---
+type: overview
+tags:
+  - overview
+  - architecture
+related:
+  - "[[README]]"
+  - "[[CONTEXT]]"
+  - "[[modules/README]]"
+---
+
 # Configuration Optimization Tool — Wiki
 
 ## Overview
