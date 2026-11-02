@@ -62,6 +62,18 @@ A required or conditional input relationship from a provider output to a consume
 A phase of the MAGICIAN architecture that a COT module belongs to: Defect Detection, Task Planning, or Motion Planning. Groups are fixed architecture metadata, not derived from questionnaire answers. On the dashboard, a dependency between two modules of the same group is drawn as a module arrow; dependencies between groups collapse into one group arrow. Arrows only show how modules relate; they do not detect conflicts or block configurations.
 _Avoid_: category, section, phase (ambiguous with capability level)
 
+**DMP**:
+The grinding module that replays a learned grinding primitive on a detected defect. Belongs to the Motion Planning group, alongside but separate from the Motion Planner (whose own `discrete_dmp`/`rhytmic_dmp` services are not the DMP). In scope whenever the pipeline selection includes grinding.
+_Avoid_: DMP Motion Planner, grinding planner
+
+**Learned grinding primitive**:
+The pose and force profile the DMP replays on a defect, learned offline from demonstrations; there is one per defect class. New demonstrations mean the primitive is regenerated and validated outside COT — never retrained, and never by COT itself.
+_Avoid_: model, prototype (on its own), DMP (that is the module, not the primitive)
+
+**Defect class**:
+The classification of a defect that MAGICIAN grinds: Positive Dent or Negative Dent. The DMP selects its learned grinding primitive by defect class, and the Tactile Classifier classifies into the same classes. A defect class the DMP has no primitive for cannot be ground.
+_Avoid_: defect type (too generic), dents/dirt/surface damage (the old, too-generic questionnaire values)
+
 **External input requirement**:
 A required consumer input for which the normal MAGICIAN provider is inactive and an external source is allowed. For the initial grinding-only scenario, this is defect information required by the Orienteering Solver.
 
