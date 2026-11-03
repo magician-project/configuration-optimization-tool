@@ -23,6 +23,7 @@ from PySide6.QtCore import Qt, Signal, Slot
 from app.models.use_case import UseCase, ComputeResult, ExternalSource
 from app.engine.module_dependencies import validate_configuration
 from app.engine.module_registry import is_assessed
+from app.engine.result_freshness import answers_fingerprint, out_of_date_modules
 from app.engine.questionnaire_engine import (
     compute_impacts, apply_impacts_to_modules, consumers_awaiting_external_input,
     sync_external_input_status,
@@ -59,6 +60,8 @@ class UseCasePage(QWidget):
         self._dirty = False
         self._active_detail_dlg = None   # currently open ModuleDetail dialog
         self._compute_progress_dlg: Optional[ComputeProgressDialog] = None
+        # Answers fingerprint per module, taken when its compute starts (the answers compute.py reads).
+        self._compute_fingerprints: dict[str, str] = {}
         self._compute_line_received.connect(self._append_compute_line)
         self._compute_finished.connect(self._finish_compute)
         self._build_ui()
@@ -189,7 +192,7 @@ class UseCasePage(QWidget):
         uc = self._use_case
         if uc is None:
             return
-        self._module_grid.update_modules(uc.modules)
+        self._module_grid.update_modules(uc.modules, out_of_date=out_of_date_modules(uc))
         self._validation_panel.update_validation(self._validation(uc))
 
     @staticmethod
@@ -410,6 +413,7 @@ class UseCasePage(QWidget):
         ms.status = "computing"
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
+        self._compute_fingerprints[module_id] = answers_fingerprint(uc, module_id)
         self._refresh_grid()
         self._refresh_open_dialog(module_id)
 
@@ -447,6 +451,8 @@ class UseCasePage(QWidget):
         if self._compute_progress_dlg is not None:
             self._compute_progress_dlg.on_done(success, result_path)
 
+        fingerprint = self._compute_fingerprints.pop(module_id, None)
+
         # Scope may have changed while compute ran; a late result must not undo that.
         if ms.status in ("out_of_scope", "not_assessed"):
             return
@@ -460,6 +466,7 @@ class UseCasePage(QWidget):
                 ms.status = "computed"
                 ms.compute_result = result
                 ms.computed_at = datetime.now(timezone.utc).isoformat()
+                ms.computed_answers_fingerprint = fingerprint
             except Exception:
                 logger.exception("Failed to load compute result")
                 ms.status = "compute_failed"
@@ -485,7 +492,7 @@ class UseCasePage(QWidget):
         # Generic hook: any module can mark its own configuration as not
         # deployable yet via ComputeResult.deploy_blockers (see
         # modules/localiser/compute.py). None means "never evaluated" --
-        # for modules known to populate it, that means a stale pre-upgrade
+        # for modules known to populate it, that means a pre-upgrade
         # result, so force a recompute instead of silently allowing deploy.
         blockers = ms.compute_result.deploy_blockers
         if blockers is None and module_id in _MODULES_WITH_DEPLOY_BLOCKERS:

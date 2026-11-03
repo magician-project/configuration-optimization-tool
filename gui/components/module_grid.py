@@ -7,6 +7,7 @@ Emits module_selected(module_id) when a tile is clicked.
 from __future__ import annotations
 
 import math
+from collections.abc import Collection
 
 from PySide6.QtWidgets import (
     QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
@@ -243,7 +244,8 @@ class ModuleGrid(QWidget):
         self._group_grids[group_id] = grid
         return frame
 
-    def update_modules(self, modules: dict) -> None:
+    def update_modules(self, modules: dict, out_of_date: Collection[str] = frozenset()) -> None:
+        """Show the module states; ``out_of_date`` holds the ids whose compute result is out of date."""
         def is_out_of_scope(module_id: str) -> bool:
             return getattr(modules.get(module_id), "status", None) == "out_of_scope"
 
@@ -258,7 +260,7 @@ class ModuleGrid(QWidget):
         for mid, tile in self._tiles.items():
             ms: ModuleState | None = modules.get(mid)
             if ms:
-                tile.update_state(ms)
+                tile.update_state(ms, out_of_date=mid in out_of_date)
                 if ms.status == "needs_action":
                     needs += 1
                 elif ms.status in ("validated", "computed"):
@@ -358,6 +360,14 @@ class _ModuleTile(QFrame):
         self._status_lbl.setStyleSheet("font-size: 11px; color: #6b7280; background: transparent;")
         status_row.addWidget(self._status_lbl)
         status_row.addStretch()
+        self._out_of_date_badge = QLabel("Out of date")
+        self._out_of_date_badge.setToolTip("The answers changed after the last compute. Run Compute again.")
+        self._out_of_date_badge.setStyleSheet(
+            "background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; border-radius: 4px; "
+            "padding: 0px 6px; font-size: 10px; font-weight: bold;"
+        )
+        self._out_of_date_badge.hide()
+        status_row.addWidget(self._out_of_date_badge)
         vbox.addLayout(status_row)
 
         # Action type badges row
@@ -368,8 +378,10 @@ class _ModuleTile(QFrame):
 
         vbox.addStretch()
 
-    def update_state(self, ms: ModuleState) -> None:
+    def update_state(self, ms: ModuleState, out_of_date: bool = False) -> None:
         self._out_of_scope = ms.status == "out_of_scope"
+        # Without a scope there is no result to judge, so the badge would only add noise.
+        self._out_of_date_badge.setVisible(out_of_date and ms.status not in ("out_of_scope", "not_assessed"))
         strip, accent, status_text = _STATUS_STYLE.get(
             ms.status, ("#d1d5db", "#6b7280", ms.status)
         )
