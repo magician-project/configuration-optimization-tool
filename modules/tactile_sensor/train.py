@@ -22,7 +22,7 @@ def run_training(
     Parameters
     ----------
     materials:    list of material labels (e.g. ["metal", "plastic"])
-    defect_types: list of defect labels (e.g. ["dents", "dirt"])
+    defect_types: list of Tactile Classifier defect class labels (e.g. ["POSITIVE", "NEGATIVE"])
     object_size:  size descriptor ("small" | "large" | "variable" | "unknown")
     output_dir:   directory to write the trained model checkpoint to
 

@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # (as [] when there's nothing blocking). A stored result with
 # deploy_blockers is None for one of these predates the convention and
 # must be recomputed before deploy can trust it — see _deploy_module().
-_MODULES_WITH_DEPLOY_BLOCKERS = {"localiser"}
+_MODULES_WITH_DEPLOY_BLOCKERS = {"localiser", "tactile_sensor", "orienteering_solver", "ergodic_control"}
 
 
 class UseCasePage(QWidget):
@@ -529,6 +529,12 @@ class UseCasePage(QWidget):
             ms.status = "deployed"
             ms.deployed_at = datetime.now(timezone.utc).isoformat()
             self._show_banner(f"{ms.module_name} deployed to ROS 2.")
+            if ms.compute_result.notes:
+                QMessageBox.information(
+                    self, "Deployed with notes",
+                    f"{ms.module_name} was deployed. Please note:\n- "
+                    + "\n- ".join(ms.compute_result.notes),
+                )
         else:
             ms.status = "deploy_failed"
             QMessageBox.warning(

@@ -118,9 +118,10 @@ Q4  Apr – Jun 2027   Production-ready — pip package, contributor guide, hard
 - Add the three grinding modules to the module registry, based on the partner module scans
 - DMP: select the learned grinding primitive per defect class (see [[CONTEXT]]); new demonstrations mean the primitive is regenerated and validated outside COT, never retrained
 - Impedance Controller and Cartesian Controller: capture their configurable parameters and use-case impacts from the partner module scans
-- Generate startup configuration; only fire live ROS 2 parameter updates once runtime tuning is confirmed for these modules
-- Add schema questions, impact rules and module dependencies (DMP → Cartesian / Impedance Controller); in scope whenever the pipeline selection includes grinding
-- **Done when:** A grinding use case shows the three modules on the dashboard with impacts, and produces a startup configuration for each
+- Generate one shared startup configuration for the IIT grinding runtime that hosts all three (see [[0005-iit-grinding-runtime-split-into-modules-with-one-startup-artifact|ADR-0005]]); only fire live ROS 2 parameter updates once runtime tuning is confirmed for these modules
+- Add schema questions, impact rules and module dependencies (DMP → Cartesian / Impedance Controller); in scope whenever the pipeline selection includes grinding. DMP joins Motion Planning; the two controllers form a new Controller group
+- Broken into tickets 07–15 in `docs/tickets/`
+- **Done when:** A grinding use case shows the three modules on the dashboard with impacts, and produces one startup configuration for the IIT grinding runtime
 
 ---
 

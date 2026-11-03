@@ -15,6 +15,10 @@ import os
 import sys
 from datetime import datetime
 
+# Explicit mapping from COT defect classes to the Tactile Classifier's labels.
+# Its interface has no label for "other", so that class blocks deployment.
+_DEFECT_CLASS_LABELS = {"positive_dent": "POSITIVE", "negative_dent": "NEGATIVE"}
+
 
 def run(answers: dict, output_dir: str) -> dict:
     """
@@ -24,9 +28,7 @@ def run(answers: dict, output_dir: str) -> dict:
     outputs: dict = {}
 
     materials = answers.get("q5_materials") or []
-    defects = answers.get("q8_defects") or []
-    if answers.get("q8_other_defect"):
-        defects = [answers["q8_other_defect"] if d == "other" else d for d in defects]
+    defects = [_DEFECT_CLASS_LABELS[d] for d in answers.get("q8_defects") or [] if d in _DEFECT_CLASS_LABELS]
     object_size = answers.get("q6_object_size") or "unknown"
 
     outputs["materials"] = ",".join(materials) if materials else "unspecified"
@@ -54,6 +56,25 @@ def run(answers: dict, output_dir: str) -> dict:
     return outputs
 
 
+def deploy_blockers(answers: dict) -> list:
+    """
+    Human-readable reasons this configuration must not be deployed yet.
+    Written as a top-level result.json field, next to `outputs`.
+    """
+    blockers = []
+    if "other" in (answers.get("q8_defects") or []):
+        description = str(answers.get("q8_other_defect") or "").strip()
+        if not description:
+            blockers.append("describe the other defect class (Q8)")
+        elif "," in description:
+            blockers.append("describe one other defect class, without commas (Q8)")
+        blockers.append(
+            f"defect class '{description or 'other'}' is not supported by the Tactile Classifier "
+            "interface (POSITIVE and NEGATIVE only)"
+        )
+    return blockers
+
+
 def main() -> None:
     if len(sys.argv) < 3:
         print(
@@ -72,6 +93,7 @@ def main() -> None:
 
     print(f"[tactile_sensor] Computing configuration for use case: {use_case.get('name', '?')}")
     outputs = run(answers, output_dir)
+    blockers = deploy_blockers(answers)
 
     result = {
         "module_id": "tactile_sensor",
@@ -79,6 +101,8 @@ def main() -> None:
         "outputs": outputs,
         "error": None,
         "computed_at": datetime.utcnow().isoformat(),
+        "deploy_blockers": blockers,
+        "notes": [],
     }
 
     os.makedirs(output_dir, exist_ok=True)
@@ -87,6 +111,7 @@ def main() -> None:
         json.dump(result, f, indent=2)
 
     print(f"[tactile_sensor] Result written to {out_path}")
+    print(f"[tactile_sensor] Deploy blockers: {blockers or 'none'}")
     for k, v in outputs.items():
         print(f"  {k}: {v}")
 

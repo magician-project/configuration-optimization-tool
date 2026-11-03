@@ -4,10 +4,13 @@ from app.models.use_case import ModuleImpact, Flag, ModuleState, ConfidenceScore
 from app.engine.module_registry import MODULES, compute_default_modules, is_assessed
 from app.engine.module_dependencies import validate_configuration
 
+_DEFECT_CLASS_LABELS = {"positive_dent": "Positive Dent", "negative_dent": "Negative Dent"}
+
+
 def _defect_names(answers: QuestionnaireAnswers) -> List[str]:
-    """Selected Q8 defect types with "other" replaced by the free-text answer."""
-    other = answers.q8_other_defect or "(other \u2014 unspecified)"
-    return [other if d == "other" else d for d in answers.q8_defects]
+    """Selected Q8 defect classes as labels, with "other" replaced by its description."""
+    other = (answers.q8_other_defect or "").strip() or "(other \u2014 unspecified)"
+    return [other if d == "other" else _DEFECT_CLASS_LABELS.get(d, d) for d in answers.q8_defects]
 
 
 # ---------------------------------------------------------------------------
@@ -440,52 +443,33 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             total_characteristics += 1
 
     # ------------------------------------------------------------------
-    # Q8: Defect types
+    # Q8: Defect classes
     # ------------------------------------------------------------------
     if answers.q8_defects:
-        defect_labels = {
-            "dents": "Dents/Deformations",
-            "dirt": "Dirt/Contamination",
-            "surface_damage": "Surface damage",
-        }
-        defects_text = ", ".join(
-            defect_labels.get(d, d) for d in _defect_names(answers)
-        )
+        defects_text = ", ".join(_defect_names(answers))
         result["orienteering_solver"]["impacts"].append(_impact(
             characteristic="Type defect",
             affects="DefectProfitCalculator, Defect Information",
             what_changes=(
-                f"Defect types: {defects_text}. Profit function and service time model must be "
-                "calibrated per defect type. Partners must supply defect-type-specific "
+                f"Defect classes: {defects_text}. Profit function and service time model must be "
+                "calibrated per defect class. Partners must supply defect-class-specific "
                 "economic and operational parameters."
             ),
             action_type="reconfigure",
-            reason="Q8: Defect types selected",
+            reason="Q8: Defect classes selected",
         ))
         result["tactile_sensor"]["impacts"].append(_impact(
             characteristic="Different materials, object sizes, dirt/dent types, and time constraints",
             affects="Input",
             what_changes=(
-                f"Tactile Classifier must have training data for defect types: {defects_text}. "
-                "Classes in the CNN-LSTM output layer must match the selected types. "
-                "Re-label and retrain if any type is new."
+                f"Tactile Classifier must have training data for defect classes: {defects_text}. "
+                "Classes in the CNN-LSTM output layer must match the selected classes. "
+                "Re-label and retrain if any class is new."
             ),
             action_type="retrain",
-            reason="Q8: Defect types selected",
+            reason="Q8: Defect classes selected",
         ))
         total_characteristics += 2
-
-        geometric = {"dents", "surface_damage"}
-        if any(d in geometric for d in answers.q8_defects):
-            result["tactile_sensor"]["flags"].append(_flag(
-                id="flag_geometric_defects",
-                type="warning",
-                message=(
-                    "Dents and surface damage require 3D or depth-aware data. "
-                    "Verify labelled examples exist before training."
-                ),
-                module_id="tactile_sensor",
-            ))
 
     # ------------------------------------------------------------------
     # Q8 extensions: Vision Classifier configuration
@@ -771,12 +755,12 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
             characteristic="Material / defect context updated",
             affects="Input",
             what_changes=(
-                f"Target materials: {mat_str}. Defect types: {def_str}. "
+                f"Target materials: {mat_str}. Defect classes: {def_str}. "
                 "The Ergodic Control prior distribution is seeded from this context — "
                 "re-run compute to regenerate trajectory and Kalman configs."
             ),
             action_type="reconfigure",
-            reason="Q5/Q8: Material or defect types specified",
+            reason="Q5/Q8: Material or defect classes specified",
         ))
         total_characteristics += 1
 
@@ -1012,7 +996,7 @@ def _compute_confidence(answers: QuestionnaireAnswers, module_answers: dict = No
     if answers.q5_materials or answers.q6_object_size:
         score += 1
 
-    # Cat 5: Defect Types
+    # Cat 5: Defect Classes
     if answers.q8_defects:
         score += 1
 
