@@ -10,6 +10,7 @@ Runs outlive their page: a run still going blocks a new compute on a reopened pa
 
 import json
 import threading
+import time
 
 import pytest
 from PySide6.QtWidgets import QApplication
@@ -217,7 +218,7 @@ def orphan_run(tmp_path, monkeypatch):
     release = threading.Event()
     started = []
 
-    def start(use_case_id: str, module_id: str) -> None:
+    def start(use_case_id: str, module_id: str) -> threading.Event:
         uc = json_store.load(use_case_id)
         first_line = threading.Event()
 
@@ -229,6 +230,7 @@ def orphan_run(tmp_path, monkeypatch):
         runner.start()
         started.append((use_case_id, module_id))
         assert first_line.wait(timeout=60)
+        return release
 
     yield start
     release.set()
@@ -277,6 +279,42 @@ def test_reopening_a_use_case_whose_compute_still_runs_keeps_it_computing(
     reopened = UseCasePage("fresh")
 
     assert reopened._use_case.modules["grabber"].status == "computing"
+
+
+def _wait_for_status(page, module_id: str, status: str) -> None:
+    deadline = time.monotonic() + 30
+    while page._use_case.modules[module_id].status != status:
+        assert time.monotonic() < deadline, f"{module_id} never reached {status}"
+        QApplication.processEvents()
+        time.sleep(0.01)
+
+
+def test_a_reopened_page_recovers_when_the_compute_it_found_running_ends(
+    qapp, tmp_path, monkeypatch, orphan_run
+):
+    from gui.pages import use_case_page
+    monkeypatch.setattr(use_case_page.UseCasePage, "_ORPHAN_POLL_MS", 10)
+    _computing_page(tmp_path, monkeypatch, "grabber")
+    release = orphan_run("fresh", "grabber")
+    reopened = use_case_page.UseCasePage("fresh")
+    assert reopened._use_case.modules["grabber"].status == "computing"
+
+    release.set()
+    _wait_for_status(reopened, "grabber", "compute_failed")
+
+    from PySide6.QtWidgets import QLabel
+    tile_texts = [w.text() for w in reopened._module_grid.tile("grabber").findChildren(QLabel)]
+    assert "Compute failed" in tile_texts
+    assert "Run Compute again" in reopened._banner.text()
+    assert json_store.load("fresh").modules["grabber"].status == "compute_failed"
+
+
+def test_the_recovery_leaves_a_compute_of_this_page_alone(qapp, tmp_path, monkeypatch):
+    page, _result_path = _computing_page(tmp_path, monkeypatch, "grabber")
+
+    page._recover_orphaned_computes()
+
+    assert page._use_case.modules["grabber"].status == "computing"
 
 
 # A new run overwrites the artifact files of the kept result in compute_outputs/<module>/,

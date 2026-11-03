@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTabWidget, QMessageBox,
 )
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Qt, QTimer, Signal, Slot
 
 from app.models.use_case import UseCase, ComputeResult, ExternalSource
 from app.engine.module_dependencies import validate_configuration
@@ -51,6 +51,7 @@ class UseCasePage(QWidget):
     navigate_home = Signal()
     _compute_line_received = Signal(str)
     _compute_finished = Signal(str, bool, object)
+    _ORPHAN_POLL_MS = 1000
 
     def __init__(self, use_case_id: str, parent=None) -> None:
         super().__init__(parent)
@@ -63,6 +64,8 @@ class UseCasePage(QWidget):
         # Answers fingerprint per module, taken when its compute starts (the answers compute.py reads).
         # A module in here has a compute still running.
         self._compute_fingerprints: dict[str, str] = {}
+        self._orphan_timer = QTimer(self)
+        self._orphan_timer.timeout.connect(self._recover_orphaned_computes)
         self._compute_line_received.connect(self._append_compute_line)
         self._compute_finished.connect(self._finish_compute)
         self._build_ui()
@@ -175,28 +178,52 @@ class UseCasePage(QWidget):
             self.navigate_home.emit()
             return
         self._use_case = uc
-        self._fail_computes_without_a_run(uc)
+        self._fail_computes_without_a_run()
         self._dirty = False
         self._pending_answers = None
         self._save_bar.hide()
         self._refresh_ui()
+        self._watch_orphaned_computes()
 
-    @staticmethod
-    def _fail_computes_without_a_run(uc: UseCase) -> None:
-        """Show a stored "computing" status as failed when no run is left to finish it.
+    def _orphaned_computes(self) -> list:
+        """Modules stored as "computing" that this page did not start."""
+        uc = self._use_case
+        return [
+            ms for mid, ms in uc.modules.items()
+            if ms.status == "computing" and mid not in self._compute_fingerprints
+        ] if uc is not None else []
+
+    def _fail_computes_without_a_run(self) -> list:
+        """Mark "computing" modules as failed when no run is left to finish them; returns those modules.
 
         A page that is closed while its compute runs never processes the result, so the
         module would otherwise stay on "computing" without any action to retry.
         """
-        orphaned = [
-            ms for mid, ms in uc.modules.items()
-            if ms.status == "computing" and not is_compute_running(uc.id, mid)
-        ]
-        if not orphaned:
-            return
-        for ms in orphaned:
+        uc = self._use_case
+        ended = [ms for ms in self._orphaned_computes() if not is_compute_running(uc.id, ms.module_id)]
+        for ms in ended:
             ms.status = "compute_failed"
-        json_store.save(uc)
+        if ended:
+            json_store.save(uc)
+        return ended
+
+    def _watch_orphaned_computes(self) -> None:
+        """Keep checking while a compute of an earlier page is running: its result reaches that page, not this one."""
+        if self._orphaned_computes():
+            self._orphan_timer.start(self._ORPHAN_POLL_MS)
+
+    @Slot()
+    def _recover_orphaned_computes(self) -> None:
+        ended = self._fail_computes_without_a_run()
+        if not self._orphaned_computes():
+            self._orphan_timer.stop()
+        if not ended:
+            return
+        self._refresh_grid()
+        for ms in ended:
+            self._refresh_open_dialog(ms.module_id)
+        names = ", ".join(ms.module_name for ms in ended)
+        self._show_banner(f"The compute of {names} ended while this page was closed. Run Compute again.")
 
     def _refresh_ui(self) -> None:
         uc = self._use_case
