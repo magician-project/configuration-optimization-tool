@@ -420,6 +420,9 @@ class UseCasePage(QWidget):
             return
 
         ms.status = "computing"
+        # This run overwrites the artifact files of the kept result, so that result is out of
+        # date from now on, also if this run fails or is discarded.
+        ms.computed_answers_fingerprint = None
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
         # compute.py reads this snapshot, so the fingerprint describes exactly the answers it uses.

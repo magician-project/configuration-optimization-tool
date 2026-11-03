@@ -200,6 +200,38 @@ def test_a_second_compute_is_refused_while_the_first_still_runs(qapp, tmp_path, 
     assert not _badge_visible(page, "grabber")
 
 
+def _save_pipeline(page, pipeline) -> None:
+    page._pending_answers = {**page._use_case.answers.model_dump(), "q_pipeline": pipeline}
+    page._save_questionnaire()
+
+
+# A new run overwrites the artifact files of the kept result in compute_outputs/<module>/,
+# so once it starts, that result can no longer be trusted, whatever happens to the run.
+def test_a_failed_recompute_leaves_the_previous_result_out_of_date(qapp, tmp_path, monkeypatch):
+    page, result_path = _computing_page(tmp_path, monkeypatch, "grabber")
+    page._finish_compute("grabber", True, result_path)
+
+    page._run_compute("grabber")
+    page._finish_compute("grabber", False, None)
+
+    assert page._use_case.modules["grabber"].compute_result is not None
+    assert _badge_visible(page, "grabber")
+
+
+def test_a_discarded_recompute_leaves_the_previous_result_out_of_date_after_reverting(
+    qapp, tmp_path, monkeypatch
+):
+    page, result_path = _computing_page(tmp_path, monkeypatch, "grabber")
+    page._finish_compute("grabber", True, result_path)
+
+    page._run_compute("grabber")
+    _save_pipeline(page, None)
+    page._finish_compute("grabber", True, result_path)
+    _save_pipeline(page, "inspection")
+
+    assert _badge_visible(page, "grabber")
+
+
 def test_the_fingerprint_survives_reloading_the_use_case(qapp, tmp_path, monkeypatch):
     page, result_path = _computing_page(tmp_path, monkeypatch, "grabber")
     page._finish_compute("grabber", True, result_path)
