@@ -106,7 +106,7 @@ A module without any open item is shown as **Ready to validate** (internal statu
 
 ## Offline Compute
 
-For each module, COT can run a dedicated `compute.py` script that reads the questionnaire answers and derives the specific ROS parameter values without requiring a live ROS environment. The runner (`app/engine/compute_runner.py`) spawns the script as a child subprocess and streams its stdout/stderr back to a progress dialog in the GUI.
+For each module, COT can run a dedicated `compute.py` script that reads the questionnaire answers and derives the specific ROS parameter values without requiring a live ROS environment. The runner (`app/engine/compute_runner.py`) spawns the script as a child subprocess and streams its stdout/stderr back to a progress dialog in the GUI. The script reads a snapshot of the use case taken when compute starts, not the live `use_case.json`, so answers saved during a run never mix into it and the result's answers fingerprint matches what it was computed from. A module can have only one compute running at a time.
 
 Computed outputs are written to:
 

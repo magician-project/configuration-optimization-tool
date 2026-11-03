@@ -422,7 +422,9 @@ class UseCasePage(QWidget):
         ms.status = "computing"
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
-        self._compute_fingerprints[module_id] = answers_fingerprint(uc, module_id)
+        # compute.py reads this snapshot, so the fingerprint describes exactly the answers it uses.
+        snapshot = uc.model_copy(deep=True)
+        self._compute_fingerprints[module_id] = answers_fingerprint(snapshot, module_id)
         self._refresh_grid()
         self._refresh_open_dialog(module_id)
 
@@ -438,7 +440,7 @@ class UseCasePage(QWidget):
         def on_done(success: bool, result_path: str | None) -> None:
             self._compute_finished.emit(module_id, success, result_path)
 
-        runner = ComputeRunner(uc, module_id, on_line, on_done)
+        runner = ComputeRunner(snapshot, module_id, on_line, on_done)
         runner.start()
 
     @Slot(str)
