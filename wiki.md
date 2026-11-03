@@ -100,11 +100,13 @@ Clicking a tile opens the module detail dialog, where engineers can:
 
 A module without any open item is shown as **Ready to validate** (internal status `ok`); it can be validated and computed. **Action required** (`needs_action`) is shown only when there is a concrete open item: an impact, an unacknowledged flag, or an external input without an agreed source.
 
+**Out of date**: every compute stores a fingerprint of the answers its `compute.py` reads (the general answers plus that module's own `module_answers`). When those answers change afterwards, the tile shows an **Out of date** badge; reverting the change clears it again. Answers of other modules never make a result out of date, and a result computed before fingerprints existed always counts as out of date. Starting a new compute also makes the kept result out of date, because the run overwrites its artifact files; if the run fails or is discarded, the old result stays out of date until a compute succeeds. Saving answers still resets the module status, but keeps the last compute result so its freshness can be judged (`app/engine/result_freshness.py`). The badge is informational: it does not block deploy of the existing modules.
+
 ---
 
 ## Offline Compute
 
-For each module, COT can run a dedicated `compute.py` script that reads the questionnaire answers and derives the specific ROS parameter values without requiring a live ROS environment. The runner (`app/engine/compute_runner.py`) spawns the script as a child subprocess and streams its stdout/stderr back to a progress dialog in the GUI.
+For each module, COT can run a dedicated `compute.py` script that reads the questionnaire answers and derives the specific ROS parameter values without requiring a live ROS environment. The runner (`app/engine/compute_runner.py`) spawns the script as a child subprocess and streams its stdout/stderr back to a progress dialog in the GUI. The script reads a snapshot of the use case taken when compute starts, not the live `use_case.json`, so answers saved during a run never mix into it and the result's answers fingerprint matches what it was computed from. A module can have only one compute running at a time, also after you left the use case and reopened it: running computes are tracked per use case and module for the whole application. A module that is still on "Computing…" when its use case is opened, while no compute is running for it any more, is shown as *Compute failed* so it can be retried. If its compute is still running when the use case is opened, the page keeps checking and does the same, with a message, as soon as that compute ends: the result of that run reaches the page that started it, not the reopened one, so run Compute again.
 
 Computed outputs are written to:
 

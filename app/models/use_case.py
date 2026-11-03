@@ -73,6 +73,9 @@ class ModuleState(BaseModel):
     compute_result: Optional[ComputeResult] = None
     validated_at: Optional[str] = None
     computed_at: Optional[str] = None
+    # Fingerprint of the answers compute_result was computed from (see
+    # app/engine/result_freshness.py). None for results computed before fingerprints existed.
+    computed_answers_fingerprint: Optional[str] = None
     deployed_at: Optional[str] = None
 
 

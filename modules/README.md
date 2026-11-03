@@ -41,6 +41,9 @@ modules/<module_id>/
    ```
    python -m modules.<module_id>.compute <use_case.json> <output_dir>
    ```
+   `<use_case.json>` is a temporary snapshot of the use case, taken when compute starts, in the
+   same format as the stored `use_case.json`. Read it only through `sys.argv[1]`: its location
+   says nothing about the use case folder, and the file is deleted after the run.
 5. `compute.py` writes `result.json` to `<output_dir>`.
 6. The user reviews the result and clicks **Deploy to ROS 2**.
 7. COT calls `ros_interface.get_commands(outputs)` and fires the resulting

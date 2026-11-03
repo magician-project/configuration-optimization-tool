@@ -105,3 +105,7 @@ _Avoid_: no action needed, ok
 **Not assessed**:
 The state of a use case whose pipeline selection is unanswered. The pipeline selection is the gate: until it is answered, scope cannot be derived, so no module is shown as in scope, valid, or free of actions, and impacts from other answers are not shown either.
 _Avoid_: valid, no action needed (both claim an assessment that did not happen)
+
+**Out of date**:
+A compute result whose answers changed after it was computed: the general answers or the module's own answers differ from the fingerprint stored at compute, or there is no fingerprint at all. Answers of other modules never make it out of date, and reverting a change makes it current again. It is a property of the compute result, not a module status.
+_Avoid_: stale, outdated status

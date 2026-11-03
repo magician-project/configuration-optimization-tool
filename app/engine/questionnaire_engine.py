@@ -893,6 +893,7 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
     Preserves flag acknowledged state where flag IDs match.
     Resets module status to 'ok' or 'needs_action' based on new impacts, or to
     'out_of_scope' when the module is not in the use case's default module set.
+    Keeps the last compute result and its answers fingerprint (see result_freshness).
     """
     module_impacts = result["module_impacts"]
     use_case.confidence = ConfidenceScore(**result["confidence"])
@@ -936,6 +937,9 @@ def apply_impacts_to_modules(use_case: UseCase, result: Dict[str, Any]) -> None:
             status=new_status,
             impacts=new_impacts,
             flags=new_flags,
+            compute_result=current.compute_result if current else None,
+            computed_at=current.computed_at if current else None,
+            computed_answers_fingerprint=current.computed_answers_fingerprint if current else None,
         )
 
     sync_external_input_status(use_case)

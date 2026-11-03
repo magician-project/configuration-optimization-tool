@@ -57,3 +57,18 @@ def test_tile_status_is_readable_as_text_not_only_as_colour(qapp):
         state = ModuleState(module_id="grabber", module_name="Grabber", description="d", status=status)
 
         assert text in _texts(_grid_with(state).tile("grabber"))
+
+
+def _visible_texts(widget) -> list:
+    return [w.text() for w in widget.findChildren(QLabel) if not w.isHidden()]
+
+
+def test_tile_shows_an_out_of_date_badge_only_for_out_of_date_results(qapp):
+    state = ModuleState(module_id="grabber", module_name="Grabber", description="d", status="computed")
+    grid = ModuleGrid()
+
+    grid.update_modules({"grabber": state}, out_of_date={"grabber"})
+    assert "Out of date" in _visible_texts(grid.tile("grabber"))
+
+    grid.update_modules({"grabber": state})
+    assert "Out of date" not in _visible_texts(grid.tile("grabber"))

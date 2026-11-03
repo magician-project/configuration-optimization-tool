@@ -18,11 +18,12 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTabWidget, QMessageBox,
 )
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Qt, QTimer, Signal, Slot
 
 from app.models.use_case import UseCase, ComputeResult, ExternalSource
 from app.engine.module_dependencies import validate_configuration
 from app.engine.module_registry import is_assessed
+from app.engine.result_freshness import answers_fingerprint, out_of_date_modules
 from app.engine.questionnaire_engine import (
     compute_impacts, apply_impacts_to_modules, consumers_awaiting_external_input,
     sync_external_input_status,
@@ -35,7 +36,7 @@ from gui.components.questionnaire_form import QuestionnaireForm
 from gui.components.module_grid import ModuleGrid
 from gui.components.module_detail import ModuleDetail
 from gui.components.compute_progress_dialog import ComputeProgressDialog
-from app.engine.compute_runner import ComputeRunner
+from app.engine.compute_runner import ComputeRunner, is_compute_running
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ class UseCasePage(QWidget):
     navigate_home = Signal()
     _compute_line_received = Signal(str)
     _compute_finished = Signal(str, bool, object)
+    _ORPHAN_POLL_MS = 1000
 
     def __init__(self, use_case_id: str, parent=None) -> None:
         super().__init__(parent)
@@ -59,6 +61,11 @@ class UseCasePage(QWidget):
         self._dirty = False
         self._active_detail_dlg = None   # currently open ModuleDetail dialog
         self._compute_progress_dlg: Optional[ComputeProgressDialog] = None
+        # Answers fingerprint per module, taken when its compute starts (the answers compute.py reads).
+        # A module in here has a compute still running.
+        self._compute_fingerprints: dict[str, str] = {}
+        self._orphan_timer = QTimer(self)
+        self._orphan_timer.timeout.connect(self._recover_orphaned_computes)
         self._compute_line_received.connect(self._append_compute_line)
         self._compute_finished.connect(self._finish_compute)
         self._build_ui()
@@ -171,10 +178,52 @@ class UseCasePage(QWidget):
             self.navigate_home.emit()
             return
         self._use_case = uc
+        self._fail_computes_without_a_run()
         self._dirty = False
         self._pending_answers = None
         self._save_bar.hide()
         self._refresh_ui()
+        self._watch_orphaned_computes()
+
+    def _orphaned_computes(self) -> list:
+        """Modules stored as "computing" that this page did not start."""
+        uc = self._use_case
+        return [
+            ms for mid, ms in uc.modules.items()
+            if ms.status == "computing" and mid not in self._compute_fingerprints
+        ] if uc is not None else []
+
+    def _fail_computes_without_a_run(self) -> list:
+        """Mark "computing" modules as failed when no run is left to finish them; returns those modules.
+
+        A page that is closed while its compute runs never processes the result, so the
+        module would otherwise stay on "computing" without any action to retry.
+        """
+        uc = self._use_case
+        ended = [ms for ms in self._orphaned_computes() if not is_compute_running(uc.id, ms.module_id)]
+        for ms in ended:
+            ms.status = "compute_failed"
+        if ended:
+            json_store.save(uc)
+        return ended
+
+    def _watch_orphaned_computes(self) -> None:
+        """Keep checking while a compute of an earlier page is running: its result reaches that page, not this one."""
+        if self._orphaned_computes():
+            self._orphan_timer.start(self._ORPHAN_POLL_MS)
+
+    @Slot()
+    def _recover_orphaned_computes(self) -> None:
+        ended = self._fail_computes_without_a_run()
+        if not self._orphaned_computes():
+            self._orphan_timer.stop()
+        if not ended:
+            return
+        self._refresh_grid()
+        for ms in ended:
+            self._refresh_open_dialog(ms.module_id)
+        names = ", ".join(ms.module_name for ms in ended)
+        self._show_banner(f"The compute of {names} ended while this page was closed. Run Compute again.")
 
     def _refresh_ui(self) -> None:
         uc = self._use_case
@@ -189,7 +238,7 @@ class UseCasePage(QWidget):
         uc = self._use_case
         if uc is None:
             return
-        self._module_grid.update_modules(uc.modules)
+        self._module_grid.update_modules(uc.modules, out_of_date=out_of_date_modules(uc))
         self._validation_panel.update_validation(self._validation(uc))
 
     @staticmethod
@@ -406,10 +455,26 @@ class UseCasePage(QWidget):
         ms = uc.modules.get(module_id)
         if ms is None or ms.status == "out_of_scope":
             return
+        # Saving answers resets the "computing" status, so the status cannot tell whether a run is
+        # still going. Overlapping runs would share result.json and swap their fingerprints.
+        # The registry knows runs of pages that are gone; the local entry covers a run that has
+        # ended but whose result this page has not processed yet.
+        if module_id in self._compute_fingerprints or is_compute_running(uc.id, module_id):
+            QMessageBox.warning(
+                self, "Compute already running",
+                f"A compute for {ms.module_name} is still running. Wait until it has finished.",
+            )
+            return
 
         ms.status = "computing"
+        # This run overwrites the artifact files of the kept result, so that result is out of
+        # date from now on, also if this run fails or is discarded.
+        ms.computed_answers_fingerprint = None
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
+        # compute.py reads this snapshot, so the fingerprint describes exactly the answers it uses.
+        snapshot = uc.model_copy(deep=True)
+        self._compute_fingerprints[module_id] = answers_fingerprint(snapshot, module_id)
         self._refresh_grid()
         self._refresh_open_dialog(module_id)
 
@@ -425,7 +490,7 @@ class UseCasePage(QWidget):
         def on_done(success: bool, result_path: str | None) -> None:
             self._compute_finished.emit(module_id, success, result_path)
 
-        runner = ComputeRunner(uc, module_id, on_line, on_done)
+        runner = ComputeRunner(snapshot, module_id, on_line, on_done)
         runner.start()
 
     @Slot(str)
@@ -447,6 +512,8 @@ class UseCasePage(QWidget):
         if self._compute_progress_dlg is not None:
             self._compute_progress_dlg.on_done(success, result_path)
 
+        fingerprint = self._compute_fingerprints.pop(module_id, None)
+
         # Scope may have changed while compute ran; a late result must not undo that.
         if ms.status in ("out_of_scope", "not_assessed"):
             return
@@ -460,6 +527,7 @@ class UseCasePage(QWidget):
                 ms.status = "computed"
                 ms.compute_result = result
                 ms.computed_at = datetime.now(timezone.utc).isoformat()
+                ms.computed_answers_fingerprint = fingerprint
             except Exception:
                 logger.exception("Failed to load compute result")
                 ms.status = "compute_failed"
@@ -485,7 +553,7 @@ class UseCasePage(QWidget):
         # Generic hook: any module can mark its own configuration as not
         # deployable yet via ComputeResult.deploy_blockers (see
         # modules/localiser/compute.py). None means "never evaluated" --
-        # for modules known to populate it, that means a stale pre-upgrade
+        # for modules known to populate it, that means a pre-upgrade
         # result, so force a recompute instead of silently allowing deploy.
         blockers = ms.compute_result.deploy_blockers
         if blockers is None and module_id in _MODULES_WITH_DEPLOY_BLOCKERS:
