@@ -181,6 +181,25 @@ def test_answers_changed_while_compute_runs_make_its_result_out_of_date(qapp, tm
     assert _badge_visible(page, "grabber")
 
 
+def test_a_second_compute_is_refused_while_the_first_still_runs(qapp, tmp_path, monkeypatch):
+    page, result_path = _computing_page(tmp_path, monkeypatch, "grabber")
+    from gui.pages import use_case_page
+    started, warnings = [], []
+    monkeypatch.setattr(use_case_page, "ComputeRunner", lambda *args: started.append(args) or _IdleRunner())
+    monkeypatch.setattr(use_case_page.QMessageBox, "warning", lambda *args: warnings.append(args[1:]))
+    # Saving answers resets the "computing" status, so the status alone cannot guard against a rerun.
+    page._on_module_config_changed("grabber", {"q_example": "after"})
+    page._on_module_config_changed("grabber", {"q_example": "before"})
+
+    page._run_compute("grabber")
+    page._finish_compute("grabber", True, result_path)
+
+    assert started == []
+    [(title, _message)] = warnings
+    assert title == "Compute already running"
+    assert not _badge_visible(page, "grabber")
+
+
 def test_the_fingerprint_survives_reloading_the_use_case(qapp, tmp_path, monkeypatch):
     page, result_path = _computing_page(tmp_path, monkeypatch, "grabber")
     page._finish_compute("grabber", True, result_path)

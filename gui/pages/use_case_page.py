@@ -61,6 +61,7 @@ class UseCasePage(QWidget):
         self._active_detail_dlg = None   # currently open ModuleDetail dialog
         self._compute_progress_dlg: Optional[ComputeProgressDialog] = None
         # Answers fingerprint per module, taken when its compute starts (the answers compute.py reads).
+        # A module in here has a compute still running.
         self._compute_fingerprints: dict[str, str] = {}
         self._compute_line_received.connect(self._append_compute_line)
         self._compute_finished.connect(self._finish_compute)
@@ -408,6 +409,14 @@ class UseCasePage(QWidget):
             return
         ms = uc.modules.get(module_id)
         if ms is None or ms.status == "out_of_scope":
+            return
+        # Saving answers resets the "computing" status, so the status cannot tell whether a run is
+        # still going. Overlapping runs would share result.json and swap their fingerprints.
+        if module_id in self._compute_fingerprints:
+            QMessageBox.warning(
+                self, "Compute already running",
+                f"A compute for {ms.module_name} is still running. Wait until it has finished.",
+            )
             return
 
         ms.status = "computing"
