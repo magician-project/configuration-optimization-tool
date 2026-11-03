@@ -25,8 +25,22 @@ to the ROS 2 node, per the partner-provided configuration spec.
 |---|---|
 | `q5_materials` | List of material types the sensor will encounter |
 | `q6_object_size` | Object size category (affects training data selection) |
-| `q8_defects` | List of defect types to detect |
-| `q8_other_defect` | Free text naming the defect type when `"other"` is selected |
+| `q8_defects` | Defect classes to detect: `positive_dent`, `negative_dent`, `other` |
+| `q8_other_defect` | Required description of the defect class when `"other"` is selected |
+
+## Defect class mapping
+
+COT maps its defect classes explicitly to the Tactile Classifier's labels:
+
+| COT defect class | `defect_types` label |
+|---|---|
+| `positive_dent` (Positive Dent) | `POSITIVE` |
+| `negative_dent` (Negative Dent) | `NEGATIVE` |
+| `other` | none — the current interface has no class for it |
+
+Selecting `other` is a **deploy blocker** that names the described class, so it
+is never silently dropped. A missing description, or one with commas, adds a
+second blocker.
 
 ## Partner parameter inventory
 
@@ -36,7 +50,7 @@ currently reads/writes versus what is still pending:
 | Parameter | Type | Startup/runtime | Status |
 |---|---|---|---|
 | `material_list` | `string[]` | Startup | Implemented — `q5_materials` → `materials` output |
-| `defect_types` | `string[]` | Startup | Implemented — `q8_defects` → `defect_types` output |
+| `defect_types` | `string[]` | Startup | Implemented — `q8_defects` → `defect_types` output (`POSITIVE`/`NEGATIVE`) |
 | `model_path` | `string` | Startup | Implemented — set after (placeholder) training |
 | `retrain_required` | `bool` | COT decision flag | Implemented — derived from materials/defects presence |
 | `force_level` | `float[2]` (`min_force_N`, `max_force_N`) | Startup; not runtime-tunable | Not yet implemented — no question/output wired up |
@@ -53,15 +67,20 @@ inspection strategy/trajectory planning rather than classifier parameters.
 | Key | Type | Description |
 |---|---|---|
 | `materials` | `str` | Comma-separated list of materials |
-| `defects` | `str` | Comma-separated list of defect types |
+| `defect_types` | `str` | Comma-separated defect class labels (`POSITIVE`, `NEGATIVE`), or `unspecified` |
 | `object_size` | `str` | Object size category |
 | `retrain_required` | `int` (0/1) | Whether retraining was triggered |
 | `model_path` | `str` | Absolute path to the trained model checkpoint |
+
+`result.json` also has a top-level `deploy_blockers` list (see the defect class
+mapping above).
 
 ## ROS 2 commands fired
 
 `ros2 param set` on `/tactile_classifier_system`:
 - `model_path`
+- `material_list`
+- `defect_types`
 
 Followed by a `/tactile_classifier_system/reload_model` service call.
 

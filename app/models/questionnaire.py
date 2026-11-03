@@ -1,5 +1,8 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, List, Dict, Any
+
+# Canonical Q8 values. Modules map these to their own interface labels.
+DEFECT_CLASSES = ("positive_dent", "negative_dent", "other")
 
 
 class ObjectDimensions(BaseModel):
@@ -47,8 +50,17 @@ class QuestionnaireAnswers(BaseModel):
     q7_mesh_status: Optional[str] = None      # "cad" | "scanning" | "unknown"
 
     # Section D: Defect Detection
-    q8_defects: List[str] = []               # ["dents", "dirt", "surface_damage", "other"]
-    q8_other_defect: Optional[str] = None
+    q8_defects: List[str] = []               # defect classes: values of DEFECT_CLASSES
+    q8_other_defect: Optional[str] = None    # description, required when "other" is selected
+
+    @field_validator("q8_defects", mode="before")
+    @classmethod
+    def _drop_old_defect_types(cls, value: Any) -> Any:
+        # The old values (dents, dirt, surface_damage) have no safe mapping to a
+        # defect class, so they are dropped and Q8 must be answered again.
+        if isinstance(value, list):
+            return [v for v in value if v in DEFECT_CLASSES]
+        return value
     # Note: Vision Classifier config (q_clf_*) fields are now stored in
     # UseCase.module_answers["vision_classifier"], not here.
 

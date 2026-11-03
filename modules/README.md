@@ -68,6 +68,27 @@ non-empty. Leave it unset (or `[]`) if your module has nothing to block on.
 See `modules/localiser/compute.py::deploy_blockers()` for a reference
 implementation.
 
+### Optional: notes that do not block deployment
+
+For something the partner should know but that must not stop deployment (e.g.
+an interface mapping not yet verified with the module owner), write a
+top-level `notes: list[str]` key next to `outputs`. The GUI shows the notes
+after a successful deploy. See `modules/orienteering_solver/compute.py::notes()`.
+
+### Defect classes
+
+Modules that consume `q8_defects` map COT's defect classes (`positive_dent`,
+`negative_dent`, `other`) explicitly to their own interface labels, and `other`
+is never silently dropped. A class the module's interface does not support is a
+deploy blocker (e.g. `other` in `tactile_sensor`).
+
+Exception: `orienteering_solver` and `ergodic_control` pass the canonical
+classes through, with the description in place of `other`, because their
+interface is not yet agreed with the module owner. Instead of a blocker they
+write the note "defect class mapping not verified with module owner". Once the
+owner confirms the interface, replace the pass-through with an explicit mapping
+and blockers.
+
 ## Contract for `ros_interface.py`
 
 The `get_commands(outputs: dict) -> List[ROS2Command]` function must:

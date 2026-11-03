@@ -57,7 +57,7 @@ Module-specific configuration (for example, vision classifier model selection or
 
 ### Confidence Score
 
-A multi-category completeness bar shows how thoroughly the questionnaire has been filled in. Categories include: Robot Arms, Camera/Sensors, Lighting, Material/Size, Defect Types, Time/Profit, Mesh, Grabber Hardware, and Classifier Config. The score drives a low / medium / high confidence level displayed on each use case card.
+A multi-category completeness bar shows how thoroughly the questionnaire has been filled in. Categories include: Robot Arms, Camera/Sensors, Lighting, Material/Size, Defect Classes, Time/Profit, Mesh, Grabber Hardware, and Classifier Config. The score drives a low / medium / high confidence level displayed on each use case card.
 
 ---
 

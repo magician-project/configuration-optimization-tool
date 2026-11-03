@@ -33,6 +33,9 @@ class ComputeResult(BaseModel):
     # its own typed field rather than an outputs[] entry so `outputs` stays
     # a flat str/int/float dict per the module contract in modules/README.md.
     deploy_blockers: Optional[List[str]] = None
+    # Things the partner should know before deploying, which do not block it
+    # (e.g. an interface mapping not yet verified with the module owner).
+    notes: List[str] = []
     error: Optional[str] = None
 
     def interface_outputs(self) -> Dict[str, object]:

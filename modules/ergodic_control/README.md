@@ -46,8 +46,14 @@ The module also uses:
 - `q2_stream_shm_name` — Shared memory stream name for camera data
 - `q2_camera_framerate` — Camera FPS (affects Kalman filter update rate)
 - `q5_materials` — Target material types (for context)
-- `q8_defects` — Expected defect types (for context)
-- `q8_other_defect` — Free text naming the defect type when `"other"` is selected
+- `q8_defects` — Expected defect classes: `positive_dent`, `negative_dent`, `other`
+- `q8_other_defect` — Required description of the defect class when `"other"` is selected
+
+`defect_types` carries the canonical COT defect classes; a selected `other` is
+replaced by its description and never dropped. The mapping is **not verified
+with the module owner** yet, so `result.json` carries the note "defect class
+mapping not verified with module owner". `other` is not a deploy blocker; a
+missing description for it, or one with commas, is.
 
 ## Outputs (written to `result.json`)
 
@@ -65,7 +71,7 @@ The module also uses:
 | `kalman_process_noise` | `float` | Kalman process noise σ² |
 | `kalman_measurement_noise` | `float` | Kalman measurement noise σ² |
 | `target_materials` | `str` | Comma-separated list of materials |
-| `defect_types` | `str` | Comma-separated list of defect types |
+| `defect_types` | `str` | Comma-separated defect classes (see above), or `unspecified` |
 | `stream_name` | `str` | Shared memory stream name |
 
 ## ROS 2 Commands Fired
@@ -75,7 +81,7 @@ The module also uses:
 On `/magician_ergodic_control`:
 - `mesh_file_path` — Path to .stl mesh
 - `target_materials` — Material types
-- `defect_types` — Defect types
+- `defect_types` — Defect classes
 - `camera_stream_name` — Shared memory stream for camera
 
 On `/magician_configuration`:

@@ -20,7 +20,7 @@ SCHEMA = {
                     "q2_camera_framerate", "q2_stream_shm"]},
         {"id": 3, "label": "Lighting",          "fields": ["q4_lighting"]},
         {"id": 4, "label": "Material/Size",     "fields": ["q5_materials", "q6_object_size"]},
-        {"id": 5, "label": "Defect Types",
+        {"id": 5, "label": "Defect Classes",
          "fields": ["q8_defects", "q_clf_model", "q_clf_tile_size", "q_clf_threshold"]},
         {"id": 6, "label": "Time/Profit",       "fields": ["q9_time", "q10_profit"]},
         {"id": 7, "label": "Mesh",              "fields": ["q7_mesh"]},
@@ -267,22 +267,24 @@ SCHEMA = {
         {
             "id": "q8_defects",
             "section": "D",
-            "title": "Types of defects to detect",
-            "tooltip": "Select all defect types relevant to your application.",
+            "title": "Defect classes",
+            "tooltip": (
+                "Select every defect class the robots must handle. Choose Other only for a class that is "
+                "neither a positive nor a negative dent, and describe it."
+            ),
             "type": "checkbox",
             "options": [
-                {"value": "dents",          "label": "Dents / Deformations"},
-                {"value": "dirt",           "label": "Dirt / Contamination"},
-                {"value": "surface_damage", "label": "Surface damage"},
-                {"value": "other",          "label": "Other defect types"},
+                {"value": "positive_dent", "label": "Positive Dent"},
+                {"value": "negative_dent", "label": "Negative Dent"},
+                {"value": "other",         "label": "Other"},
             ],
             "follow_up": {
                 "condition": {"field": "q8_defects", "operator": "contains", "value": "other"},
                 "question": {
                     "id": "q8_other_defect",
                     "type": "text",
-                    "label": "Specify other defect types:",
-                    "placeholder": "e.g., corrosion, cracks...",
+                    "label": "Describe the other defect class (required, one class):",
+                    "placeholder": "e.g. scratch",
                 },
             },
         },

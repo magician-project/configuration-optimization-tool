@@ -59,7 +59,7 @@ _Avoid_: enabled/disabled, on/off, override
 A required or conditional input relationship from a provider output to a consumer input. A dependency may be satisfied by an active MAGICIAN module or, when explicitly allowed, by a declared external input.
 
 **Module group**:
-A phase of the MAGICIAN architecture that a COT module belongs to: Defect Detection, Task Planning, or Motion Planning. Groups are fixed architecture metadata, not derived from questionnaire answers. On the dashboard, a dependency between two modules of the same group is drawn as a module arrow; dependencies between groups collapse into one group arrow. Arrows only show how modules relate; they do not detect conflicts or block configurations.
+A phase of the MAGICIAN architecture that a COT module belongs to: Defect Detection, Task Planning, Motion Planning, or Controller. Motion Planning holds the modules that produce motion references (Motion Planner, Ergodic Control, DMP); Controller holds the modules of the IIT grinding runtime that turn those references into robot commands (Cartesian Controller, Impedance Controller). Groups are fixed architecture metadata, not derived from questionnaire answers. On the dashboard, a dependency between two modules of the same group is drawn as a module arrow; dependencies between groups collapse into one group arrow. Arrows only show how modules relate; they do not detect conflicts or block configurations.
 _Avoid_: category, section, phase (ambiguous with capability level)
 
 **DMP**:
@@ -67,15 +67,26 @@ The grinding module that replays a learned grinding primitive on a detected defe
 _Avoid_: DMP Motion Planner, grinding planner
 
 **Learned grinding primitive**:
-The pose and force profile the DMP replays on a defect, learned offline from demonstrations; there is one per defect class. New demonstrations mean the primitive is regenerated and validated outside COT — never retrained, and never by COT itself.
+What the DMP replays on a defect: a pose profile and a wrench (force) profile, learned offline from demonstrations; there is one per defect class. New demonstrations mean the primitive is regenerated and validated outside COT — never retrained, and never by COT itself.
 _Avoid_: model, prototype (on its own), DMP (that is the module, not the primitive)
 
+**IIT grinding runtime**:
+The single process that hosts the DMP, Cartesian Controller and Impedance Controller. It is configured once at startup and restarted to change; COT cannot tune it live. The three are separate COT modules but share one startup configuration.
+_Avoid_: IIT player, grinding module
+
+**Shared runtime parameter**:
+A startup parameter of the IIT grinding runtime that serves more than one of its modules (e.g. the control rate). It has one value for the whole runtime, edited in one place and shown wherever it applies.
+
 **Defect class**:
-The classification of a defect that MAGICIAN grinds: Positive Dent or Negative Dent. The DMP selects its learned grinding primitive by defect class, and the Tactile Classifier classifies into the same classes. A defect class the DMP has no primitive for cannot be ground.
+The classification of a defect, used by both inspection and grinding. COT's canonical defect classes are Positive Dent and Negative Dent; a partner may also describe an other defect class. Each module that consumes defect classes maps them to its own interface labels (e.g. the DMP's POSITIVE/NEGATIVE); a defect class without a mapping in a module makes that module not deployable and is never silently dropped. While a module owner has not confirmed the interface, that module passes the canonical classes through with a "mapping not verified" note instead of a blocker. "No Defect" is a classifier outcome, not a defect class.
 _Avoid_: defect type (too generic), dents/dirt/surface damage (the old, too-generic questionnaire values)
 
+**Required capability**:
+An input a module needs that is not tied to one provider module — e.g. the measured wrench for the Impedance Controller. It is satisfied by an in-scope module that provides it or by a declared external source; with neither, the configuration cannot be deployed. A required capability never pulls a module into scope, and is shown as a status on the consuming module rather than as a dashboard arrow.
+_Avoid_: dependency (implies a fixed provider)
+
 **External input requirement**:
-A required consumer input for which the normal MAGICIAN provider is inactive and an external source is allowed. For the initial grinding-only scenario, this is defect information required by the Orienteering Solver.
+A required consumer input — of a module dependency whose normal MAGICIAN provider is out of scope, or of a required capability without an in-scope provider — for which the partner must declare an external source and agree its interface. Examples: defect information for the Orienteering Solver in grinding-only, which must include each defect's defect class; the measured wrench for the Impedance Controller when no in-scope module provides it.
 
 **Dependency evidence status**:
 The confidence category attached to a dependency or interface: documented, conceptual, proposed, or unknown. This describes evidence, not whether a module is present in the COT or whether a use-case configuration is valid.

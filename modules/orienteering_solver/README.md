@@ -29,6 +29,18 @@ reload service call.
 | `q9_time_value` | Numeric time budget (when `q9_time == "tight"`) |
 | `q9_time_unit` | `"seconds"`, `"minutes"`, or `"hours"` |
 | `q10_profit` | `"standard"` or `"custom"` |
+| `q8_defects` | Defect classes: `positive_dent`, `negative_dent`, `other` |
+| `q8_other_defect` | Required description of the defect class when `"other"` is selected |
+
+## Defect classes
+
+`defect_types` carries the canonical COT defect classes (`positive_dent`,
+`negative_dent`); a selected `other` is replaced by its description and never
+dropped. The mapping is **not verified with the module owner** yet, so
+`result.json` carries the note "defect class mapping not verified with module
+owner". `other` is not a deploy blocker, because whether the solver supports it
+is still unknown. A missing description for `other`, or one with commas (which
+would split the class in the comma-separated output), does block deployment.
 
 ## OP variant selection logic
 
@@ -56,11 +68,16 @@ contract (an *external input requirement*, declared in the module dialog).
 | `num_agents` | `int` | Number of robot agents |
 | `time_budget_seconds` | `float` | Time budget in seconds; `-1` = no limit |
 | `custom_profit_enabled` | `int` (0/1) | Whether custom profit function is active |
+| `material_list` | `str` | Comma-separated list of materials |
+| `defect_types` | `str` | Comma-separated defect classes (see above), or `unspecified` |
+
+`result.json` also has top-level `deploy_blockers` and `notes` lists.
 
 ## ROS 2 commands fired
 
 All commands are `ros2 param set` on `/op_solver`:
-- `op_variant`, `num_agents`, `time_budget_seconds`, `custom_profit_enabled`
+- `op_variant`, `num_agents`, `time_budget_seconds`, `custom_profit_enabled`,
+  `material_list`, `defect_types`
 
 Followed by a `/op_solver/reload_config` service call.
 

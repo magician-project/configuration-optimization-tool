@@ -24,6 +24,21 @@ from datetime import datetime
 
 from modules.ergodic_control.generate_config import write_configs
 
+# COT defect classes are passed through unchanged; whether this module expects
+# these values (and how it handles "other") is not yet agreed with its owner.
+_DEFECT_CLASSES = ("positive_dent", "negative_dent")
+_MAPPING_NOT_VERIFIED = "defect class mapping not verified with module owner"
+
+
+def _defect_types(answers: dict) -> list:
+    """Selected defect classes, with "other" replaced by its description (never dropped)."""
+    other = str(answers.get("q8_other_defect") or "").strip() or "other"
+    return [
+        other if d == "other" else d
+        for d in answers.get("q8_defects") or []
+        if d in _DEFECT_CLASSES or d == "other"
+    ]
+
 
 def run(answers: dict, output_dir: str) -> dict:
     outputs: dict = {}
@@ -84,9 +99,7 @@ def run(answers: dict, output_dir: str) -> dict:
 
     # ── Defect information from materials ────────────────────────────────────
     materials = answers.get("q5_materials") or []
-    defects = answers.get("q8_defects") or []
-    if answers.get("q8_other_defect"):
-        defects = [answers["q8_other_defect"] if d == "other" else d for d in defects]
+    defects = _defect_types(answers)
     outputs["target_materials"] = ",".join(materials) if materials else "unspecified"
     outputs["defect_types"] = ",".join(defects) if defects else "unspecified"
 
@@ -103,6 +116,24 @@ def run(answers: dict, output_dir: str) -> dict:
     outputs["motion_planner_service"] = "/motion_planner/execute_trajectory_on_mesh"
 
     return outputs
+
+
+def deploy_blockers(answers: dict) -> list:
+    """Human-readable reasons this configuration must not be deployed yet."""
+    if "other" not in (answers.get("q8_defects") or []):
+        return []
+    description = str(answers.get("q8_other_defect") or "").strip()
+    if not description:
+        return ["describe the other defect class (Q8)"]
+    # defect_types is comma-separated, so a comma would split one class into several.
+    if "," in description:
+        return ["describe one other defect class, without commas (Q8)"]
+    return []
+
+
+def notes(answers: dict) -> list:
+    """Things to know before deploying that do not block it."""
+    return [_MAPPING_NOT_VERIFIED] if _defect_types(answers) else []
 
 
 def main() -> None:
@@ -125,6 +156,7 @@ def main() -> None:
 
     print(f"[ergodic_control] Computing configuration for use case: {use_case.get('name', '?')}")
     outputs = run(answers, output_dir)
+    blockers = deploy_blockers(answers)
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -143,6 +175,8 @@ def main() -> None:
             "trajectory_config": trajectory_path,
             "kalman_config": kalman_path,
         },
+        "deploy_blockers": blockers,
+        "notes": notes(answers),
     }
 
     out_path = os.path.join(output_dir, "result.json")
@@ -150,6 +184,7 @@ def main() -> None:
         json.dump(result, f, indent=2)
 
     print(f"[ergodic_control] Result written to {out_path}")
+    print(f"[ergodic_control] Deploy blockers: {blockers or 'none'}")
     for k, v in outputs.items():
         print(f"  {k}: {v}")
 
