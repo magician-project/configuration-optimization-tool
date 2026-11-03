@@ -36,7 +36,7 @@ from gui.components.questionnaire_form import QuestionnaireForm
 from gui.components.module_grid import ModuleGrid
 from gui.components.module_detail import ModuleDetail
 from gui.components.compute_progress_dialog import ComputeProgressDialog
-from app.engine.compute_runner import ComputeRunner
+from app.engine.compute_runner import ComputeRunner, is_compute_running
 
 logger = logging.getLogger(__name__)
 
@@ -175,10 +175,28 @@ class UseCasePage(QWidget):
             self.navigate_home.emit()
             return
         self._use_case = uc
+        self._fail_computes_without_a_run(uc)
         self._dirty = False
         self._pending_answers = None
         self._save_bar.hide()
         self._refresh_ui()
+
+    @staticmethod
+    def _fail_computes_without_a_run(uc: UseCase) -> None:
+        """Show a stored "computing" status as failed when no run is left to finish it.
+
+        A page that is closed while its compute runs never processes the result, so the
+        module would otherwise stay on "computing" without any action to retry.
+        """
+        orphaned = [
+            ms for mid, ms in uc.modules.items()
+            if ms.status == "computing" and not is_compute_running(uc.id, mid)
+        ]
+        if not orphaned:
+            return
+        for ms in orphaned:
+            ms.status = "compute_failed"
+        json_store.save(uc)
 
     def _refresh_ui(self) -> None:
         uc = self._use_case
@@ -412,7 +430,9 @@ class UseCasePage(QWidget):
             return
         # Saving answers resets the "computing" status, so the status cannot tell whether a run is
         # still going. Overlapping runs would share result.json and swap their fingerprints.
-        if module_id in self._compute_fingerprints:
+        # The registry knows runs of pages that are gone; the local entry covers a run that has
+        # ended but whose result this page has not processed yet.
+        if module_id in self._compute_fingerprints or is_compute_running(uc.id, module_id):
             QMessageBox.warning(
                 self, "Compute already running",
                 f"A compute for {ms.module_name} is still running. Wait until it has finished.",

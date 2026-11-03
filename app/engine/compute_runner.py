@@ -18,6 +18,11 @@ The runner snapshots the use case when it is created and gives compute.py that
 snapshot, not the live use_case.json: answers saved while compute starts up must
 not leak into the run (its answers fingerprint is taken from the same snapshot).
 
+Runs are registered per (use case, module) for the whole process, because they share
+one output directory and outlive the page that started them. Use is_compute_running()
+to ask, and expect ComputeAlreadyRunning from start() when a run is still going.
+Callbacks may fail (e.g. the page that owned them is gone); the run goes on regardless.
+
 The runner writes result.json to:
     data/use_cases/{use_case_id}/compute_outputs/{module_id}/result.json
 """
@@ -40,11 +45,25 @@ logger = logging.getLogger(__name__)
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 _DATA_DIR = os.path.join(_REPO_ROOT, "data", "use_cases")
 
+# Output directories of the runs in progress; the directory is the shared resource that must not be written twice.
+_active_runs: set[str] = set()
+_active_runs_lock = threading.Lock()
+
+
+class ComputeAlreadyRunning(RuntimeError):
+    """A compute for this use case and module is still running."""
+
 
 def _output_dir(use_case_id: str, module_id: str) -> str:
     safe_uc = "".join(c for c in use_case_id if c.isalnum() or c == "-")
     safe_mod = "".join(c for c in module_id if c.isalnum() or c in "-_")
     return os.path.join(_DATA_DIR, safe_uc, "compute_outputs", safe_mod)
+
+
+def is_compute_running(use_case_id: str, module_id: str) -> bool:
+    """True while a compute for this module of this use case is running, whichever page started it."""
+    with _active_runs_lock:
+        return _output_dir(use_case_id, module_id) in _active_runs
 
 
 class ComputeRunner:
@@ -75,13 +94,43 @@ class ComputeRunner:
         self._thread: Optional[threading.Thread] = None
 
     def start(self) -> None:
-        """Start the compute subprocess in a background thread (non-blocking)."""
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
+        """Start the compute subprocess in a background thread (non-blocking).
+
+        Raises ComputeAlreadyRunning if this module of this use case is still computing.
+        """
+        out_dir = _output_dir(self._use_case_id, self._module_id)
+        with _active_runs_lock:
+            if out_dir in _active_runs:
+                raise ComputeAlreadyRunning(f"{self._module_id} of use case {self._use_case_id}")
+            _active_runs.add(out_dir)
+        try:
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+        except BaseException:
+            self._release(out_dir)
+            raise
+
+    @staticmethod
+    def _release(out_dir: str) -> None:
+        with _active_runs_lock:
+            _active_runs.discard(out_dir)
+
+    def _notify_line(self, line: str) -> None:
+        try:
+            self._on_line(line)
+        except Exception:
+            logger.debug("Compute output listener failed for %s", self._module_id, exc_info=True)
+
+    def _notify_done(self, success: bool, result_path: Optional[str]) -> None:
+        try:
+            self._on_done(success, result_path)
+        except Exception:
+            logger.debug("Compute completion listener failed for %s", self._module_id, exc_info=True)
 
     def _run(self) -> None:
         out_dir = _output_dir(self._use_case_id, self._module_id)
         input_path: Optional[str] = None
+        success, done_path = False, None
 
         # Force the child process to write UTF-8 to stdout/stderr regardless of the
         # platform's default console codepage (e.g. cp1252 on Windows). Without this,
@@ -99,7 +148,7 @@ class ComputeRunner:
 
             module_dotted = f"modules.{self._module_id}.compute"
             cmd = [sys.executable, "-m", module_dotted, input_path, out_dir]
-            self._on_line(f"[compute_runner] Starting: {' '.join(cmd)}")
+            self._notify_line(f"[compute_runner] Starting: {' '.join(cmd)}")
 
             proc = subprocess.Popen(
                 cmd,
@@ -113,30 +162,30 @@ class ComputeRunner:
             )
 
             for line in proc.stdout:  # type: ignore[union-attr]
-                self._on_line(line.rstrip())
+                self._notify_line(line.rstrip())
 
             proc.wait()
-            success = proc.returncode == 0
 
             result_path = os.path.join(out_dir, "result.json")
-            if success and os.path.exists(result_path):
-                self._on_done(True, result_path)
+            if proc.returncode == 0 and os.path.exists(result_path):
+                success, done_path = True, result_path
             else:
-                msg = (
+                self._notify_line(
                     f"[compute_runner] Subprocess exited with code {proc.returncode}"
-                    if not success
+                    if proc.returncode != 0
                     else f"[compute_runner] result.json not found at {result_path}"
                 )
-                self._on_line(msg)
-                self._on_done(False, None)
 
         except Exception as exc:
             logger.exception("Compute runner failed for %s", self._module_id)
-            self._on_line(f"[compute_runner] Exception: {exc}")
-            self._on_done(False, None)
+            self._notify_line(f"[compute_runner] Exception: {exc}")
         finally:
             if input_path is not None:
                 try:
                     os.remove(input_path)
                 except OSError:
                     logger.warning("Could not remove compute input snapshot %s", input_path)
+            # Released before reporting: once on_done fires, the output files are final.
+            self._release(out_dir)
+
+        self._notify_done(success, done_path)

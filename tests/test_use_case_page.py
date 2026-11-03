@@ -4,15 +4,20 @@ left scope (pipeline changed while it was running) must not bring the module bac
 Also guards UseCasePage._deploy_module(): result notes are shown, and pre-upgrade results
 of modules that evaluate deploy blockers must be recomputed.
 The out-of-date badge follows answer changes after compute, without blocking deploy.
+Runs outlive their page: a run still going blocks a new compute on a reopened page, and a
+"computing" status without a run is shown as failed.
 """
 
 import json
+import threading
 
 import pytest
 from PySide6.QtWidgets import QApplication
 
 from datetime import datetime, timezone
 
+from app.engine import compute_runner
+from app.engine.compute_runner import ComputeRunner, is_compute_running
 from app.engine.questionnaire_engine import apply_impacts_to_modules, compute_impacts
 from app.models.questionnaire import QuestionnaireAnswers
 from app.models.use_case import ComputeResult, UseCase
@@ -203,6 +208,75 @@ def test_a_second_compute_is_refused_while_the_first_still_runs(qapp, tmp_path, 
 def _save_pipeline(page, pipeline) -> None:
     page._pending_answers = {**page._use_case.answers.model_dump(), "q_pipeline": pipeline}
     page._save_questionnaire()
+
+
+@pytest.fixture
+def orphan_run(tmp_path, monkeypatch):
+    """Starts a real compute that keeps running until released, as if started by a page that is gone."""
+    monkeypatch.setattr(compute_runner, "_DATA_DIR", str(tmp_path))
+    release = threading.Event()
+    started = []
+
+    def start(use_case_id: str, module_id: str) -> None:
+        uc = json_store.load(use_case_id)
+        first_line = threading.Event()
+
+        def hold_the_run(line: str) -> None:
+            first_line.set()
+            release.wait(timeout=60)
+
+        runner = ComputeRunner(uc, module_id, hold_the_run, lambda success, path: None)
+        runner.start()
+        started.append((use_case_id, module_id))
+        assert first_line.wait(timeout=60)
+
+    yield start
+    release.set()
+    for use_case_id, module_id in started:
+        deadline = datetime.now(timezone.utc).timestamp() + 60
+        while is_compute_running(use_case_id, module_id):
+            assert datetime.now(timezone.utc).timestamp() < deadline
+            threading.Event().wait(0.01)
+
+
+def test_a_compute_still_running_from_an_earlier_page_blocks_compute_on_a_reopened_page(
+    qapp, tmp_path, monkeypatch, orphan_run
+):
+    page, _result_path = _computing_page(tmp_path, monkeypatch, "grabber")
+    orphan_run("fresh", "grabber")
+    from gui.pages import use_case_page
+    started, warnings = [], []
+    monkeypatch.setattr(use_case_page, "ComputeRunner", lambda *args: started.append(args) or _IdleRunner())
+    monkeypatch.setattr(use_case_page.QMessageBox, "warning", lambda *args: warnings.append(args[1:]))
+
+    reopened = use_case_page.UseCasePage("fresh")
+    reopened._run_compute("grabber")
+
+    assert started == []
+    [(title, _message)] = warnings
+    assert title == "Compute already running"
+
+
+def test_reopening_a_use_case_whose_compute_is_gone_shows_compute_failed(qapp, tmp_path, monkeypatch):
+    _computing_page(tmp_path, monkeypatch, "grabber")
+
+    from gui.pages.use_case_page import UseCasePage
+    reopened = UseCasePage("fresh")
+
+    assert reopened._use_case.modules["grabber"].status == "compute_failed"
+    assert json_store.load("fresh").modules["grabber"].status == "compute_failed"
+
+
+def test_reopening_a_use_case_whose_compute_still_runs_keeps_it_computing(
+    qapp, tmp_path, monkeypatch, orphan_run
+):
+    _computing_page(tmp_path, monkeypatch, "grabber")
+    orphan_run("fresh", "grabber")
+
+    from gui.pages.use_case_page import UseCasePage
+    reopened = UseCasePage("fresh")
+
+    assert reopened._use_case.modules["grabber"].status == "computing"
 
 
 # A new run overwrites the artifact files of the kept result in compute_outputs/<module>/,
