@@ -17,6 +17,7 @@ Lifecycle buttons shown based on module status:
 
 from __future__ import annotations
 
+import copy
 from typing import List, Optional
 
 from PySide6.QtWidgets import (
@@ -70,11 +71,13 @@ class ModuleDetail(QDialog):
     def __init__(
         self, module: ModuleState, module_config: dict = None,
         external_inputs: Optional[List[ExternalInputRequirement]] = None, parent=None,
+        general_answers: Optional[dict] = None,
     ) -> None:
         super().__init__(parent)
         self._module = module
         self._module_config: dict = dict(module_config or {})
         self._external_inputs: List[ExternalInputRequirement] = list(external_inputs or [])
+        self._general_answers: dict = dict(general_answers or {})
         self.setWindowTitle(module.module_name)
         self.setMinimumSize(640, 560)
         self.setModal(True)
@@ -118,7 +121,7 @@ class ModuleDetail(QDialog):
             info.setStyleSheet("color: #6b7280; font-size: 11px; padding: 4px 0;")
             config_layout.addWidget(info)
 
-            self._config_form = QuestionnaireForm(questions=config_questions)
+            self._config_form = QuestionnaireForm(questions=config_questions, general_answers=self._general_answers)
             self._config_form.load_answers(self._module_config)
             self._config_form.answers_changed.connect(self._on_config_changed)
             self._config_form.help_link_requested.connect(self._on_help_link_requested)
@@ -192,7 +195,8 @@ class ModuleDetail(QDialog):
         self._module_config = config
 
     def _save_config(self) -> None:
-        self.module_config_changed.emit(self._module.module_id, self._module_config)
+        # Deep copy: the form keeps editing its own (nested) answers after this save.
+        self.module_config_changed.emit(self._module.module_id, copy.deepcopy(self._module_config))
         # Brief visual feedback via window title flash
         orig = self.windowTitle()
         self.setWindowTitle(f"{orig}  ✓ saved")

@@ -148,3 +148,98 @@ def test_sensor_section_visible_when_pipeline_unanswered(qapp):
     form.load_answers({})
 
     assert not _sensor_section(form).isHidden()
+
+
+_PRIMITIVES = {
+    "id": "primitives",
+    "type": "collection",
+    "title": "Grinding primitives",
+    "tooltip": "Paths per defect class.",
+    "driver": {"field": "q8_defects", "options": ["positive_dent", "negative_dent"]},
+    "item_fields": [
+        {"id": "pose_path", "label": "Pose path", "type": "text"},
+        {"id": "wrench_path", "label": "Wrench path", "type": "text"},
+    ],
+}
+
+
+def _shown_rows(form):
+    """(option, field) pairs whose input the user would see once the form is shown."""
+    return {
+        tuple(key.split(".")[1:]) for key, w in form._widgets.items()
+        if key.startswith("primitives.") and w.isVisibleTo(form)
+    }
+
+
+def test_collection_shows_one_row_per_selected_allowed_driver_option(qapp):
+    form = QuestionnaireForm(
+        questions=[_PRIMITIVES], general_answers={"q8_defects": ["negative_dent", "other"]},
+    )
+
+    assert _shown_rows(form) == {("negative_dent", "pose_path"), ("negative_dent", "wrench_path")}
+
+
+def test_collection_rows_follow_a_changed_driver(qapp):
+    form = QuestionnaireForm(questions=[_PRIMITIVES], general_answers={"q8_defects": ["negative_dent"]})
+
+    form.set_general_answers({"q8_defects": ["positive_dent"]})
+
+    assert _shown_rows(form) == {("positive_dent", "pose_path"), ("positive_dent", "wrench_path")}
+
+
+def test_collection_shows_no_rows_while_the_driver_is_unanswered(qapp):
+    form = QuestionnaireForm(questions=[_PRIMITIVES])
+
+    assert _shown_rows(form) == set()
+
+
+def test_collection_answers_are_stored_per_option_and_item_field(qapp):
+    form = QuestionnaireForm(questions=[_PRIMITIVES], general_answers={"q8_defects": ["positive_dent"]})
+
+    form._widgets["primitives.positive_dent.pose_path"].setText("/prim/pos_pose.csv")
+    form._widgets["primitives.positive_dent.wrench_path"].setText("/prim/pos_wrench.csv")
+
+    assert form.get_answers() == {
+        "primitives": {"positive_dent": {"pose_path": "/prim/pos_pose.csv", "wrench_path": "/prim/pos_wrench.csv"}},
+    }
+
+
+def test_clearing_every_collection_field_leaves_no_answer(qapp):
+    form = QuestionnaireForm(questions=[_PRIMITIVES], general_answers={"q8_defects": ["positive_dent"]})
+    pose = form._widgets["primitives.positive_dent.pose_path"]
+
+    pose.setText("/prim/pos_pose.csv")
+    pose.setText("")
+
+    assert form.get_answers() == {}
+
+
+def test_collection_answers_reload_into_their_rows(qapp):
+    form = QuestionnaireForm(questions=[_PRIMITIVES], general_answers={"q8_defects": ["negative_dent"]})
+
+    form.load_answers({"primitives": {"negative_dent": {"pose_path": "/prim/neg_pose.csv"}}})
+
+    assert form._widgets["primitives.negative_dent.pose_path"].text() == "/prim/neg_pose.csv"
+    assert form._widgets["primitives.negative_dent.wrench_path"].text() == ""
+
+
+def test_values_of_a_deselected_option_return_when_it_is_reselected(qapp):
+    saved = {"primitives": {"positive_dent": {"pose_path": "/prim/pos_pose.csv"}}}
+    form = QuestionnaireForm(questions=[_PRIMITIVES], general_answers={"q8_defects": ["negative_dent"]})
+    form.load_answers(saved)
+
+    form.set_general_answers({"q8_defects": ["positive_dent"]})
+
+    assert ("positive_dent", "pose_path") in _shown_rows(form)
+    assert form._widgets["primitives.positive_dent.pose_path"].text() == "/prim/pos_pose.csv"
+    assert form.get_answers() == saved
+
+
+def test_editing_a_reloaded_collection_leaves_the_saved_answers_untouched(qapp):
+    saved = {"primitives": {"positive_dent": {"pose_path": "/prim/pos_pose.csv"}}}
+    form = QuestionnaireForm(questions=[_PRIMITIVES], general_answers={"q8_defects": ["positive_dent"]})
+    form.load_answers(saved)
+
+    form._widgets["primitives.positive_dent.pose_path"].setText("/prim/other.csv")
+
+    assert saved == {"primitives": {"positive_dent": {"pose_path": "/prim/pos_pose.csv"}}}
