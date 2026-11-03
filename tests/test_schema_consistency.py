@@ -111,6 +111,19 @@ def _with_follow_ups(questions):
             yield q["follow_up"]["question"]
 
 
+def test_every_collection_names_a_valid_driver_and_text_item_fields():
+    # A typo in the driver or its option filter would otherwise only surface when the module form opens.
+    from app.engine.collection import collection_options
+
+    for q in _all_questions():
+        if q.get("type") != "collection":
+            continue
+        assert collection_options(q), f"{q['id']}: driver allows no options"
+        assert q.get("item_fields"), f"{q['id']}: no item fields"
+        for field in q["item_fields"]:
+            assert field.get("type", "text") == "text", f"{q['id']}: item field {field['id']} is not text"
+
+
 def test_numeric_defaults_lie_within_their_min_and_max():
     # A default outside the range is silently clamped by the spin box (e.g. 0 -> 1).
     for q in _with_follow_ups(_all_questions()):

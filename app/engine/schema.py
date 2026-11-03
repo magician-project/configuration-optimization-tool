@@ -345,6 +345,19 @@ SCHEMA = {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Module-specific configuration schemas (*_CONFIG) render flat in the module
+# detail panel and see only their own module_answers. The one exception is the
+# "collection" type (app/engine/collection.py): it names an explicit driver
+# from the general questionnaire and asks its text item_fields once per
+# selected driver option, e.g.
+#   {"id": "primitives", "type": "collection",
+#    "driver": {"field": "q8_defects", "options": ["positive_dent", "negative_dent"]},
+#    "item_fields": [{"id": "pose_path", "label": "Pose path", "type": "text"}]}
+# stored as module_answers[<module>]["primitives"][<option>]["pose_path"].
+# Leave out driver "options" to allow every driver option.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Vision Classifier module-specific configuration schema.
 # These fields live in module_answers["vision_classifier"], NOT in the
 # general questionnaire answers. Rendered in the Vision Classifier module

@@ -298,6 +298,7 @@ class UseCasePage(QWidget):
         dlg = ModuleDetail(
             ms, module_config=module_config,
             external_inputs=self._external_inputs_for(module_id), parent=self,
+            general_answers=self._use_case.answers.model_dump(),
         )
         if doc_anchor is not None:
             dlg.show_documentation(doc_anchor)

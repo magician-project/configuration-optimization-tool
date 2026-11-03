@@ -6,6 +6,9 @@ Emits `answers_changed(dict)` whenever any field changes.
 
 from __future__ import annotations
 
+import copy
+from typing import NamedTuple
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QCheckBox, QLineEdit, QSpinBox, QDoubleSpinBox,
@@ -13,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
+from app.engine.collection import collection_options, driver_answers, driver_question, selected_options
 from app.engine.schema import SCHEMA
 from gui.components.info_button import make_info_button
 from gui.components.question_help_dialog import QuestionHelpDialog
@@ -45,23 +49,36 @@ _SECTION_ACCENT = {
 }
 
 
+class _CollectionRows(NamedTuple):
+    question: dict
+    rows: dict          # option value -> row widget
+    empty_hint: QLabel  # shown while no allowed driver option is selected
+
+
+def _collection_key(qid: str, option: str, field_id: str) -> str:
+    # "." because question, option and field ids themselves contain "_".
+    return f"{qid}.{option}.{field_id}"
+
+
 class QuestionnaireForm(QScrollArea):
     answers_changed = Signal(dict)
     # (module_id, readme_anchor) — a question's help panel asked to open module documentation
     help_link_requested = Signal(str, str)
 
-    def __init__(self, parent=None, questions: list | None = None) -> None:
+    def __init__(self, parent=None, questions: list | None = None, general_answers: dict | None = None) -> None:
         super().__init__(parent)
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
 
         # Allow injecting a custom question list (e.g. module-specific config)
         self._questions = questions if questions is not None else SCHEMA["questions"]
+        self._driver_answers = driver_answers(self._questions, general_answers or {})
 
         self._answers: dict = {}
         self._widgets: dict = {}   # field_id -> widget
         self._conditional_widgets: list = []  # widgets with conditions
         self._dimension_fields: dict = {}  # qid -> subfield ids (incl. "unit") for dimensions-type questions
+        self._collections: dict[str, _CollectionRows] = {}
 
         container = QWidget()
         container.setStyleSheet("background: transparent;")
@@ -78,12 +95,18 @@ class QuestionnaireForm(QScrollArea):
     # ------------------------------------------------------------------
 
     def load_answers(self, answers: dict) -> None:
-        self._answers = dict(answers)
+        # Deep copy: collection answers are nested, and edits must not leak into the caller's saved dict.
+        self._answers = copy.deepcopy(answers)
         self._apply_answers_to_widgets()
         self._update_conditional_visibility()
 
     def get_answers(self) -> dict:
-        return dict(self._answers)
+        return copy.deepcopy(self._answers)
+
+    def set_general_answers(self, general_answers: dict) -> None:
+        """Re-read the collection drivers from the general questionnaire and show the matching rows."""
+        self._driver_answers = driver_answers(self._questions, general_answers)
+        self._update_collection_rows()
 
     # ------------------------------------------------------------------
     # Build form
@@ -381,7 +404,64 @@ class QuestionnaireForm(QScrollArea):
             self._dimension_fields[qid] = [f["id"] for f in q.get("fields", [])] + ["unit"]
             return container, follow_up_widget
 
+        elif qtype == "collection":
+            return self._build_collection(q), follow_up_widget
+
         return QWidget(), None
+
+    def _build_collection(self, q: dict) -> QWidget:
+        """One row of item fields per allowed driver option; only selected options' rows are shown."""
+        qid = q["id"]
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        vbox = QVBoxLayout(container)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(6)
+
+        driver_title = driver_question(q)["title"]
+        hint = QLabel(f"Nothing to configure yet: select an option in \u201c{driver_title}\u201d in the questionnaire.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #6b7280; font-size: 11px; font-style: italic;")
+        vbox.addWidget(hint)
+
+        rows: dict = {}
+        for option in collection_options(q):
+            row = QFrame()
+            row.setStyleSheet(
+                "QFrame {"
+                "  background: #f8fafc;"
+                "  border-left: 3px solid #c7d2fe;"
+                "  border-radius: 0 6px 6px 0;"
+                "}"
+            )
+            row_box = QVBoxLayout(row)
+            row_box.setContentsMargins(12, 8, 12, 8)
+            row_box.setSpacing(5)
+            header = QLabel(option["label"])
+            header.setStyleSheet("color: #1f2937; font-size: 11px; font-weight: 600; background: transparent;")
+            row_box.addWidget(header)
+
+            for field in q.get("item_fields", []):
+                if field.get("type", "text") != "text":
+                    raise ValueError(f"{qid}: unsupported collection item field type {field['type']!r}")
+                lbl = QLabel(field.get("label", field["id"]))
+                lbl.setStyleSheet("color: #374151; font-size: 11px; background: transparent;")
+                row_box.addWidget(lbl)
+                w = QLineEdit()
+                w.setPlaceholderText(field.get("placeholder", ""))
+                self._widgets[_collection_key(qid, option["value"], field["id"])] = w
+                w.textChanged.connect(
+                    lambda v, _opt=option["value"], _fid=field["id"]:
+                    self._on_collection_changed(qid, _opt, _fid, v)
+                )
+                row_box.addWidget(w)
+
+            rows[option["value"]] = row
+            vbox.addWidget(row)
+
+        self._collections[qid] = _CollectionRows(q, rows, hint)
+        self._update_collection_rows()
+        return container
 
     def _build_follow_up(self, follow_up: dict) -> QWidget:
         fq = follow_up["question"]
@@ -529,6 +609,31 @@ class QuestionnaireForm(QScrollArea):
         self._answers[qid] = dims
         self.answers_changed.emit(self._answers)
 
+    def _on_collection_changed(self, qid: str, option: str, field_id: str, value: str) -> None:
+        # Empty levels are pruned so a cleared row leaves no trace in the saved answers.
+        items = self._answers.get(qid)
+        if not isinstance(items, dict):
+            items = self._answers[qid] = {}
+        item = items.get(option)
+        if not isinstance(item, dict):
+            item = items[option] = {}
+        if value:
+            item[field_id] = value
+        else:
+            item.pop(field_id, None)
+            if not item:
+                items.pop(option, None)
+            if not items:
+                self._answers.pop(qid, None)
+        self.answers_changed.emit(self._answers)
+
+    def _update_collection_rows(self) -> None:
+        for collection in self._collections.values():
+            selected = selected_options(collection.question, self._driver_answers)
+            for option, row in collection.rows.items():
+                row.setVisible(option in selected)
+            collection.empty_hint.setVisible(not selected)
+
     def _on_select_changed(self, combo: QComboBox, follow_up_widget: QWidget, q: dict) -> None:
         value = combo.currentData()
         cond = q["follow_up"]["condition"]
@@ -609,3 +714,15 @@ class QuestionnaireForm(QScrollArea):
                 elif isinstance(widget, QDoubleSpinBox):
                     widget.setValue(float(value))
                 widget.blockSignals(False)
+
+        for qid, collection in self._collections.items():
+            items = self._answers.get(qid)
+            items = items if isinstance(items, dict) else {}
+            for option in collection.rows:
+                item = items.get(option)
+                item = item if isinstance(item, dict) else {}
+                for field in collection.question.get("item_fields", []):
+                    widget = self._widgets[_collection_key(qid, option, field["id"])]
+                    widget.blockSignals(True)
+                    widget.setText(str(item.get(field["id"]) or ""))
+                    widget.blockSignals(False)
