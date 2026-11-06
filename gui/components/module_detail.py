@@ -85,7 +85,10 @@ class ModuleDetail(QDialog):
 
     def _build_tabbed_ui(self, root: QVBoxLayout) -> None:
         """Tabs: Impacts & Flags | Module Configuration (only with a config schema) | Documentation."""
-        from app.engine.schema import VISION_CLASSIFIER_CONFIG, ERGODIC_CONTROL_CONFIG, GRABBER_CONFIG, LOCALISER_CONFIG, MOTION_PLANNER_CONFIG
+        from app.engine.schema import (
+            DMP_CONFIG, ERGODIC_CONTROL_CONFIG, GRABBER_CONFIG, LOCALISER_CONFIG, MOTION_PLANNER_CONFIG,
+            VISION_CLASSIFIER_CONFIG,
+        )
         from gui.components.questionnaire_form import QuestionnaireForm
 
         _MODULE_CONFIGS = {
@@ -94,6 +97,7 @@ class ModuleDetail(QDialog):
             "grabber":           GRABBER_CONFIG,
             "localiser":         LOCALISER_CONFIG,
             "motion_planning":   MOTION_PLANNER_CONFIG,
+            "dmp":               DMP_CONFIG,
         }
         config_questions = _MODULE_CONFIGS.get(self._module.module_id, [])
 

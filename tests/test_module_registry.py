@@ -7,6 +7,7 @@ cases saved before this question existed.
 from app.engine.module_registry import compute_default_modules
 
 _INSPECTION = {"grabber", "vision_classifier", "ergodic_control"}
+_GRINDING = {"orienteering_solver", "dmp"}
 _SHARED = {"localiser", "motion_planning"}
 
 
@@ -15,11 +16,11 @@ def test_inspection_excludes_grinding_modules():
 
 
 def test_grinding_excludes_inspection_modules():
-    assert set(compute_default_modules("grinding")) == {"orienteering_solver"} | _SHARED
+    assert set(compute_default_modules("grinding")) == _GRINDING | _SHARED
 
 
 def test_both_combines_inspection_and_grinding():
-    assert set(compute_default_modules("both")) == _INSPECTION | {"orienteering_solver"} | _SHARED
+    assert set(compute_default_modules("both")) == _INSPECTION | _GRINDING | _SHARED
 
 
 def test_tactile_sensor_added_only_when_selected():

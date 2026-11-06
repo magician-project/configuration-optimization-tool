@@ -23,13 +23,12 @@ from app.models.use_case import ExternalSource
 # before using it in a dependency; move it to MODULES once COT can configure it.
 NON_COT_NODES: Dict[str, dict] = {
     "estimation_algorithm": {"name": "Estimation Algorithm"},
-    "dmp_motion_planner": {"name": "DMP Motion Planner"},
 }
 
 _NON_COT_NODES_BY_PIPELINE: Dict[str, List[str]] = {
     "inspection": ["estimation_algorithm"],
-    "grinding": ["dmp_motion_planner"],
-    "both": ["estimation_algorithm", "dmp_motion_planner"],
+    "grinding": [],
+    "both": ["estimation_algorithm"],
 }
 
 
@@ -118,8 +117,9 @@ DEPENDENCIES: List[Dependency] = [
     ),
     Dependency(
         id="orienteering_solver_to_dmp",
-        provider="orienteering_solver", consumer="dmp_motion_planner",
-        provider_output="grinding_schedule", consumer_input="ordered_grinding_targets",
+        provider="orienteering_solver", consumer="dmp",
+        provider_output="grinding_schedule",
+        consumer_input="ordered grinding targets (defect class, pose, frame_id)",
         external_input_allowed=False,
         evidence_status="documented", validation_status="verified",
     ),

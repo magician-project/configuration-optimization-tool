@@ -18,6 +18,7 @@ Module owners work exclusively inside their own folder.
 | `orienteering_solver/` | Orienteering Solver | `/op_solver` | Reconfiguration |
 | `localiser/` | Localiser | `/localisation` | Reconfiguration |
 | `motion_planning/` | Motion Planner | `/motion_planner` | Reconfiguration |
+| `dmp/` | DMP | placeholder, not yet confirmed by IIT | Startup configuration |
 | `tactile_sensor/` | Tactile Sensor | `/tactile_classifier_system` | Retrain + Reconfigure |
 | `vision_classifier/` | Vision Classifier | `/magician_vision_classifier` | Retrain + Reconfigure |
 
@@ -83,7 +84,8 @@ after a successful deploy. See `modules/orienteering_solver/compute.py::notes()`
 Modules that consume `q8_defects` map COT's defect classes (`positive_dent`,
 `negative_dent`, `other`) explicitly to their own interface labels, and `other`
 is never silently dropped. A class the module's interface does not support is a
-deploy blocker (e.g. `other` in `tactile_sensor`).
+deploy blocker (e.g. `other` in `tactile_sensor`, or in `dmp`, which has a learned
+primitive for Positive and Negative Dent only).
 
 Exception: `orienteering_solver` and `ergodic_control` pass the canonical
 classes through, with the description in place of `other`, because their

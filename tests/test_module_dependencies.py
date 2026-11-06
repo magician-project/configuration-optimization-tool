@@ -55,6 +55,32 @@ def test_external_source_kept_for_out_of_scope_dependency_is_not_counted():
     assert validate_configuration("both", external_sources=sources).status == "valid"
 
 
+def test_dmp_is_a_cot_module_consuming_the_ordered_grinding_targets():
+    from app.engine.module_dependencies import DEPENDENCIES, NON_COT_NODES, scope_for
+
+    [dep] = [d for d in DEPENDENCIES if d.id == "orienteering_solver_to_dmp"]
+
+    assert dep.consumer == "dmp"
+    assert dep.consumer_input == "ordered grinding targets (defect class, pose, frame_id)"
+    assert "dmp_motion_planner" not in NON_COT_NODES
+    assert "dmp_motion_planner" not in scope_for("both")
+
+
+def test_dmp_is_in_scope_for_grinding_and_both_but_not_inspection():
+    from app.engine.module_dependencies import scope_for
+
+    assert "dmp" in scope_for("grinding")
+    assert "dmp" in scope_for("both")
+    assert "dmp" not in scope_for("inspection")
+
+
+def test_dmp_needs_the_orienteering_solver_and_is_satisfied_when_it_is_in_scope():
+    result = validate_configuration("both")
+
+    assert "orienteering_solver_to_dmp" in result.satisfied
+    assert result.status == "valid"
+
+
 def test_unanswered_pipeline_is_not_assessed():
     result = validate_configuration(None)
 

@@ -10,7 +10,7 @@ from app.engine.module_registry import MODULES, README_EMPTY_STATE, module_readm
 from app.models.use_case import ModuleState
 from gui.components.module_detail import ModuleDetail
 
-_CONFIGURABLE = {"vision_classifier", "ergodic_control", "grabber", "localiser", "motion_planning"}
+_CONFIGURABLE = {"vision_classifier", "ergodic_control", "grabber", "localiser", "motion_planning", "dmp"}
 
 
 @pytest.fixture(scope="module")

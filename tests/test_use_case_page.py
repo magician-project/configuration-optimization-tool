@@ -104,7 +104,7 @@ def test_deploy_without_notes_shows_no_notes_dialog(qapp, tmp_path, monkeypatch)
     assert (warnings, infos) == ([], [])
 
 
-@pytest.mark.parametrize("module_id", ["tactile_sensor", "orienteering_solver", "ergodic_control"])
+@pytest.mark.parametrize("module_id", ["tactile_sensor", "orienteering_solver", "ergodic_control", "dmp"])
 def test_q8_consumer_result_without_evaluated_blockers_must_be_recomputed(qapp, tmp_path, monkeypatch, module_id):
     page, warnings, _infos = _page_with_computed_module(tmp_path, monkeypatch, module_id)
 
