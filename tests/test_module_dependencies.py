@@ -7,6 +7,11 @@ from app.engine.module_dependencies import validate_configuration
 from app.models.use_case import ExternalSource
 
 
+_CONTROLLER_DEPENDENCIES = [
+    "dmp_to_cartesian_controller", "dmp_to_impedance_controller", "impedance_controller_to_cartesian_controller",
+]
+
+
 def test_both_pipelines_need_no_external_input():
     result = validate_configuration("both")
 
@@ -79,6 +84,40 @@ def test_dmp_needs_the_orienteering_solver_and_is_satisfied_when_it_is_in_scope(
 
     assert "orienteering_solver_to_dmp" in result.satisfied
     assert result.status == "valid"
+
+
+def test_dmp_to_the_controllers_is_verified_and_required_but_impedance_to_cartesian_is_not_confirmed():
+    from app.engine.module_dependencies import DEPENDENCIES
+
+    by_id = {d.id: d for d in DEPENDENCIES}
+
+    assert [(by_id[i].provider, by_id[i].consumer) for i in _CONTROLLER_DEPENDENCIES] == [
+        ("dmp", "cartesian_controller"),
+        ("dmp", "impedance_controller"),
+        ("impedance_controller", "cartesian_controller"),
+    ]
+    for dep_id in _CONTROLLER_DEPENDENCIES[:2]:
+        dep = by_id[dep_id]
+        assert not dep.display_only and not dep.external_input_allowed and dep.verified
+    assert by_id[_CONTROLLER_DEPENDENCIES[2]].display_only
+
+
+def test_grinding_use_case_satisfies_the_dmp_to_controller_dependencies():
+    for pipeline in ("grinding", "both"):
+        result = validate_configuration(pipeline)
+
+        assert result.owner_confirmation_needed == []
+        assert set(_CONTROLLER_DEPENDENCIES[:2]) <= set(result.satisfied)
+        assert _CONTROLLER_DEPENDENCIES[2] not in result.satisfied
+
+
+def test_controllers_are_in_scope_for_grinding_and_both_but_not_inspection():
+    from app.engine.module_dependencies import scope_for
+
+    for module_id in ("cartesian_controller", "impedance_controller"):
+        assert module_id in scope_for("grinding")
+        assert module_id in scope_for("both")
+        assert module_id not in scope_for("inspection")
 
 
 def test_unanswered_pipeline_is_not_assessed():

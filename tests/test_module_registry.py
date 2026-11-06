@@ -7,7 +7,7 @@ cases saved before this question existed.
 from app.engine.module_registry import compute_default_modules
 
 _INSPECTION = {"grabber", "vision_classifier", "ergodic_control"}
-_GRINDING = {"orienteering_solver", "dmp"}
+_GRINDING = {"orienteering_solver", "dmp", "cartesian_controller", "impedance_controller"}
 _SHARED = {"localiser", "motion_planning"}
 
 

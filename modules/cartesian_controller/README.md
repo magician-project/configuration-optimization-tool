@@ -1,0 +1,66 @@
+# Module: Cartesian Controller
+
+**ROS 2 node:** placeholder (`cartesian_controller_placeholder`) until IIT confirms the node name of the grinding runtime
+**Action type:** Startup configuration (no retraining, no live tuning)
+
+## What this module does
+
+The Cartesian Controller sequences the contact phases of a grinding cycle and generates the Cartesian
+references for the robot: reach the starting pose of the primitive, the initial contact (TOUCH) phase,
+the replay of the learned primitive, the unloading phase that releases the tool contact, and the final
+retreat ("go away"). Force-dependent corrections come from the
+[Impedance Controller](../impedance_controller/README.md); the learned pose profile comes from the
+[DMP](../dmp/README.md). See [`CONTEXT.md`](../../CONTEXT.md) for these terms and
+[`COT_CARTESIAN_CONTROLLER.md`](../../docs/specs/COT_CARTESIAN_CONTROLLER.md) for the IIT spec.
+
+The Cartesian Controller is in scope when the pipeline selection includes grinding. It runs in the
+same IIT grinding runtime as the DMP and the Impedance Controller, which is configured once at startup
+and restarted to change ([ADR-0005](../../docs/adr/0005-iit-grinding-runtime-split-into-modules-with-one-startup-artifact.md)).
+
+## File overview
+
+| File | Purpose |
+|---|---|
+| `compute.py` | Reads the answers → resolves the startup configuration (spec defaults for anything unanswered) → writes `result.json` |
+| `ros_interface.py` | Returns notes only: the real deploy goes through the IIT runtime, not `ros2 param set` |
+| `test_compute.py` | Tests for the defaults, the fixed unload mode and the `result.json` contract |
+| `README.md` | This file |
+
+## Inputs (`module_answers["cartesian_controller"]`)
+
+All parameters are optional: an unanswered one takes the spec default.
+
+| Question key | Default | Description |
+|---|---:|---|
+| `reach_duration_s` | 10 s | Time allowed to reach the starting primitive pose |
+| `touch_dwell_s` | 3 s | Dwell time of the initial contact phase |
+| `touch_approach_distance_m` | 0.015 m | Bounds the tool travel towards the surface during TOUCH |
+| `unload_tail_window_s` | 2.5 s | Limits the unloading logic to the end of the primitive |
+| `unload_extra_duration_s` | 2.0 s | Extra time for a controlled contact release |
+| `unload_retract_rate_m_s` | 0.015 m/s | Tool-normal retraction velocity while unloading |
+| `go_away_distance_m` | 0.10 m | Final retraction distance after contact release |
+| `go_away_duration_s` | 5 s | Time allotted to the final retreat |
+| `control_rate_hz` | 1000 Hz | Update rate of the force control and the Cartesian references. **Shared** with the Impedance Controller, which shows it read-only: this module owns it |
+
+## Outputs (written to `result.json`)
+
+`outputs` is flat (`str` or `float`): every key of the table above, plus:
+
+| Key | Description |
+|---|---|
+| `unload_mode` | Always `"smooth retract"`; not a question |
+
+## Deploy blockers
+
+None: every parameter has a default.
+
+## Notes
+
+- Startup configuration: the grinding runtime must be restarted for changes to take effect.
+- COT does not check whether the phase durations fit the time constraint of the use case; contact and
+  safety requirements always take precedence.
+
+## Open points
+
+The node name, the literal parameter names and the passing mechanism are open questions for IIT; see
+"Open questions for IIT" in [`COT_DMP.md`](../../docs/specs/COT_DMP.md).
