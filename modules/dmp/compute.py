@@ -52,7 +52,8 @@ def _path(item: dict, field: str) -> str:
 
 def _offset(answers: dict, axis: str):
     """(value, problem): the offset component in metres, or why it cannot be used."""
-    raw = str(answers.get(f"tool_defect_offset_{axis}_m") or "").strip()
+    raw_value = answers.get(f"tool_defect_offset_{axis}_m")
+    raw = str(raw_value).strip() if raw_value is not None else ""
     if not raw:
         return None, "is missing"
     try:

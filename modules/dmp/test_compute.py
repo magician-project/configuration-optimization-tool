@@ -167,6 +167,14 @@ def test_zero_is_a_valid_offset():
     assert run(answers)["tool_defect_offset_x_m"] == 0.0
 
 
+@pytest.mark.parametrize("value", [0, 0.0])
+def test_a_numeric_zero_offset_is_not_treated_as_missing(value):
+    answers = _answers(tool_defect_offset_x_m=value)
+
+    assert deploy_blockers(answers) == []
+    assert run(answers)["tool_defect_offset_x_m"] == 0.0
+
+
 def test_notes_say_what_cot_cannot_verify():
     joined = " ".join(notes(_answers()))
 
