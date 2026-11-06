@@ -1065,6 +1065,43 @@ LOCALISER_CONFIG = [
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
+# DMP module-specific configuration schema.
+# These fields live in module_answers["dmp"]. The tool offset has no default on
+# purpose (it is calibrated per tool), so its components are text fields: an
+# empty field means "not entered", which a number spin box cannot express.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_DMP_DOCS = {"module": "dmp", "anchor": "inputs-module_answersdmp"}
+
+DMP_CONFIG = [
+    {
+        "id": "primitives",
+        "title": "Learned grinding primitives",
+        "tooltip": "For each defect class to grind, the pose file and the force file of its learned primitive. "
+                   "Only classes selected in the defect classes question are asked.",
+        "help_link": _DMP_DOCS,
+        "type": "collection",
+        "driver": {"field": "q8_defects", "options": ["positive_dent", "negative_dent"]},
+        "item_fields": [
+            {"id": "pose_path", "label": "Pose path", "type": "text", "placeholder": "/primitives/pose.npy"},
+            {"id": "wrench_path", "label": "Wrench path", "type": "text", "placeholder": "/primitives/wrench.npy"},
+        ],
+    },
+    *[
+        {
+            "id": f"tool_defect_offset_{axis}_m",
+            "title": f"Tool offset {axis} (m)",
+            "tooltip": f"Offset of the tool footprint relative to the detected defect, along {axis}, in metres. "
+                       "Required: it is calibrated per tool and cannot be checked here.",
+            "help_link": _DMP_DOCS,
+            "type": "text",
+            "placeholder": "e.g. 0.012",
+        }
+        for axis in ("x", "y", "z")
+    ],
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Motion Planner module-specific configuration schema.
 # These fields live in module_answers["motion_planning"], NOT in the general
 # questionnaire answers. Rendered in the Motion Planner module detail panel.

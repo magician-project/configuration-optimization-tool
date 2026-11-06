@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 # (as [] when there's nothing blocking). A stored result with
 # deploy_blockers is None for one of these predates the convention and
 # must be recomputed before deploy can trust it — see _deploy_module().
-_MODULES_WITH_DEPLOY_BLOCKERS = {"localiser", "tactile_sensor", "orienteering_solver", "ergodic_control"}
+_MODULES_WITH_DEPLOY_BLOCKERS = {"localiser", "tactile_sensor", "orienteering_solver", "ergodic_control", "dmp"}
 
 
 class UseCasePage(QWidget):

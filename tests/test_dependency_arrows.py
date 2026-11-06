@@ -59,7 +59,7 @@ def test_out_of_scope_module_has_no_incoming_or_outgoing_edges():
 
 
 def test_non_cot_nodes_are_never_drawn():
-    scope = _cot_scope("both") + ["estimation_algorithm", "dmp_motion_planner"]
+    scope = _cot_scope("both") + ["estimation_algorithm"]
 
     assert all(n in MODULES for e in visible_dependency_edges(scope) for n in (e.provider, e.consumer))
     assert all(

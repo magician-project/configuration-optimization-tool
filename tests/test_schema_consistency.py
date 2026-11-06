@@ -133,6 +133,20 @@ def test_numeric_defaults_lie_within_their_min_and_max():
         assert low <= default <= high, f"{q['id']}: default {default} outside [{low}, {high}]"
 
 
+def test_dmp_config_asks_two_paths_per_defect_class_and_a_required_offset_without_defaults():
+    from app.engine.collection import collection_options
+    from app.engine.schema import DMP_CONFIG
+
+    by_id = {q["id"]: q for q in DMP_CONFIG}
+
+    primitives = by_id["primitives"]
+    assert primitives["driver"]["field"] == "q8_defects"
+    assert [o["value"] for o in collection_options(primitives)] == ["positive_dent", "negative_dent"]
+    assert [f["id"] for f in primitives["item_fields"]] == ["pose_path", "wrench_path"]
+    for axis in "xyz":
+        assert "default" not in by_id[f"tool_defect_offset_{axis}_m"]
+
+
 def test_pipeline_and_profit_questions_have_full_help():
     by_id = {q["id"]: q for q in SCHEMA["questions"]}
 
