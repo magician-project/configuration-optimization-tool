@@ -81,15 +81,27 @@ def build_runtime_params(use_case: UseCase) -> dict:
 
 
 def deploy_runtime(use_case: UseCase, output_dir: str) -> RuntimeDeployment:
-    """Write the one startup artifact; raises ValueError (writing nothing) while the gate is not met."""
+    """Write the one startup artifact; raises ValueError (writing nothing) while the gate is not met.
+
+    The previous artifact stays untouched unless the new one is complete: the document is built
+    first and swapped in atomically, so a rejected or failed redeploy cannot leave an empty file.
+    """
     reasons = runtime_deploy_blockers(use_case)
     if reasons:
         raise ValueError("IIT grinding runtime is not ready to deploy:\n- " + "\n- ".join(reasons))
 
+    document = yaml.dump(build_runtime_params(use_case), default_flow_style=False, sort_keys=False)
+
     os.makedirs(output_dir, exist_ok=True)
     artifact_path = os.path.join(output_dir, ARTIFACT_FILENAME)
-    with open(artifact_path, "w", encoding="utf-8") as f:
-        yaml.dump(build_runtime_params(use_case), f, default_flow_style=False, sort_keys=False)
+    temp_path = artifact_path + ".tmp"
+    try:
+        with open(temp_path, "w", encoding="utf-8") as f:
+            f.write(document)
+        os.replace(temp_path, artifact_path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
     notes = [
         f"Startup artifact for the whole IIT grinding runtime: {artifact_path}",

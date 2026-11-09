@@ -221,6 +221,36 @@ def test_a_blocked_deploy_writes_nothing(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
+def test_a_rejected_redeploy_keeps_the_last_artifact(tmp_path):
+    uc = _use_case()
+    deploy_runtime(uc, str(tmp_path))
+    before = (tmp_path / ARTIFACT_FILENAME).read_text(encoding="utf-8")
+    uc.modules["dmp"].compute_result.outputs["reach_duration_s"] = 1.0
+
+    with pytest.raises(ValueError, match="reach_duration_s"):
+        deploy_runtime(uc, str(tmp_path))
+
+    assert (tmp_path / ARTIFACT_FILENAME).read_text(encoding="utf-8") == before
+    assert [p.name for p in tmp_path.iterdir()] == [ARTIFACT_FILENAME]
+
+
+def test_a_failed_write_keeps_the_last_artifact_and_leaves_no_temporary_file(tmp_path, monkeypatch):
+    uc = _use_case()
+    deploy_runtime(uc, str(tmp_path))
+    before = (tmp_path / ARTIFACT_FILENAME).read_text(encoding="utf-8")
+
+    def failing_replace(*args):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("app.engine.runtime_deploy.os.replace", failing_replace)
+
+    with pytest.raises(OSError):
+        deploy_runtime(uc, str(tmp_path))
+
+    assert (tmp_path / ARTIFACT_FILENAME).read_text(encoding="utf-8") == before
+    assert [p.name for p in tmp_path.iterdir()] == [ARTIFACT_FILENAME]
+
+
 # --- UseCasePage: deploy from any of the three tiles -------------------------------------------
 
 @pytest.fixture(scope="module")
