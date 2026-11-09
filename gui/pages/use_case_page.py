@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
 
 from app.models.use_case import UseCase, ComputeResult, ExternalSource
-from app.engine.module_dependencies import validate_use_case
+from app.engine.module_dependencies import capability_deploy_blockers, validate_use_case
 from app.engine.module_registry import is_assessed
 from app.engine.result_freshness import answers_fingerprint, out_of_date_modules
 from app.engine.shared_parameters import shared_values
@@ -563,6 +563,8 @@ class UseCasePage(QWidget):
         # modules/localiser/compute.py). None means "never evaluated" --
         # for modules known to populate it, that means a pre-upgrade
         # result, so force a recompute instead of silently allowing deploy.
+        # Required-capability blockers depend on state that changes after compute (pipeline,
+        # external sources), so they are evaluated now instead of read from the stored result.
         blockers = ms.compute_result.deploy_blockers
         if blockers is None and module_id in _MODULES_WITH_DEPLOY_BLOCKERS:
             QMessageBox.warning(
@@ -571,7 +573,7 @@ class UseCasePage(QWidget):
                 "Run Compute again.",
             )
             return
-        blockers = blockers or []
+        blockers = (blockers or []) + capability_deploy_blockers(validate_use_case(uc), module_id)
         if blockers:
             QMessageBox.warning(
                 self, "Deployment blocked",

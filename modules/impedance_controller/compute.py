@@ -4,8 +4,8 @@ Impedance Controller — compute.py
 Resolves the startup configuration of the Impedance Controller of the IIT grinding runtime:
 gains, limits and thresholds, with the spec defaults for anything not answered.
 `control_rate_hz` is shared: it is owned by the Cartesian Controller and read from there.
-The measured wrench is a required capability: its source and topic are answered here, and a missing
-or invalid source blocks deployment (see app/engine/module_dependencies.py).
+The measured wrench is a required capability: its source and topic are answered here. A missing or
+invalid source blocks deployment, which the deploy step checks live (app/engine/module_dependencies.py).
 
 Usage (called by compute_runner.py as a subprocess):
     python -m modules.impedance_controller.compute <use_case_json_path> <output_dir>
@@ -17,10 +17,9 @@ import sys
 from datetime import datetime
 
 from app.engine.module_config import control_rate_blockers, drop_invalid_control_rate, number_values
-from app.engine.module_dependencies import GRABBER_WRENCH_TOPIC, capability_deploy_blockers, validate_configuration
+from app.engine.module_dependencies import GRABBER_WRENCH_TOPIC
 from app.engine.schema import IMPEDANCE_CONTROLLER_CONFIG
 from app.engine.shared_parameters import answers_with_shared
-from app.models.use_case import ExternalSource
 
 _STARTUP_NOTE = (
     "startup configuration: the grinding runtime must be restarted for changes to take effect; "
@@ -53,20 +52,11 @@ def run(answers: dict) -> dict:
 def deploy_blockers(answers: dict) -> list:
     """Human-readable reasons this configuration must not be deployed yet.
 
-    Covers the module's own answers; main() adds the required-capability blockers, which also depend
-    on the pipeline selection and the declared external sources.
+    Covers the module's own answers only. The required-capability blockers depend on the pipeline
+    selection and the declared external sources, which change after compute, so the deploy step
+    evaluates them live (UseCasePage._deploy_module).
     """
     return control_rate_blockers(IMPEDANCE_CONTROLLER_CONFIG, answers)
-
-
-def wrench_blockers(use_case: dict) -> list:
-    """Deploy blockers of the measured wrench capability for a use case (as stored in its JSON)."""
-    answers = use_case.get("answers", {})
-    sources = {k: ExternalSource(**v) for k, v in use_case.get("external_sources", {}).items()}
-    validation = validate_configuration(
-        answers.get("q_pipeline"), answers.get("q3_additional_sensors"), sources, use_case.get("module_answers", {})
-    )
-    return capability_deploy_blockers(validation, "impedance_controller")
 
 
 def notes(answers: dict) -> list:
@@ -99,7 +89,7 @@ def main() -> None:
         "outputs": outputs,
         "error": None,
         "computed_at": datetime.utcnow().isoformat(),
-        "deploy_blockers": deploy_blockers(answers) + wrench_blockers(use_case),
+        "deploy_blockers": deploy_blockers(answers),
         "notes": notes(answers),
     }
 

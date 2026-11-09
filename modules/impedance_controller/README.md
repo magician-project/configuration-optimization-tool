@@ -76,7 +76,8 @@ the source is known: the Grabber falls back to its default topic.
 `deploy_blockers` in `result.json` names the cause:
 
 - the control rate (read from the Cartesian Controller) is not a finite number greater than 0. The value is then left out of `outputs`.
-- the measured wrench has no valid source: the Grabber is chosen but not in scope or without tactile sensing, no source is chosen while the Grabber could provide it, an external source has no `measured_wrench_topic`, or an external source is not named.
+
+The measured wrench is not part of `result.json`: it depends on the pipeline selection and the declared external sources, which can change after Compute. The deploy step therefore evaluates it live and blocks deployment when the wrench has no valid source: the Grabber is chosen but not in scope or without tactile sensing, no source is chosen while the Grabber could provide it, an external source has no `measured_wrench_topic`, or an external source is not named.
 
 Every other parameter has a default, so nothing else can be left incomplete.
 

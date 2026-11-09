@@ -57,12 +57,15 @@ def test_late_compute_result_is_discarded_for_module_without_scope(
     assert module.compute_result is None
 
 
-def _page_with_computed_module(tmp_path, monkeypatch, module_id, **result_fields):
+def _page_with_computed_module(
+    tmp_path, monkeypatch, module_id, *, module_answers=None, external_sources=None, **result_fields
+):
     monkeypatch.setattr(json_store, "_DATA_DIR", str(tmp_path))
     now = datetime.now(timezone.utc).isoformat()
     uc = UseCase(id="deploy", name="Deploy", created_at=now, updated_at=now,
-                 answers=QuestionnaireAnswers(q_pipeline="both", q3_additional_sensors=["tactile"]))
-    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers={}))
+                 answers=QuestionnaireAnswers(q_pipeline="both", q3_additional_sensors=["tactile"]),
+                 module_answers=module_answers or {}, external_sources=external_sources or {})
+    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers=uc.module_answers))
     module = uc.modules[module_id]
     module.compute_result = ComputeResult(module_id=module_id, success=True, outputs={}, **result_fields)
     module.status = "computed"
@@ -116,6 +119,64 @@ def test_q8_consumer_result_without_evaluated_blockers_must_be_recomputed(qapp, 
     assert title == "Cannot deploy"
     assert "Run Compute again" in message
     assert page._use_case.modules[module_id].status == "computed"
+
+
+_GRABBER_WRENCH = {"impedance_controller": {"measured_wrench_source": "grabber"}}
+_EXTERNAL_WRENCH = {
+    "impedance_controller": {"measured_wrench_source": "external", "measured_wrench_topic": "/partner/wrench"},
+}
+
+
+def test_deploy_is_blocked_without_a_wrench_source_even_when_the_stored_result_has_no_blockers(
+    qapp, tmp_path, monkeypatch
+):
+    page, warnings, _infos = _page_with_computed_module(
+        tmp_path, monkeypatch, "impedance_controller", deploy_blockers=[],
+    )
+
+    page._deploy_module("impedance_controller")
+
+    [(title, message)] = warnings
+    assert title == "Deployment blocked"
+    assert "choose a source" in message
+    assert page._use_case.modules["impedance_controller"].status == "computed"
+
+
+def test_deploy_is_blocked_when_the_external_wrench_source_is_cleared_after_compute(qapp, tmp_path, monkeypatch):
+    page, warnings, _infos = _page_with_computed_module(
+        tmp_path, monkeypatch, "impedance_controller", module_answers=_EXTERNAL_WRENCH, deploy_blockers=[],
+    )
+
+    page._deploy_module("impedance_controller")
+
+    [(title, message)] = warnings
+    assert title == "Deployment blocked"
+    assert "name the external source" in message
+
+
+def test_deploy_is_allowed_once_the_wrench_source_is_named_after_compute(qapp, tmp_path, monkeypatch):
+    from app.models.use_case import ExternalSource
+
+    page, warnings, _infos = _page_with_computed_module(
+        tmp_path, monkeypatch, "impedance_controller", module_answers=_EXTERNAL_WRENCH,
+        external_sources={"measured_wrench": ExternalSource(source_name="Partner F/T")},
+        deploy_blockers=[],
+    )
+
+    page._deploy_module("impedance_controller")
+
+    assert page._use_case.modules["impedance_controller"].status == "deployed"
+
+
+def test_deploy_is_allowed_with_the_grabber_as_wrench_source(qapp, tmp_path, monkeypatch):
+    page, warnings, _infos = _page_with_computed_module(
+        tmp_path, monkeypatch, "impedance_controller", module_answers=_GRABBER_WRENCH, deploy_blockers=[],
+    )
+
+    page._deploy_module("impedance_controller")
+
+    assert warnings == []
+    assert page._use_case.modules["impedance_controller"].status == "deployed"
 
 
 class _IdleRunner:
