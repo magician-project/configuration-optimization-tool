@@ -14,7 +14,10 @@ regenerated and validated outside COT; COT never regenerates or retrains it. See
 
 The DMP is in scope when the pipeline selection includes grinding. It receives its ordered grinding
 targets (defect class, pose, `frame_id`) per cycle from the Orienteering Solver; COT does not
-configure those.
+configure those. The target frame is a *required capability* (see [`CONTEXT.md`](../../CONTEXT.md)):
+the Localiser, which is always in scope, publishes it, and the DMP tile shows which frame that is
+(the Localiser's mesh frame, default `fender`). The frames of an external defect handover must be
+published by the Localiser, or the handover must state the transform to the robot planning frame.
 
 ## File overview
 

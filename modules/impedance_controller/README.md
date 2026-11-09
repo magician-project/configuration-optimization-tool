@@ -29,7 +29,7 @@ and restarted to change ([ADR-0005](../../docs/adr/0005-iit-grinding-runtime-spl
 
 ## Inputs (`module_answers["impedance_controller"]`)
 
-All parameters are optional: an unanswered one takes the spec default.
+All parameters are optional: an unanswered one takes the spec default, except the measured wrench source (see below).
 
 | Question key | Default | Description |
 |---|---:|---|
@@ -49,20 +49,35 @@ All parameters are optional: an unanswered one takes the spec default.
 | `force_sync_timeout_s` | 4 s | Maximum time for the initial force synchronisation |
 | `force_sync_tolerance_n` | 2 N | Accepted force mismatch before replay begins |
 | `unload_threshold_n` | 8 N | Identifies low-force conditions during unloading |
+| `measured_wrench_source` | — (no default) | Where the measured wrench comes from: `grabber` (MAGICIAN Grabber) or `external` |
+| `measured_wrench_topic` | Grabber: `/magician_grabber/wrench_sensed` | ROS 2 topic of the measured wrench. Required for an external source |
 
-The measured wrench topic and the wrench source are not configured here; they fall under the required
-capabilities work (ticket 12).
+## Measured wrench (required capability)
+
+The measured wrench is a *required capability*, not a dependency on one module (see
+[`CONTEXT.md`](../../CONTEXT.md)): it never pulls a module into scope and is shown as a status line on
+this module's tile, never as an arrow.
+
+- **MAGICIAN Grabber:** valid only when the Grabber is in scope and delivers F/T data, i.e. tactile
+  sensing is selected (Q3, which sets the Grabber's `use_ati_force`). Otherwise deployment is blocked.
+- **External:** the tile asks for an external source (name it and agree the contract, as for the
+  Orienteering Solver) and `measured_wrench_topic` is mandatory.
+- With no valid source, or no topic for an external source, deployment is blocked. While the Grabber
+  cannot be the source (e.g. grinding-only), an unanswered source counts as external.
 
 ## Outputs (written to `result.json`)
 
 `outputs` is flat: every key of the table above (numbers as `float`, `force_sync_enabled` as a boolean).
-`control_rate_hz` is the Cartesian Controller's value.
+`control_rate_hz` is the Cartesian Controller's value. `measured_wrench_topic` (a string) is written once
+the source is known: the Grabber falls back to its default topic.
 
 ## Deploy blockers
 
 `deploy_blockers` in `result.json` names the cause:
 
 - the control rate (read from the Cartesian Controller) is not a finite number greater than 0. The value is then left out of `outputs`.
+
+The measured wrench is not part of `result.json`: it depends on the pipeline selection and the declared external sources, which can change after Compute. The deploy step therefore evaluates it live and blocks deployment when the wrench has no valid source: the Grabber is chosen but not in scope or without tactile sensing, no source is chosen while the Grabber could provide it, an external source has no `measured_wrench_topic`, or an external source is not named.
 
 Every other parameter has a default, so nothing else can be left incomplete.
 

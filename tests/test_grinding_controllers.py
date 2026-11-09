@@ -77,7 +77,8 @@ def test_impedance_schema_asks_every_startup_parameter_with_its_spec_default():
         _IMPEDANCE_PARAMETERS
     )
     assert by_id["force_sync_enabled"]["default"] == "no"
-    assert not {"measured_wrench_topic", "unload_mode"} & set(by_id)
+    assert "unload_mode" not in by_id
+    assert {"measured_wrench_source", "measured_wrench_topic"} <= set(by_id)
 
 
 def test_the_shared_control_rate_is_read_only_only_for_the_reader():

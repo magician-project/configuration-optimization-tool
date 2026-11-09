@@ -58,8 +58,25 @@ def test_force_sync_is_off_until_answered():
     assert run({"force_sync_enabled": "yes"})["force_sync_enabled"] is True
 
 
-def test_the_wrench_topic_is_not_configured_here():
+def test_the_wrench_topic_is_only_written_once_the_source_is_known():
     assert "measured_wrench_topic" not in run({})
+    assert "measured_wrench_topic" not in run({"measured_wrench_source": "external"})
+    assert run({"measured_wrench_source": "external", "measured_wrench_topic": " /ft/wrench "})[
+        "measured_wrench_topic"
+    ] == "/ft/wrench"
+
+
+def test_the_grabber_source_falls_back_to_the_grabber_topic():
+    assert run({"measured_wrench_source": "grabber"})["measured_wrench_topic"] == "/magician_grabber/wrench_sensed"
+    assert run({"measured_wrench_source": "grabber", "measured_wrench_topic": "/ft/custom"})[
+        "measured_wrench_topic"
+    ] == "/ft/custom"
+
+
+def test_main_leaves_the_wrench_capability_blockers_to_the_deploy_step(tmp_path, monkeypatch):
+    result = _run_main(tmp_path, monkeypatch, {}, answers={"q_pipeline": "grinding"})
+
+    assert result["deploy_blockers"] == []
 
 
 def test_nothing_blocks_deployment_with_the_defaults():
@@ -94,8 +111,8 @@ def test_ros_interface_only_returns_notes():
     assert commands and all(c.type == "note" for c in commands)
 
 
-def _run_main(tmp_path, monkeypatch, module_answers):
-    use_case = {"name": "Grinding cell", "answers": {}, "module_answers": module_answers}
+def _run_main(tmp_path, monkeypatch, module_answers, answers=None):
+    use_case = {"name": "Grinding cell", "answers": answers or {}, "module_answers": module_answers}
     use_case_path = tmp_path / "use_case.json"
     use_case_path.write_text(json.dumps(use_case), encoding="utf-8")
     out_dir = tmp_path / "out"

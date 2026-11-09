@@ -4,7 +4,8 @@ Impedance Controller — compute.py
 Resolves the startup configuration of the Impedance Controller of the IIT grinding runtime:
 gains, limits and thresholds, with the spec defaults for anything not answered.
 `control_rate_hz` is shared: it is owned by the Cartesian Controller and read from there.
-The measured wrench topic and source are handled by the required-capabilities work (ticket 12).
+The measured wrench is a required capability: its source and topic are answered here. A missing or
+invalid source blocks deployment, which the deploy step checks live (app/engine/module_dependencies.py).
 
 Usage (called by compute_runner.py as a subprocess):
     python -m modules.impedance_controller.compute <use_case_json_path> <output_dir>
@@ -16,6 +17,7 @@ import sys
 from datetime import datetime
 
 from app.engine.module_config import control_rate_blockers, drop_invalid_control_rate, number_values
+from app.engine.module_dependencies import GRABBER_WRENCH_TOPIC
 from app.engine.schema import IMPEDANCE_CONTROLLER_CONFIG
 from app.engine.shared_parameters import answers_with_shared
 
@@ -33,15 +35,27 @@ def run(answers: dict) -> dict:
     """Flat str/int/float outputs: every answer, or its spec default when unanswered.
 
     An invalid control rate is left out (and blocks deployment) instead of being written.
+    The measured wrench topic is written once the source is known: the Grabber falls back to its
+    default topic, an external source has none until it is entered.
     """
     outputs: dict = drop_invalid_control_rate(number_values(IMPEDANCE_CONTROLLER_CONFIG, answers))
     # Unanswered means off until IIT confirms the default.
     outputs["force_sync_enabled"] = answers.get("force_sync_enabled", "no") == "yes"
+    topic = str(answers.get("measured_wrench_topic") or "").strip()
+    if answers.get("measured_wrench_source") == "grabber":
+        topic = topic or GRABBER_WRENCH_TOPIC
+    if topic:
+        outputs["measured_wrench_topic"] = topic
     return outputs
 
 
 def deploy_blockers(answers: dict) -> list:
-    """Human-readable reasons this configuration must not be deployed yet."""
+    """Human-readable reasons this configuration must not be deployed yet.
+
+    Covers the module's own answers only. The required-capability blockers depend on the pipeline
+    selection and the declared external sources, which change after compute, so the deploy step
+    evaluates them live (UseCasePage._deploy_module).
+    """
     return control_rate_blockers(IMPEDANCE_CONTROLLER_CONFIG, answers)
 
 
