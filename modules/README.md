@@ -52,6 +52,14 @@ modules/<module_id>/
 7. COT calls `ros_interface.get_commands(outputs)` and fires the resulting
    `ros2 param set` / `ros2 service call` commands on the robot machine.
 
+   Exception: the DMP, Cartesian Controller and Impedance Controller form one IIT grinding
+   runtime that is configured once at startup (ADR-0005). **Deploy** on any of their tiles is a
+   runtime-level action (`app/engine/runtime_deploy.py`): it refuses unless all three are computed,
+   not out of date and free of deploy blockers and open required capabilities, then combines the
+   three results into one `params.yaml` (`control_rate_hz` once, from the Cartesian Controller)
+   and returns notes only. No `ros2 param set` or `service` command is generated, and COT does
+   not start or restart the runtime. These three modules' `ros_interface.py` is not used by deploy.
+
 ## Contract for `compute.py`
 
 The `run(answers)` function (or `run(answers, output_dir)` for ML modules) must:
@@ -70,7 +78,8 @@ the live node (e.g. a required field was left blank), write a top-level
 *not* inside `outputs` itself — `outputs` must stay flat `str`/`int`/`float`.
 `gui/pages/use_case_page.py::_deploy_module()` checks this field before
 calling `ros_interface.get_commands()` and refuses to deploy while it is
-non-empty. Leave it unset (or `[]`) if your module has nothing to block on.
+non-empty. (For the IIT grinding runtime modules the same check runs for all three at once in
+`app/engine/runtime_deploy.py`.) Leave it unset (or `[]`) if your module has nothing to block on.
 See `modules/localiser/compute.py::deploy_blockers()` for a reference
 implementation.
 
