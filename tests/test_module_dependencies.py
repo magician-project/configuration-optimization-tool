@@ -267,13 +267,13 @@ def test_an_external_source_needs_a_topic():
 
 
 def test_an_unsupported_wrench_source_is_a_blocker_and_raises_no_external_input():
-    answers = {"impedance_controller": {"measured_wrench_source": "foo", "measured_wrench_topic": "/ft"}}
+    answers = {"impedance_controller": {"measured_wrench_source": "unknown_source", "measured_wrench_topic": "/ft"}}
 
     for pipeline in ("grinding", "both"):
         result = validate_configuration(pipeline, ["tactile"], module_answers=answers)
 
         assert result.status == "invalid"
-        assert "unsupported source 'foo'" in _wrench(result).blockers[0]
+        assert "unsupported source 'unknown_source'" in _wrench(result).blockers[0]
         assert [r for r in result.external_inputs if r.kind == "capability"] == []
 
 
