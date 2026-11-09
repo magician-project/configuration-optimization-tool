@@ -951,13 +951,21 @@ def consumers_awaiting_external_input(use_case: UseCase) -> set:
     return {r.consumer for r in validation.external_inputs if not r.complete}
 
 
+def consumers_with_open_item(use_case: UseCase) -> set:
+    """Module ids with an external input still to agree or a required capability without a valid source."""
+    validation = validate_use_case(use_case)
+    return {r.consumer for r in validation.external_inputs if not r.complete} | {
+        c.consumer for c in validation.capabilities if not c.satisfied
+    }
+
+
 def sync_external_input_status(use_case: UseCase) -> None:
-    """Flag a module waiting for an agreed external input; undo that once it is agreed.
+    """Flag a module with an open external input or capability; undo that once it is resolved.
 
     Only escalates "ok": later lifecycle states (validated, computed, ...) are left alone,
-    since external-input readiness is informational and must not block compute or deploy.
+    since this readiness is informational and must not block compute or deploy.
     """
-    pending = consumers_awaiting_external_input(use_case)
+    pending = consumers_with_open_item(use_case)
     for mid, ms in use_case.modules.items():
         if ms.status in ("out_of_scope", "computing", "deploying"):
             continue

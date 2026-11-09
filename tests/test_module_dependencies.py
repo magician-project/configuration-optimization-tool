@@ -358,3 +358,56 @@ def test_a_missing_wrench_source_makes_the_impedance_controller_need_action_unti
     assert uc.modules["impedance_controller"].status == "ok"
 
 
+def _both_use_case_with_tactile():
+    uc = _grinding_use_case()
+    uc.answers.q_pipeline = "both"
+    uc.answers.q3_additional_sensors = ["tactile"]
+    return uc
+
+
+def test_an_unanswered_wrench_source_needs_action_even_though_no_external_input_is_raised():
+    from app.engine.questionnaire_engine import apply_impacts_to_modules, compute_impacts
+
+    uc = _both_use_case_with_tactile()
+
+    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers=uc.module_answers))
+
+    assert validate_configuration("both", ["tactile"]).external_inputs == []
+    assert uc.modules["impedance_controller"].status == "needs_action"
+
+
+def test_choosing_a_valid_wrench_source_makes_the_impedance_controller_ready_again():
+    from app.engine.questionnaire_engine import apply_impacts_to_modules, compute_impacts
+
+    uc = _both_use_case_with_tactile()
+    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers=uc.module_answers))
+
+    uc.module_answers.update(_GRABBER_WRENCH)
+    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers=uc.module_answers))
+
+    assert uc.modules["impedance_controller"].status == "ok"
+
+
+def test_an_agreed_external_wrench_source_without_a_topic_still_needs_action():
+    from app.engine.questionnaire_engine import apply_impacts_to_modules, compute_impacts
+
+    uc = _both_use_case_with_tactile()
+    uc.module_answers["impedance_controller"] = {"measured_wrench_source": "external"}
+    uc.external_sources["measured_wrench"] = _WRENCH_SOURCE
+
+    apply_impacts_to_modules(uc, compute_impacts(uc.answers, module_answers=uc.module_answers))
+
+    assert uc.modules["impedance_controller"].status == "needs_action"
+
+
+def test_an_open_capability_does_not_reset_advanced_lifecycle_status():
+    from app.engine.questionnaire_engine import sync_external_input_status
+
+    uc = _both_use_case_with_tactile()
+    uc.modules["impedance_controller"].status = "computed"
+
+    sync_external_input_status(uc)
+
+    assert uc.modules["impedance_controller"].status == "computed"
+
+
