@@ -1117,16 +1117,18 @@ _IMPEDANCE_DOCS = {"module": "impedance_controller", "anchor": "inputs-module_an
 
 
 def _float_param(qid: str, title: str, tooltip: str, docs: dict, default: float, *,
-                 max: float = 9999.0, decimals: int = 3, step: float = 0.1, **extra) -> dict:
+                 min: float = 0.0, max: float = 9999.0, decimals: int = 3, step: float = 0.1, **extra) -> dict:
     return {
         "id": qid, "title": title, "tooltip": tooltip, "help_link": docs, "type": "number_float",
-        "min": 0.0, "max": max, "decimals": decimals, "step": step, "default": default, **extra,
+        "min": min, "max": max, "decimals": decimals, "step": step, "default": default, **extra,
     }
 
 
+# A rate of zero cannot define an update loop, so unlike the other parameters it must be positive.
 _CONTROL_RATE_HZ = {
     "title": "Control rate (Hz)",
     "default": 1000.0,
+    "min": 1.0,
     "max": 10000.0,
     "decimals": 1,
     "step": 10.0,
@@ -1179,7 +1181,7 @@ CARTESIAN_CONTROLLER_CONFIG = [
         "control_rate_hz", _CONTROL_RATE_HZ["title"],
         "How often the force control and the robot references are updated. Shared with the Impedance "
         "Controller, which shows this value read-only. Default: 1000 Hz.",
-        _CARTESIAN_DOCS, _CONTROL_RATE_HZ["default"], max=_CONTROL_RATE_HZ["max"],
+        _CARTESIAN_DOCS, _CONTROL_RATE_HZ["default"], min=_CONTROL_RATE_HZ["min"], max=_CONTROL_RATE_HZ["max"],
         decimals=_CONTROL_RATE_HZ["decimals"], step=_CONTROL_RATE_HZ["step"],
     ),
 ]
@@ -1195,7 +1197,7 @@ IMPEDANCE_CONTROLLER_CONFIG = [
         "control_rate_hz", _CONTROL_RATE_HZ["title"],
         "How often the force control and the robot references are updated. Set in the Cartesian Controller; "
         "shown here read-only.",
-        _IMPEDANCE_DOCS, _CONTROL_RATE_HZ["default"], max=_CONTROL_RATE_HZ["max"],
+        _IMPEDANCE_DOCS, _CONTROL_RATE_HZ["default"], min=_CONTROL_RATE_HZ["min"], max=_CONTROL_RATE_HZ["max"],
         decimals=_CONTROL_RATE_HZ["decimals"], step=_CONTROL_RATE_HZ["step"], read_only=True,
     ),
     _float_param(

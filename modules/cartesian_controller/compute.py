@@ -14,7 +14,7 @@ import os
 import sys
 from datetime import datetime
 
-from app.engine.module_config import number_values
+from app.engine.module_config import control_rate_blockers, drop_invalid_control_rate, number_values
 from app.engine.schema import CARTESIAN_CONTROLLER_CONFIG
 
 # Always set, never a question: the only unload behaviour COT configures.
@@ -31,15 +31,18 @@ _TIME_NOTE = (
 
 
 def run(answers: dict) -> dict:
-    """Flat str/float outputs: every answer, or its spec default when unanswered."""
-    outputs: dict = number_values(CARTESIAN_CONTROLLER_CONFIG, answers)
+    """Flat str/float outputs: every answer, or its spec default when unanswered.
+
+    An invalid control rate is left out (and blocks deployment) instead of being written.
+    """
+    outputs: dict = drop_invalid_control_rate(number_values(CARTESIAN_CONTROLLER_CONFIG, answers))
     outputs["unload_mode"] = _UNLOAD_MODE
     return outputs
 
 
 def deploy_blockers(answers: dict) -> list:
-    """Every parameter has a spec default, so nothing can be left incomplete."""
-    return []
+    """Human-readable reasons this configuration must not be deployed yet."""
+    return control_rate_blockers(CARTESIAN_CONTROLLER_CONFIG, answers)
 
 
 def notes(answers: dict) -> list:

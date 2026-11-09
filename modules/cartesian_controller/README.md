@@ -40,7 +40,7 @@ All parameters are optional: an unanswered one takes the spec default.
 | `unload_retract_rate_m_s` | 0.015 m/s | Tool-normal retraction velocity while unloading |
 | `go_away_distance_m` | 0.10 m | Final retraction distance after contact release |
 | `go_away_duration_s` | 5 s | Time allotted to the final retreat |
-| `control_rate_hz` | 1000 Hz | Update rate of the force control and the Cartesian references. **Shared** with the Impedance Controller, which shows it read-only: this module owns it |
+| `control_rate_hz` | 1000 Hz | Update rate of the force control and the Cartesian references. Must be greater than 0 (minimum 1 Hz in the form). **Shared** with the Impedance Controller, which shows it read-only: this module owns it |
 
 ## Outputs (written to `result.json`)
 
@@ -52,7 +52,11 @@ All parameters are optional: an unanswered one takes the spec default.
 
 ## Deploy blockers
 
-None: every parameter has a default.
+`deploy_blockers` in `result.json` names the cause:
+
+- the control rate is not a finite number greater than 0 (also for a stored or imported answer that bypassed the form). The value is then left out of `outputs`.
+
+Every other parameter has a default, so nothing else can be left incomplete.
 
 ## Notes
 
@@ -62,5 +66,5 @@ None: every parameter has a default.
 
 ## Open points
 
-The node name, the literal parameter names and the passing mechanism are open questions for IIT; see
-"Open questions for IIT" in [`COT_DMP.md`](../../docs/specs/COT_DMP.md).
+The node name, the literal parameter names, the passing mechanism and the valid ranges of the
+parameters (the spec only gives baselines) are open questions for IIT; see "Open questions for IIT" in [`COT_DMP.md`](../../docs/specs/COT_DMP.md).

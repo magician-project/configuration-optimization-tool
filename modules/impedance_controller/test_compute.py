@@ -62,8 +62,23 @@ def test_the_wrench_topic_is_not_configured_here():
     assert "measured_wrench_topic" not in run({})
 
 
-def test_nothing_blocks_deployment():
+def test_nothing_blocks_deployment_with_the_defaults():
     assert deploy_blockers({}) == []
+
+
+@pytest.mark.parametrize("rate", [0, 0.0, -5.0, float("nan"), float("inf")])
+def test_a_control_rate_that_is_not_positive_blocks_deployment_and_is_not_written(rate):
+    answers = {"control_rate_hz": rate}
+
+    assert deploy_blockers(answers) == ["control rate (Hz) must be greater than 0"]
+    assert "control_rate_hz" not in run(answers)
+
+
+def test_main_blocks_deployment_when_the_cartesian_controller_has_a_zero_control_rate(tmp_path, monkeypatch):
+    result = _run_main(tmp_path, monkeypatch, {"cartesian_controller": {"control_rate_hz": 0}})
+
+    assert result["deploy_blockers"] == ["control rate (Hz) must be greater than 0"]
+    assert "control_rate_hz" not in result["outputs"]
 
 
 def test_notes_say_changes_need_a_restart_and_the_recipe_is_not_verified():

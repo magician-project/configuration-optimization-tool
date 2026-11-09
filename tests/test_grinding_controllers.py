@@ -91,6 +91,13 @@ def test_the_shared_control_rate_is_read_only_only_for_the_reader():
     )
 
 
+def test_the_control_rate_must_be_positive_in_both_controller_schemas():
+    for config in (CARTESIAN_CONTROLLER_CONFIG, IMPEDANCE_CONTROLLER_CONFIG):
+        [rate] = [q for q in config if q["id"] == "control_rate_hz"]
+
+        assert rate["min"] > 0 and rate["default"] >= rate["min"]
+
+
 def test_the_cartesian_controller_owns_the_control_rate():
     assert SHARED_PARAMETERS["control_rate_hz"][0] == "cartesian_controller"
     assert shared_parameter_ids("cartesian_controller") == []

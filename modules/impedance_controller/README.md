@@ -60,7 +60,11 @@ capabilities work (ticket 12).
 
 ## Deploy blockers
 
-None: every parameter has a default.
+`deploy_blockers` in `result.json` names the cause:
+
+- the control rate (read from the Cartesian Controller) is not a finite number greater than 0. The value is then left out of `outputs`.
+
+Every other parameter has a default, so nothing else can be left incomplete.
 
 ## Notes
 
@@ -70,6 +74,7 @@ None: every parameter has a default.
 
 ## Open points
 
-The node name, the literal parameter names, the passing mechanism and the default of
+The node name, the literal parameter names, the passing mechanism, the valid ranges of the parameters
+(the spec only gives baselines) and the default of
 `force_sync_enabled` are open questions for IIT; see "Open questions for IIT" in
 [`COT_DMP.md`](../../docs/specs/COT_DMP.md).

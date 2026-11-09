@@ -53,8 +53,16 @@ def test_outputs_are_flat_str_or_float():
     assert all(isinstance(v, (str, int, float)) for v in run({}).values())
 
 
-def test_nothing_blocks_deployment():
+def test_nothing_blocks_deployment_with_the_defaults():
     assert deploy_blockers({}) == []
+
+
+@pytest.mark.parametrize("rate", [0, 0.0, -5.0, float("nan"), float("inf")])
+def test_a_control_rate_that_is_not_positive_blocks_deployment_and_is_not_written(rate):
+    answers = {"control_rate_hz": rate}
+
+    assert deploy_blockers(answers) == ["control rate (Hz) must be greater than 0"]
+    assert "control_rate_hz" not in run(answers)
 
 
 def test_notes_say_changes_need_a_restart_and_time_feasibility_is_not_checked():

@@ -15,7 +15,7 @@ import os
 import sys
 from datetime import datetime
 
-from app.engine.module_config import number_values
+from app.engine.module_config import control_rate_blockers, drop_invalid_control_rate, number_values
 from app.engine.schema import IMPEDANCE_CONTROLLER_CONFIG
 from app.engine.shared_parameters import answers_with_shared
 
@@ -30,16 +30,19 @@ _RECIPE_NOTE = (
 
 
 def run(answers: dict) -> dict:
-    """Flat str/int/float outputs: every answer, or its spec default when unanswered."""
-    outputs: dict = number_values(IMPEDANCE_CONTROLLER_CONFIG, answers)
+    """Flat str/int/float outputs: every answer, or its spec default when unanswered.
+
+    An invalid control rate is left out (and blocks deployment) instead of being written.
+    """
+    outputs: dict = drop_invalid_control_rate(number_values(IMPEDANCE_CONTROLLER_CONFIG, answers))
     # Unanswered means off until IIT confirms the default.
     outputs["force_sync_enabled"] = answers.get("force_sync_enabled", "no") == "yes"
     return outputs
 
 
 def deploy_blockers(answers: dict) -> list:
-    """Every parameter has a spec default, so nothing can be left incomplete."""
-    return []
+    """Human-readable reasons this configuration must not be deployed yet."""
+    return control_rate_blockers(IMPEDANCE_CONTROLLER_CONFIG, answers)
 
 
 def notes(answers: dict) -> list:
