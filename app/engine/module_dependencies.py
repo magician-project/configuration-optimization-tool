@@ -248,6 +248,11 @@ def _evaluate_measured_wrench(
             provider=provider, satisfied=satisfied, summary=summary, blockers=list(blockers),
         )
 
+    if choice not in ("", "grabber", "external"):
+        return status(
+            "", False, "Measured wrench: unsupported source",
+            f"Measured wrench: unsupported source '{choice}'. Choose MAGICIAN Grabber or External.",
+        ), False
     if choice == "grabber" and grabber_delivers:
         return status("grabber", True, f"Measured wrench: MAGICIAN Grabber ({topic or GRABBER_WRENCH_TOPIC})"), False
     if choice == "grabber":
