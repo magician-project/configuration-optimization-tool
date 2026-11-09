@@ -81,7 +81,8 @@ SCHEMA = {
                 "**What your choice changes**\n\n"
                 "- **Inspection only:** Grabber, Vision Classifier and Ergodic Control, plus the shared "
                 "Localiser and Motion Planner.\n"
-                "- **Grinding only:** Orienteering Solver, plus the shared modules. MAGICIAN Inspection "
+                "- **Grinding only:** Orienteering Solver, DMP, Cartesian Controller and Impedance "
+                "Controller, plus the shared modules. MAGICIAN Inspection "
                 "is out of scope, so defect information must come from an external inspection source "
                 "(an *external input requirement*). Agree on the source and data contract with whoever "
                 "provides it.\n"
@@ -1099,6 +1100,189 @@ DMP_CONFIG = [
         }
         for axis in ("x", "y", "z")
     ],
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cartesian Controller and Impedance Controller configuration schemas.
+# These fields live in module_answers["cartesian_controller"] and
+# module_answers["impedance_controller"]. All map 1:1 to the "COT configuration
+# parameters" tables of COT_CARTESIAN_CONTROLLER.md and COT_IMPEDANCE_CONTROLLER.md
+# and take effect after a restart of the grinding runtime. The defaults are the
+# spec defaults. `control_rate_hz` is shared: the Cartesian Controller owns it and
+# the Impedance Controller shows it read-only (ADR-0005, app/engine/shared_parameters.py).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_CARTESIAN_DOCS = {"module": "cartesian_controller", "anchor": "inputs-module_answerscartesian_controller"}
+_IMPEDANCE_DOCS = {"module": "impedance_controller", "anchor": "inputs-module_answersimpedance_controller"}
+
+
+def _float_param(qid: str, title: str, tooltip: str, docs: dict, default: float, *,
+                 min: float = 0.0, max: float = 9999.0, decimals: int = 3, step: float = 0.1, **extra) -> dict:
+    return {
+        "id": qid, "title": title, "tooltip": tooltip, "help_link": docs, "type": "number_float",
+        "min": min, "max": max, "decimals": decimals, "step": step, "default": default, **extra,
+    }
+
+
+# A rate of zero cannot define an update loop, so unlike the other parameters it must be positive.
+_CONTROL_RATE_HZ = {
+    "title": "Control rate (Hz)",
+    "default": 1000.0,
+    "min": 1.0,
+    "max": 10000.0,
+    "decimals": 1,
+    "step": 10.0,
+}
+
+CARTESIAN_CONTROLLER_CONFIG = [
+    _float_param(
+        "reach_duration_s", "Reach duration (s)",
+        "Time allowed to move to the starting pose of the learned primitive. Default: 10 s.",
+        _CARTESIAN_DOCS, 10.0, decimals=2,
+    ),
+    _float_param(
+        "touch_dwell_s", "Touch dwell time (s)",
+        "How long the tool stays in the initial contact phase before the learned motion starts. Default: 3 s.",
+        _CARTESIAN_DOCS, 3.0, decimals=2,
+    ),
+    _float_param(
+        "touch_approach_distance_m", "Touch approach distance (m)",
+        "Maximum distance the tool may travel towards the surface during the initial contact phase. "
+        "Default: 0.015 m.",
+        _CARTESIAN_DOCS, 0.015, max=1.0, step=0.001,
+    ),
+    _float_param(
+        "unload_tail_window_s", "Unload window at the end of the primitive (s)",
+        "Unloading logic only applies during this final part of the learned motion. Default: 2.5 s.",
+        _CARTESIAN_DOCS, 2.5, decimals=2,
+    ),
+    _float_param(
+        "unload_extra_duration_s", "Extra unload time (s)",
+        "Additional time allowed to release the tool contact in a controlled way. Default: 2 s.",
+        _CARTESIAN_DOCS, 2.0, decimals=2,
+    ),
+    _float_param(
+        "unload_retract_rate_m_s", "Unload retract speed (m/s)",
+        "Speed at which the tool moves away from the surface while the contact is released. "
+        "Default: 0.015 m/s.",
+        _CARTESIAN_DOCS, 0.015, max=1.0, step=0.001,
+    ),
+    _float_param(
+        "go_away_distance_m", "Go-away distance (m)",
+        "Distance the robot retreats after the contact is released. Default: 0.10 m.",
+        _CARTESIAN_DOCS, 0.10, max=5.0, step=0.01,
+    ),
+    _float_param(
+        "go_away_duration_s", "Go-away duration (s)",
+        "Time allowed for the final retreat of the robot. Default: 5 s.",
+        _CARTESIAN_DOCS, 5.0, decimals=2,
+    ),
+    _float_param(
+        "control_rate_hz", _CONTROL_RATE_HZ["title"],
+        "How often the force control and the robot references are updated. Shared with the Impedance "
+        "Controller, which shows this value read-only. Default: 1000 Hz.",
+        _CARTESIAN_DOCS, _CONTROL_RATE_HZ["default"], min=_CONTROL_RATE_HZ["min"], max=_CONTROL_RATE_HZ["max"],
+        decimals=_CONTROL_RATE_HZ["decimals"], step=_CONTROL_RATE_HZ["step"],
+    ),
+]
+
+IMPEDANCE_CONTROLLER_CONFIG = [
+    _float_param(
+        "force_reference_scale", "Force reference scale",
+        "Scales the learned normal-force profile before grinding. Use a validated material and tool recipe. "
+        "Default: 1.0.",
+        _IMPEDANCE_DOCS, 1.0, decimals=2,
+    ),
+    _float_param(
+        "control_rate_hz", _CONTROL_RATE_HZ["title"],
+        "How often the force control and the robot references are updated. Set in the Cartesian Controller; "
+        "shown here read-only.",
+        _IMPEDANCE_DOCS, _CONTROL_RATE_HZ["default"], min=_CONTROL_RATE_HZ["min"], max=_CONTROL_RATE_HZ["max"],
+        decimals=_CONTROL_RATE_HZ["decimals"], step=_CONTROL_RATE_HZ["step"], read_only=True,
+    ),
+    _float_param(
+        "admittance_gain", "Admittance gain (m/(N·s))",
+        "How strongly a force error is turned into a corrective speed along the tool normal. "
+        "Do not infer it from the material category. Default: 0.0013.",
+        _IMPEDANCE_DOCS, 0.0013, decimals=5, step=0.0001,
+    ),
+    _float_param(
+        "force_rate_ff_scale", "Force-rate feedforward scale",
+        "How much the controller anticipates changes in the desired force. Default: 0.6.",
+        _IMPEDANCE_DOCS, 0.6, decimals=2,
+    ),
+    _float_param(
+        "max_reference_force_rate", "Max reference force rate (N/s)",
+        "Upper limit on how fast the desired force may change in the anticipation term. Default: 220 N/s.",
+        _IMPEDANCE_DOCS, 220.0, decimals=1, step=10.0,
+    ),
+    _float_param(
+        "force_deadband_n", "Force deadband (N)",
+        "Force errors smaller than this are ignored, so the robot does not move for tiny deviations. "
+        "Default: 2 N.",
+        _IMPEDANCE_DOCS, 2.0, decimals=2,
+    ),
+    _float_param(
+        "contact_threshold_n", "Contact threshold (N)",
+        "Force at which the initial contact counts as established. Default: 3 N.",
+        _IMPEDANCE_DOCS, 3.0, decimals=2,
+    ),
+    _float_param(
+        "max_normal_displacement_m", "Max normal displacement (m)",
+        "Upper limit on the total distance the force correction may move the tool along the tool normal. "
+        "Default: 0.12 m.",
+        _IMPEDANCE_DOCS, 0.12, max=5.0, step=0.01,
+    ),
+    _float_param(
+        "max_normal_velocity_m_s", "Max normal velocity (m/s)",
+        "Upper limit on the speed of the force correction along the tool normal. Default: 0.055 m/s.",
+        _IMPEDANCE_DOCS, 0.055, max=1.0, step=0.005,
+    ),
+    _float_param(
+        "contact_entry_velocity_m_s", "Contact entry velocity (m/s)",
+        "Speed limit of the approach correction until contact is established. Default: 0.02 m/s.",
+        _IMPEDANCE_DOCS, 0.02, max=1.0, step=0.005,
+    ),
+    _float_param(
+        "max_contact_force_n", "Max contact force (N)",
+        "Safety limit: when the measured force exceeds this value, the robot is stopped immediately. "
+        "Default: 150 N.",
+        _IMPEDANCE_DOCS, 150.0, decimals=1, step=5.0,
+    ),
+    _float_param(
+        "touch_force_n", "Touch force (N)",
+        "Target normal force during the initial contact. Default: 10 N.",
+        _IMPEDANCE_DOCS, 10.0, decimals=2,
+    ),
+    {
+        "id": "force_sync_enabled",
+        "title": "Force synchronisation",
+        "tooltip": "Aligns the measured force with the first learned force value before the motion starts. "
+                   "Not decided yet by the controller owner. Default: off.",
+        "help_link": _IMPEDANCE_DOCS,
+        "type": "select",
+        "options": [
+            {"value": "no", "label": "No"},
+            {"value": "yes", "label": "Yes"},
+        ],
+        "default": "no",
+    },
+    _float_param(
+        "force_sync_timeout_s", "Force synchronisation timeout (s)",
+        "Maximum time allowed for the initial force synchronisation. Default: 4 s.",
+        _IMPEDANCE_DOCS, 4.0, decimals=2,
+    ),
+    _float_param(
+        "force_sync_tolerance_n", "Force synchronisation tolerance (N)",
+        "Accepted difference between measured and learned force before the learned motion begins. "
+        "Default: 2 N.",
+        _IMPEDANCE_DOCS, 2.0, decimals=2,
+    ),
+    _float_param(
+        "unload_threshold_n", "Unload threshold (N)",
+        "Force below which the contact counts as low during the unloading phase. Default: 8 N.",
+        _IMPEDANCE_DOCS, 8.0, decimals=2,
+    ),
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────

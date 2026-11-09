@@ -5,7 +5,8 @@ Detects whether a module's compute result is out of date: whether the answers th
 module's compute.py reads have changed since the result was computed.
 
 compute.py merges the general answers with ``module_answers[<module>]``
-(``{**answers, **module_answers[<module>]}``). The fingerprint hashes exactly
+(``{**answers, **module_answers[<module>]}``), plus the shared parameters the module reads
+from their owner (see shared_parameters.py). The fingerprint hashes exactly
 that merge, so answers of other modules never make a result out of date, and
 reverting a change makes the result current again.
 """
@@ -15,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 
+from app.engine.shared_parameters import answers_with_shared
 from app.models.use_case import UseCase
 
 
@@ -22,7 +24,7 @@ def answers_fingerprint(use_case: UseCase, module_id: str) -> str:
     """Fingerprint of the answers ``module_id``'s compute.py would read right now."""
     merged = {
         **use_case.answers.model_dump(mode="json"),
-        **use_case.module_answers.get(module_id, {}),
+        **answers_with_shared(module_id, use_case.module_answers),
     }
     canonical = json.dumps(merged, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

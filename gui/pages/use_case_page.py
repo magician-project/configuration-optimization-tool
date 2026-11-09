@@ -24,6 +24,7 @@ from app.models.use_case import UseCase, ComputeResult, ExternalSource
 from app.engine.module_dependencies import validate_configuration
 from app.engine.module_registry import is_assessed
 from app.engine.result_freshness import answers_fingerprint, out_of_date_modules
+from app.engine.shared_parameters import shared_values
 from app.engine.questionnaire_engine import (
     compute_impacts, apply_impacts_to_modules, consumers_awaiting_external_input,
     sync_external_input_status,
@@ -44,7 +45,10 @@ logger = logging.getLogger(__name__)
 # (as [] when there's nothing blocking). A stored result with
 # deploy_blockers is None for one of these predates the convention and
 # must be recomputed before deploy can trust it — see _deploy_module().
-_MODULES_WITH_DEPLOY_BLOCKERS = {"localiser", "tactile_sensor", "orienteering_solver", "ergodic_control", "dmp"}
+_MODULES_WITH_DEPLOY_BLOCKERS = {
+    "localiser", "tactile_sensor", "orienteering_solver", "ergodic_control", "dmp",
+    "cartesian_controller", "impedance_controller",
+}
 
 
 class UseCasePage(QWidget):
@@ -348,6 +352,7 @@ class UseCasePage(QWidget):
             ms, module_config=module_config,
             external_inputs=self._external_inputs_for(module_id), parent=self,
             general_answers=self._use_case.answers.model_dump(),
+            shared_answers=shared_values(module_id, self._use_case.module_answers),
         )
         if doc_anchor is not None:
             dlg.show_documentation(doc_anchor)

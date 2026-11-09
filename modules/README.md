@@ -19,6 +19,8 @@ Module owners work exclusively inside their own folder.
 | `localiser/` | Localiser | `/localisation` | Reconfiguration |
 | `motion_planning/` | Motion Planner | `/motion_planner` | Reconfiguration |
 | `dmp/` | DMP | placeholder, not yet confirmed by IIT | Startup configuration |
+| `cartesian_controller/` | Cartesian Controller | placeholder, not yet confirmed by IIT | Startup configuration |
+| `impedance_controller/` | Impedance Controller | placeholder, not yet confirmed by IIT | Startup configuration |
 | `tactile_sensor/` | Tactile Sensor | `/tactile_classifier_system` | Retrain + Reconfigure |
 | `vision_classifier/` | Vision Classifier | `/magician_vision_classifier` | Retrain + Reconfigure |
 

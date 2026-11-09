@@ -47,6 +47,8 @@ class Dependency:
     external_conditional_fields: Tuple[str, ...] = ()
     # Shown as an arrow on the dashboard only; never evaluated by validate_configuration().
     display_only: bool = False
+    # False: the dependency is still validated, but no arrow is drawn for it.
+    drawn: bool = True
 
     @property
     def verified(self) -> bool:
@@ -123,6 +125,31 @@ DEPENDENCIES: List[Dependency] = [
         external_input_allowed=False,
         evidence_status="documented", validation_status="verified",
     ),
+    # IIT confirmed the architecture: DMP feeds both controllers (drawn as the group arrow
+    # Motion Planning -> Controller). Impedance -> Cartesian is not in the confirmed diagram, so it
+    # is neither drawn nor validated until IIT confirms it.
+    Dependency(
+        id="dmp_to_cartesian_controller",
+        provider="dmp", consumer="cartesian_controller",
+        provider_output="pose_profile", consumer_input="learned pose profile",
+        external_input_allowed=False,
+        evidence_status="documented", validation_status="verified",
+    ),
+    Dependency(
+        id="dmp_to_impedance_controller",
+        provider="dmp", consumer="impedance_controller",
+        provider_output="force_profile", consumer_input="learned force profile",
+        external_input_allowed=False,
+        evidence_status="documented", validation_status="verified",
+    ),
+    Dependency(
+        id="impedance_controller_to_cartesian_controller",
+        provider="impedance_controller", consumer="cartesian_controller",
+        provider_output="tcp_normal_corrections", consumer_input="TCP-normal displacement/velocity corrections",
+        external_input_allowed=False,
+        evidence_status="documented", validation_status="owner_confirmation_needed",
+        display_only=True, drawn=False,
+    ),
     _conceptual_edge("tactile_sensor", "orienteering_solver"),
     _conceptual_edge("vision_classifier", "orienteering_solver"),
     _conceptual_edge("orienteering_solver", "motion_planning"),
@@ -170,12 +197,12 @@ def scope_for(pipeline: Optional[str], additional_sensors: Optional[List[str]] =
 
 
 def _drawable_dependencies(in_scope_modules: Iterable[str]) -> List[Dependency]:
-    """Dependencies between two in-scope COT modules, display-only ones included.
+    """Dependencies between two in-scope COT modules, display-only ones included, unless not drawn.
 
     Non-COT nodes and out-of-scope modules never qualify (ADR-0004).
     """
     drawn = {m for m in in_scope_modules if m in MODULES}
-    return [dep for dep in DEPENDENCIES if dep.provider in drawn and dep.consumer in drawn]
+    return [dep for dep in DEPENDENCIES if dep.drawn and dep.provider in drawn and dep.consumer in drawn]
 
 
 def visible_dependency_edges(in_scope_modules: Iterable[str]) -> List[VisibleEdge]:

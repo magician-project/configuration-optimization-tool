@@ -134,6 +134,40 @@ MODULES: Dict[str, dict] = {
         ],
         "compute_module": "modules.dmp.compute",
     },
+    "cartesian_controller": {
+        "name": "Cartesian Controller",
+        # Placeholder until IIT confirms the node name of the grinding runtime.
+        "ros_name": "cartesian_controller_placeholder",
+        "description": (
+            "Sequences the contact phases of a grinding cycle (reach, touch, replay of the learned "
+            "primitive, unload and go away) and generates the Cartesian references for the robot. "
+            "Configured at startup; the control rate is shared with the Impedance Controller."
+        ),
+        "characteristics": [
+            "Robot / tool change (TCP, frame mapping, limits)",
+            "Time constraint (phase durations; contact and safety requirements stay in force)",
+            "Contact quality / loss (recovery and abort behavior)",
+        ],
+        "compute_module": "modules.cartesian_controller.compute",
+    },
+    "impedance_controller": {
+        "name": "Impedance Controller",
+        # Placeholder until IIT confirms the node name of the grinding runtime.
+        "ros_name": "impedance_controller_placeholder",
+        "description": (
+            "Regulates the normal contact force during grinding: scales the learned force "
+            "reference, compares it with the measured wrench and turns the force error into a "
+            "TCP-normal correction for the Cartesian Controller. Displacement, velocity and force "
+            "limits keep the contact safe; exceeding the maximum contact force stops the robot."
+        ),
+        "characteristics": [
+            "Material / coating (force profile, admissible force, admittance tuning)",
+            "Robot / tool change (sensor sign, limits)",
+            "F/T sensor selection (wrench topic, calibration, timeout)",
+            "Contact quality / loss (force gating, recovery and abort behavior)",
+        ],
+        "compute_module": "modules.impedance_controller.compute",
+    },
 }
 
 PIPELINES = ("inspection", "grinding", "both")
@@ -148,6 +182,7 @@ MODULE_GROUPS: Dict[str, dict] = {
     },
     "task_planning": {"name": "Task Planning", "modules": ["orienteering_solver"], "columns": 1},
     "motion_planning": {"name": "Motion Planning", "modules": ["motion_planning", "ergodic_control", "dmp"], "columns": 1},
+    "controller": {"name": "Controller", "modules": ["impedance_controller", "cartesian_controller"], "columns": 2},
 }
 
 
@@ -157,7 +192,7 @@ def group_of(module_id: str) -> Optional[str]:
 # Localiser and Motion Planner are shared: in scope for every pipeline until a question drives them.
 _SHARED_MODULES = ["localiser", "motion_planning"]
 _INSPECTION_MODULES = ["grabber", "vision_classifier", "ergodic_control"]
-_GRINDING_MODULES = ["orienteering_solver", "dmp"]
+_GRINDING_MODULES = ["orienteering_solver", "dmp", "cartesian_controller", "impedance_controller"]
 
 DEFAULT_MODULES_BY_PIPELINE: Dict[str, List[str]] = {
     "inspection": _INSPECTION_MODULES + _SHARED_MODULES,

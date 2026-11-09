@@ -84,6 +84,7 @@ def test_dependencies_between_groups_collapse_into_group_arrows():
 
     assert sorted((e.provider_group, e.consumer_group) for e in edges) == [
         ("defect_detection", "task_planning"),
+        ("motion_planning", "controller"),
         ("task_planning", "motion_planning"),
     ]
 
@@ -98,6 +99,24 @@ def test_group_arrow_needs_connected_in_scope_modules_on_both_sides():
     edges = visible_group_edges(["grabber", "vision_classifier", "localiser", "motion_planning", "ergodic_control"])
 
     assert edges == []
+
+
+def test_impedance_to_cartesian_dependency_is_neither_drawn_nor_validated():
+    assert visible_dependency_edges(_cot_scope("grinding")) == []
+    assert "impedance_controller_to_cartesian_controller" not in validate_configuration("grinding").satisfied
+
+
+def test_dmp_to_both_controllers_collapses_into_one_group_arrow():
+    edges = visible_group_edges(_cot_scope("grinding"))
+
+    assert [(e.provider_group, e.consumer_group) for e in edges].count(("motion_planning", "controller")) == 1
+
+
+def test_controllers_have_no_arrows_in_an_inspection_use_case():
+    scope = _cot_scope("inspection")
+
+    assert not any("controller" in (e.provider_group, e.consumer_group) for e in visible_group_edges(scope))
+    assert not any("cartesian_controller" in (e.provider, e.consumer) for e in visible_dependency_edges(scope))
 
 
 def test_localiser_and_ergodic_control_have_no_module_arrows():
@@ -131,6 +150,7 @@ def test_grid_draws_arrows_only_between_in_scope_modules(qapp):
         "grabber": _state("grabber", "ok"),
         "vision_classifier": _state("vision_classifier", "ok"),
         "tactile_sensor": _state("tactile_sensor", "out_of_scope"),
+        "impedance_controller": _state("impedance_controller", "out_of_scope"),
     })
 
     assert grid.dependency_edges() == [VisibleEdge("grabber", "vision_classifier")]
@@ -143,8 +163,10 @@ def test_grid_draws_the_full_architecture_while_not_assessed(qapp):
 
     assert VisibleEdge("grabber", "vision_classifier") in grid.dependency_edges()
     assert VisibleEdge("grabber", "tactile_sensor") in grid.dependency_edges()
+    assert VisibleEdge("impedance_controller", "cartesian_controller") not in grid.dependency_edges()
     assert {(e.provider_group, e.consumer_group) for e in grid.group_edges()} == {
         ("defect_detection", "task_planning"), ("task_planning", "motion_planning"),
+        ("motion_planning", "controller"),
     }
 
 
@@ -153,7 +175,7 @@ def test_grid_draws_arrows_before_any_module_state_is_loaded(qapp):
 
     grid.update_modules({})
 
-    assert len(grid.group_edges()) == 2
+    assert len(grid.group_edges()) == 3
     assert grid.dependency_edges()
 
 
@@ -173,6 +195,7 @@ def test_grid_draws_group_arrows_between_group_frames(qapp):
 
     assert {(e.provider_group, e.consumer_group) for e in grid.group_edges()} == {
         ("defect_detection", "task_planning"), ("task_planning", "motion_planning"),
+        ("motion_planning", "controller"),
     }
 
 

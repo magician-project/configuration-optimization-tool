@@ -29,6 +29,7 @@ from PySide6.QtGui import QDesktopServices
 
 from app.engine.module_dependencies import ExternalInputRequirement
 from app.engine.module_registry import heading_anchor, load_module_readme, resolve_readme_link
+from app.engine.shared_parameters import without_shared
 from app.models.use_case import ModuleState
 from gui.components.external_inputs import ExternalInputForm
 
@@ -71,11 +72,13 @@ class ModuleDetail(QDialog):
     def __init__(
         self, module: ModuleState, module_config: dict = None,
         external_inputs: Optional[List[ExternalInputRequirement]] = None, parent=None,
-        general_answers: Optional[dict] = None,
+        general_answers: Optional[dict] = None, shared_answers: Optional[dict] = None,
     ) -> None:
         super().__init__(parent)
         self._module = module
-        self._module_config: dict = dict(module_config or {})
+        self._module_config: dict = without_shared(module.module_id, module_config or {})
+        # Values of parameters another module owns: shown read-only, never stored for this module.
+        self._shared_answers: dict = dict(shared_answers or {})
         self._external_inputs: List[ExternalInputRequirement] = list(external_inputs or [])
         self._general_answers: dict = dict(general_answers or {})
         self.setWindowTitle(module.module_name)
@@ -86,8 +89,8 @@ class ModuleDetail(QDialog):
     def _build_tabbed_ui(self, root: QVBoxLayout) -> None:
         """Tabs: Impacts & Flags | Module Configuration (only with a config schema) | Documentation."""
         from app.engine.schema import (
-            DMP_CONFIG, ERGODIC_CONTROL_CONFIG, GRABBER_CONFIG, LOCALISER_CONFIG, MOTION_PLANNER_CONFIG,
-            VISION_CLASSIFIER_CONFIG,
+            CARTESIAN_CONTROLLER_CONFIG, DMP_CONFIG, ERGODIC_CONTROL_CONFIG, GRABBER_CONFIG,
+            IMPEDANCE_CONTROLLER_CONFIG, LOCALISER_CONFIG, MOTION_PLANNER_CONFIG, VISION_CLASSIFIER_CONFIG,
         )
         from gui.components.questionnaire_form import QuestionnaireForm
 
@@ -98,6 +101,8 @@ class ModuleDetail(QDialog):
             "localiser":         LOCALISER_CONFIG,
             "motion_planning":   MOTION_PLANNER_CONFIG,
             "dmp":               DMP_CONFIG,
+            "cartesian_controller": CARTESIAN_CONTROLLER_CONFIG,
+            "impedance_controller": IMPEDANCE_CONTROLLER_CONFIG,
         }
         config_questions = _MODULE_CONFIGS.get(self._module.module_id, [])
 
@@ -126,7 +131,7 @@ class ModuleDetail(QDialog):
             config_layout.addWidget(info)
 
             self._config_form = QuestionnaireForm(questions=config_questions, general_answers=self._general_answers)
-            self._config_form.load_answers(self._module_config)
+            self._config_form.load_answers({**self._module_config, **self._shared_answers})
             self._config_form.answers_changed.connect(self._on_config_changed)
             self._config_form.help_link_requested.connect(self._on_help_link_requested)
             config_layout.addWidget(self._config_form, stretch=1)
@@ -196,7 +201,7 @@ class ModuleDetail(QDialog):
             self.show_documentation(anchor)
 
     def _on_config_changed(self, config: dict) -> None:
-        self._module_config = config
+        self._module_config = without_shared(self._module.module_id, config)
 
     def _save_config(self) -> None:
         # Deep copy: the form keeps editing its own (nested) answers after this save.
