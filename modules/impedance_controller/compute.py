@@ -5,7 +5,7 @@ Resolves the startup configuration of the Impedance Controller of the IIT grindi
 gains, limits and thresholds, with the spec defaults for anything not answered.
 `control_rate_hz` is shared: it is owned by the Cartesian Controller and read from there.
 The measured wrench is a required capability: its source and topic are answered here. A missing or
-invalid source blocks deployment, which the deploy step checks live (app/engine/module_dependencies.py).
+invalid source blocks deployment, which the runtime deploy step checks live (app/engine/runtime_deploy.py).
 
 Usage (called by compute_runner.py as a subprocess):
     python -m modules.impedance_controller.compute <use_case_json_path> <output_dir>
@@ -54,7 +54,7 @@ def deploy_blockers(answers: dict) -> list:
 
     Covers the module's own answers only. The required-capability blockers depend on the pipeline
     selection and the declared external sources, which change after compute, so the deploy step
-    evaluates them live (UseCasePage._deploy_module).
+    evaluates them live (UseCasePage._deploy_runtime).
     """
     return control_rate_blockers(IMPEDANCE_CONTROLLER_CONFIG, answers)
 
