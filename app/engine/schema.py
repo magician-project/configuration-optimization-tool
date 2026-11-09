@@ -1187,6 +1187,28 @@ CARTESIAN_CONTROLLER_CONFIG = [
 ]
 
 IMPEDANCE_CONTROLLER_CONFIG = [
+    {
+        "id": "measured_wrench_source",
+        "title": "Measured wrench source",
+        "tooltip": "Where the Impedance Controller gets the measured wrench (force/torque) from. The MAGICIAN "
+                   "Grabber is only valid when it is in scope and tactile sensing is selected; otherwise "
+                   "choose External and name the source in the module detail.",
+        "help_link": _IMPEDANCE_DOCS,
+        "type": "select",
+        "options": [
+            {"value": "grabber",  "label": "MAGICIAN Grabber"},
+            {"value": "external", "label": "External"},
+        ],
+    },
+    {
+        "id": "measured_wrench_topic",
+        "title": "Measured wrench topic",
+        "tooltip": "ROS 2 topic that delivers the measured wrench. Required for an external source. For the "
+                   "MAGICIAN Grabber, leave it empty to use the default: /magician_grabber/wrench_sensed.",
+        "help_link": _IMPEDANCE_DOCS,
+        "type": "text",
+        "placeholder": "/magician_grabber/wrench_sensed",
+    },
     _float_param(
         "force_reference_scale", "Force reference scale",
         "Scales the learned normal-force profile before grinding. Use a validated material and tool recipe. "

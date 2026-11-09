@@ -36,7 +36,8 @@ of the module that needs it.
 - **Incomplete**: something is still open: an external source without a name or an agreed \
 contract, or a dependency the module owners still have to confirm.
 - **Invalid**: a module needs an input that no active module provides and that cannot come from \
-outside.
+outside, or a required capability has no valid source, for example a measured wrench from the \
+Grabber without tactile sensing.
 - **Not assessed**: the pipeline selection is not answered yet, so COT cannot tell which modules \
 are in scope.
 
@@ -100,8 +101,8 @@ class ConfigurationValidationPanel(QFrame):
 
         if validation.external_inputs:
             warning = QLabel(
-                "MAGICIAN Inspection is not in scope, so the module(s) below still need input "
-                "from an external source. Name the source and agree how it provides the data."
+                "The module(s) below need input that no in-scope MAGICIAN module provides. "
+                "Name the external source and agree how it provides the data."
             )
             warning.setWordWrap(True)
             warning.setStyleSheet("color: #6b7280; font-size: 11px; border: none;")
@@ -113,6 +114,8 @@ class ConfigurationValidationPanel(QFrame):
             self._root.addWidget(self._note(f"Owner confirmation needed for dependency '{dep_id}'."))
         for dep_id in validation.blocking:
             self._root.addWidget(self._note(f"Required input '{dep_id}' has no provider and cannot come from outside."))
+        for blocker in validation.capability_blockers:
+            self._root.addWidget(self._note(blocker))
 
     def _build_help_button(self) -> QPushButton:
         btn = make_info_button("validation_help", _VALIDATION_HELP_SUMMARY)
@@ -162,9 +165,10 @@ class ConfigurationValidationPanel(QFrame):
         else:
             state = "Source not set"
             colour = "#92400e"
+        origin = f" (normally from {req.provider_name})" if req.provider_name else ""
         text = QLabel(
-            f"<b>{req.consumer_name}</b>: <i>{req.input_name}</i> "
-            f"(normally from {req.provider_name}) \u2014 <span style='color:{colour}'>{state}</span>"
+            f"<b>{req.consumer_name}</b>: <i>{req.input_name}</i>"
+            f"{origin} \u2014 <span style='color:{colour}'>{state}</span>"
         )
         text.setTextFormat(Qt.TextFormat.RichText)
         text.setWordWrap(True)
@@ -195,16 +199,25 @@ class ExternalInputForm(QFrame):
         title.setStyleSheet("font-weight: 600; border: none;")
         vbox.addWidget(title)
 
-        info = QLabel(
-            f"Normally provided by {req.provider_name}, which is not in scope for this pipeline selection. "
-            "Name the external system that supplies it and agree how it delivers the data."
-        )
+        if req.kind == "capability":
+            origin = (
+                f"{req.consumer_name} needs a {req.input_name} that no in-scope module provides. "
+                "Name the external system that supplies it and agree how it delivers the data."
+            )
+        else:
+            origin = (
+                f"Normally provided by {req.provider_name}, which is not in scope for this pipeline selection. "
+                "Name the external system that supplies it and agree how it delivers the data."
+            )
+        info = QLabel(origin)
         info.setWordWrap(True)
         info.setStyleSheet("color: #6b7280; font-size: 11px; border: none;")
         vbox.addWidget(info)
 
         vbox.addWidget(self._fields_label("Required fields", req.minimum_fields))
         vbox.addWidget(self._fields_label("Conditional fields", req.conditional_fields))
+        for note in req.field_notes:
+            vbox.addWidget(self._fields_label("Note", [note]))
         if req.external_schema:
             schema = QLabel(f"Contract schema: {req.external_schema}")
             schema.setStyleSheet("color: #6b7280; font-size: 11px; border: none;")

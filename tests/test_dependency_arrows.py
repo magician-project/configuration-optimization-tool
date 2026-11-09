@@ -126,7 +126,9 @@ def test_localiser_and_ergodic_control_have_no_module_arrows():
 
 
 def test_display_only_edges_do_not_change_the_configuration_validation():
-    result = validate_configuration("both", ["tactile"])
+    result = validate_configuration("both", ["tactile"], module_answers={
+        "impedance_controller": {"measured_wrench_source": "grabber"},
+    })
 
     assert result.status == "valid"
     assert result.owner_confirmation_needed == []

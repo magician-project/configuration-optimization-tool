@@ -58,8 +58,51 @@ def test_force_sync_is_off_until_answered():
     assert run({"force_sync_enabled": "yes"})["force_sync_enabled"] is True
 
 
-def test_the_wrench_topic_is_not_configured_here():
+def test_the_wrench_topic_is_only_written_once_the_source_is_known():
     assert "measured_wrench_topic" not in run({})
+    assert "measured_wrench_topic" not in run({"measured_wrench_source": "external"})
+    assert run({"measured_wrench_source": "external", "measured_wrench_topic": " /ft/wrench "})[
+        "measured_wrench_topic"
+    ] == "/ft/wrench"
+
+
+def test_the_grabber_source_falls_back_to_the_grabber_topic():
+    assert run({"measured_wrench_source": "grabber"})["measured_wrench_topic"] == "/magician_grabber/wrench_sensed"
+    assert run({"measured_wrench_source": "grabber", "measured_wrench_topic": "/ft/custom"})[
+        "measured_wrench_topic"
+    ] == "/ft/custom"
+
+
+def test_main_blocks_deployment_without_a_valid_wrench_source(tmp_path, monkeypatch):
+    result = _run_main(tmp_path, monkeypatch, {}, answers={"q_pipeline": "grinding"})
+
+    assert any("measured_wrench_topic" in b for b in result["deploy_blockers"])
+    assert "measured wrench: name the external source" in result["deploy_blockers"]
+
+
+def test_main_blocks_deployment_when_the_grabber_cannot_deliver_the_wrench(tmp_path, monkeypatch):
+    result = _run_main(
+        tmp_path, monkeypatch, {"impedance_controller": {"measured_wrench_source": "grabber"}},
+        answers={"q_pipeline": "both", "q3_additional_sensors": []},
+    )
+
+    assert any("tactile" in b for b in result["deploy_blockers"])
+
+
+def test_main_does_not_block_deployment_with_a_working_wrench_source(tmp_path, monkeypatch):
+    grabber = _run_main(
+        tmp_path / "a", monkeypatch, {"impedance_controller": {"measured_wrench_source": "grabber"}},
+        answers={"q_pipeline": "both", "q3_additional_sensors": ["tactile"]},
+    )
+    external = _run_main(
+        tmp_path / "b", monkeypatch,
+        {"impedance_controller": {"measured_wrench_source": "external", "measured_wrench_topic": "/ft"}},
+        answers={"q_pipeline": "grinding"},
+        external_sources={"measured_wrench": {"source_name": "Partner F/T", "contract_agreed": False}},
+    )
+
+    assert grabber["deploy_blockers"] == []
+    assert external["deploy_blockers"] == []
 
 
 def test_nothing_blocks_deployment_with_the_defaults():
@@ -94,8 +137,12 @@ def test_ros_interface_only_returns_notes():
     assert commands and all(c.type == "note" for c in commands)
 
 
-def _run_main(tmp_path, monkeypatch, module_answers):
-    use_case = {"name": "Grinding cell", "answers": {}, "module_answers": module_answers}
+def _run_main(tmp_path, monkeypatch, module_answers, answers=None, external_sources=None):
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    use_case = {
+        "name": "Grinding cell", "answers": answers or {}, "module_answers": module_answers,
+        "external_sources": external_sources or {},
+    }
     use_case_path = tmp_path / "use_case.json"
     use_case_path.write_text(json.dumps(use_case), encoding="utf-8")
     out_dir = tmp_path / "out"

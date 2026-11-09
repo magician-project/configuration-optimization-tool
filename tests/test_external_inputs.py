@@ -30,15 +30,71 @@ def test_source_name_markup_is_escaped_in_overview(qapp):
     assert not any("<AOI>" in t for t in texts)
 
 
-def _form(source: ExternalSource):
+def _form(source: ExternalSource, dependency_id="estimation_to_orienteering_solver", module_answers=None):
     from gui.components.external_inputs import ExternalInputForm
 
-    [req] = validate_configuration("grinding", external_sources={"estimation_to_orienteering_solver": source}).external_inputs
+    validation = validate_configuration(
+        "grinding", external_sources={dependency_id: source}, module_answers=module_answers
+    )
+    [req] = [r for r in validation.external_inputs if r.dependency_id == dependency_id]
     return ExternalInputForm(req)
 
 
 def _label_texts(widget) -> list:
     return [lbl.text() for lbl in widget.findChildren(QLabel)]
+
+
+def test_form_shows_the_defect_type_and_frame_as_minimum_fields(qapp):
+    texts = _label_texts(_form(ExternalSource()))
+
+    [required] = [t for t in texts if t.startswith("Required fields")]
+    assert "defect.type" in required and "coordinate_frame.frame_id" in required
+    [conditional] = [t for t in texts if t.startswith("Conditional fields")]
+    assert "defect.type" not in conditional and "coordinate_frame.frame_id" not in conditional
+    assert any("defect class" in t for t in texts)
+
+
+def test_form_for_a_capability_says_no_in_scope_module_provides_it(qapp):
+    texts = _label_texts(_form(ExternalSource(), "measured_wrench"))
+
+    assert "External input required: measured wrench" in texts
+    assert any("no in-scope module provides" in t for t in texts)
+    assert any(t.startswith("Required fields: measured_wrench_topic") for t in texts)
+    assert not any("Normally provided by" in t for t in texts)
+
+
+def test_panel_lists_a_missing_wrench_source_and_its_blocker(qapp):
+    panel = ConfigurationValidationPanel()
+
+    panel.update_validation(validate_configuration("grinding"))
+
+    texts = _label_texts(panel)
+    assert any("Impedance Controller" in t and "measured wrench" in t and "Source not set" in t for t in texts)
+    assert any("measured_wrench_topic" in t for t in texts)
+
+
+def _tile_texts(grid, module_id) -> list:
+    return [lbl.text() for lbl in grid.tile(module_id).findChildren(QLabel, "capability_status")]
+
+
+def test_capability_status_is_shown_on_the_consumer_tile_and_never_as_an_arrow(qapp):
+    from app.engine.module_registry import MODULES
+    from app.models.use_case import ModuleState
+    from gui.components.module_grid import ModuleGrid
+
+    grid = ModuleGrid()
+    states = {m: ModuleState(module_id=m, module_name=m, description="d", status="ok") for m in MODULES}
+    validation = validate_configuration("grinding")
+    edges_without = None
+
+    grid.update_modules(states)
+    edges_without = (grid.dependency_edges(), grid.group_edges())
+    grid.update_modules(states, capabilities=validation.capabilities)
+
+    assert _tile_texts(grid, "impedance_controller") == ["Measured wrench: external input required"]
+    assert _tile_texts(grid, "dmp") == ["Target frame: fender (Localiser)"]
+    assert _tile_texts(grid, "localiser") == []
+    assert (grid.dependency_edges(), grid.group_edges()) == edges_without
 
 
 def test_form_says_nothing_is_saved_yet_for_a_new_requirement(qapp):

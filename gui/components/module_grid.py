@@ -17,7 +17,9 @@ from PySide6.QtCore import Qt, Signal, QEvent, QLineF, QPoint, QPointF, QRect, Q
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 
 from app.models.use_case import ModuleState
-from app.engine.module_dependencies import GroupEdge, VisibleEdge, visible_dependency_edges, visible_group_edges
+from app.engine.module_dependencies import (
+    CapabilityStatus, GroupEdge, VisibleEdge, visible_dependency_edges, visible_group_edges,
+)
 from app.engine.module_registry import MODULE_GROUPS, MODULES, group_of
 
 # (strip_colour, accent/text, status label)
@@ -244,8 +246,14 @@ class ModuleGrid(QWidget):
         self._group_grids[group_id] = grid
         return frame
 
-    def update_modules(self, modules: dict, out_of_date: Collection[str] = frozenset()) -> None:
-        """Show the module states; ``out_of_date`` holds the ids whose compute result is out of date."""
+    def update_modules(
+        self, modules: dict, out_of_date: Collection[str] = frozenset(),
+        capabilities: Collection[CapabilityStatus] = (),
+    ) -> None:
+        """Show the module states; ``out_of_date`` holds the ids whose compute result is out of date.
+
+        ``capabilities`` are shown as status lines on the tile of their consuming module.
+        """
         def is_out_of_scope(module_id: str) -> bool:
             return getattr(modules.get(module_id), "status", None) == "out_of_scope"
 
@@ -260,7 +268,10 @@ class ModuleGrid(QWidget):
         for mid, tile in self._tiles.items():
             ms: ModuleState | None = modules.get(mid)
             if ms:
-                tile.update_state(ms, out_of_date=mid in out_of_date)
+                tile.update_state(
+                    ms, out_of_date=mid in out_of_date,
+                    capabilities=[c for c in capabilities if c.consumer == mid],
+                )
                 if ms.status == "needs_action":
                     needs += 1
                 elif ms.status in ("validated", "computed"):
@@ -370,6 +381,11 @@ class _ModuleTile(QFrame):
         status_row.addWidget(self._out_of_date_badge)
         vbox.addLayout(status_row)
 
+        # Required capabilities of this module (e.g. the source of the measured wrench)
+        self._capabilities_box = QVBoxLayout()
+        self._capabilities_box.setSpacing(1)
+        vbox.addLayout(self._capabilities_box)
+
         # Action type badges row
         self._badges_row = QHBoxLayout()
         self._badges_row.setSpacing(4)
@@ -378,7 +394,9 @@ class _ModuleTile(QFrame):
 
         vbox.addStretch()
 
-    def update_state(self, ms: ModuleState, out_of_date: bool = False) -> None:
+    def update_state(
+        self, ms: ModuleState, out_of_date: bool = False, capabilities: Collection[CapabilityStatus] = ()
+    ) -> None:
         self._out_of_scope = ms.status == "out_of_scope"
         # Without a scope there is no result to judge, so the badge would only add noise.
         self._out_of_date_badge.setVisible(out_of_date and ms.status not in ("out_of_scope", "not_assessed"))
@@ -434,6 +452,20 @@ class _ModuleTile(QFrame):
                 )
                 self._badges_row.addWidget(badge)
         self._badges_row.addStretch()
+
+        while self._capabilities_box.count():
+            item = self._capabilities_box.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for cap in capabilities:
+            line = QLabel(cap.summary)
+            line.setObjectName("capability_status")
+            line.setTextFormat(Qt.TextFormat.PlainText)
+            line.setWordWrap(True)
+            line.setStyleSheet(
+                f"font-size: 10px; background: transparent; color: {'#6b7280' if cap.satisfied else '#b45309'};"
+            )
+            self._capabilities_box.addWidget(line)
 
     def enterEvent(self, event) -> None:
         self._apply_shadow(blur=22, offset=5, alpha=35)

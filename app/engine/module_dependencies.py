@@ -3,21 +3,23 @@ Module dependency register and configuration validation.
 
 A dependency is a provider output that a consumer module needs. When the provider is out of
 scope for the pipeline selection and external input is allowed, the partner must name an
-external source and agree a contract (an "external input requirement"). To add a dependency
+external source and agree a contract (an "external input requirement"). A required capability
+(REQUIRED_CAPABILITIES) is an input not tied to one provider module: an in-scope module or a
+declared external source satisfies it. To add a dependency
 or a module, add an entry below — validate_configuration() needs no change.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Literal, NamedTuple, Optional, Tuple
 
 from pydantic import BaseModel
 
 from app.engine.module_registry import (
     MODULES, compute_default_modules, group_of, is_assessed, normalize_pipeline,
 )
-from app.models.use_case import ExternalSource
+from app.models.use_case import ExternalSource, UseCase
 
 # Architecture nodes that are not (yet) configurable COT modules. Register a node here
 # before using it in a dependency; move it to MODULES once COT can configure it.
@@ -45,6 +47,7 @@ class Dependency:
     external_schema: Optional[str] = None
     external_minimum_fields: Tuple[str, ...] = ()
     external_conditional_fields: Tuple[str, ...] = ()
+    external_field_notes: Tuple[str, ...] = ()
     # Shown as an arrow on the dashboard only; never evaluated by validate_configuration().
     display_only: bool = False
     # False: the dependency is still validated, but no arrow is drawn for it.
@@ -108,12 +111,14 @@ DEPENDENCIES: List[Dependency] = [
         external_input_allowed=True,
         external_schema="external_inspection_handover",
         external_minimum_fields=(
-            "defect.id", "defect.location.x", "defect.location.y", "defect.location.z",
-            "defect.severity",
+            "defect.id", "defect.type", "defect.location.x", "defect.location.y", "defect.location.z",
+            "defect.severity", "coordinate_frame.frame_id",
         ),
-        external_conditional_fields=(
-            "defect.type", "defect.location.orientation", "defect.confidence",
-            "coordinate_frame.frame_id",
+        external_conditional_fields=("defect.location.orientation", "defect.confidence"),
+        external_field_notes=(
+            "defect.type must be a defect class (positive_dent, negative_dent or other)",
+            "coordinate_frame.frame_id must be a frame the Localiser publishes; for any other frame the "
+            "handover must state the transform to the robot planning frame",
         ),
         evidence_status="documented", validation_status="verified",
     ),
@@ -157,15 +162,18 @@ DEPENDENCIES: List[Dependency] = [
 
 
 class ExternalInputRequirement(BaseModel):
-    dependency_id: str
+    dependency_id: str   # the capability id for kind == "capability"
     consumer: str
     consumer_name: str
     input_name: str
-    normal_provider: str
-    provider_name: str
+    normal_provider: str = ""
+    provider_name: str = ""
+    # "dependency": the normal provider is out of scope. "capability": no in-scope module provides it.
+    kind: Literal["dependency", "capability"] = "dependency"
     external_schema: Optional[str] = None
     minimum_fields: List[str] = []
     conditional_fields: List[str] = []
+    field_notes: List[str] = []
     source_name: str = ""
     contract_agreed: bool = False
     schema_reference: str = ""
@@ -175,6 +183,17 @@ class ExternalInputRequirement(BaseModel):
         return bool(self.source_name.strip()) and self.contract_agreed
 
 
+class CapabilityStatus(BaseModel):
+    """How one required capability is satisfied; shown on the consuming module, never as an arrow."""
+    capability: str
+    consumer: str
+    name: str
+    provider: str = ""   # module id, "external", or "" when there is no valid source
+    satisfied: bool
+    summary: str
+    blockers: List[str] = []
+
+
 class ConfigurationValidation(BaseModel):
     # not_assessed | valid | valid_with_external_inputs | incomplete | invalid
     status: str
@@ -182,12 +201,100 @@ class ConfigurationValidation(BaseModel):
     external_inputs: List[ExternalInputRequirement] = []
     owner_confirmation_needed: List[str] = []
     blocking: List[str] = []
+    capabilities: List[CapabilityStatus] = []
+
+    @property
+    def capability_blockers(self) -> List[str]:
+        return [b for c in self.capabilities for b in c.blockers]
 
 
 def node_name(node_id: str) -> str:
     if node_id in MODULES:
         return MODULES[node_id]["name"]
     return NON_COT_NODES.get(node_id, {}).get("name", node_id)
+
+
+GRABBER_WRENCH_TOPIC = "/magician_grabber/wrench_sensed"
+DEFAULT_TARGET_FRAME = "fender"   # the Localiser's default mesh frame (q_local_mesh_link)
+
+
+@dataclass(frozen=True)
+class RequiredCapability:
+    """An input a module needs that is not tied to one provider module (see CONTEXT.md).
+
+    ``evaluate(in_scope, sensors, module_answers)`` returns the status and whether the partner must
+    declare an external source. A capability never pulls a module into scope and is never drawn.
+    """
+    id: str
+    consumer: str
+    name: str
+    evaluate: Callable[[set, List[str], Dict[str, dict]], Tuple["CapabilityStatus", bool]]
+    external_fields: Tuple[str, ...] = ()
+
+
+def _evaluate_measured_wrench(
+    in_scope: set, sensors: List[str], module_answers: Dict[str, dict]
+) -> Tuple[CapabilityStatus, bool]:
+    config = module_answers.get("impedance_controller", {})
+    choice = config.get("measured_wrench_source") or ""
+    topic = str(config.get("measured_wrench_topic") or "").strip()
+    # The Grabber only delivers F/T data when tactile sensing is selected (use_ati_force).
+    grabber_in_scope = "grabber" in in_scope
+    grabber_delivers = grabber_in_scope and "tactile" in sensors
+
+    def status(provider: str, satisfied: bool, summary: str, *blockers: str) -> CapabilityStatus:
+        return CapabilityStatus(
+            capability="measured_wrench", consumer="impedance_controller", name="Measured wrench",
+            provider=provider, satisfied=satisfied, summary=summary, blockers=list(blockers),
+        )
+
+    if choice == "grabber" and grabber_delivers:
+        return status("grabber", True, f"Measured wrench: MAGICIAN Grabber ({topic or GRABBER_WRENCH_TOPIC})"), False
+    if choice == "grabber":
+        reason = (
+            "the Grabber is not in scope for this pipeline selection" if not grabber_in_scope
+            else "the Grabber only provides force/torque data when tactile sensing is selected"
+        )
+        return status(
+            "", False, "Measured wrench: no valid source",
+            f"Measured wrench: {reason}. Choose an external source or change the selection.",
+        ), False
+    if not choice and grabber_delivers:
+        return status(
+            "", False, "Measured wrench: source not chosen",
+            "Measured wrench: choose a source (MAGICIAN Grabber or External).",
+        ), False
+
+    # External, or unanswered while the Grabber cannot be the source.
+    blockers = [] if topic else ["Measured wrench: an external source needs a measured_wrench_topic."]
+    return status(
+        "external", bool(topic), f"Measured wrench: external ({topic or 'topic not set'})", *blockers
+    ), True
+
+
+def _evaluate_target_frame(
+    in_scope: set, sensors: List[str], module_answers: Dict[str, dict]
+) -> Tuple[CapabilityStatus, bool]:
+    frame = str(module_answers.get("localiser", {}).get("q_local_mesh_link") or DEFAULT_TARGET_FRAME)
+    if "localiser" in in_scope:
+        return CapabilityStatus(
+            capability="target_frame", consumer="dmp", name="Target frame", provider="localiser",
+            satisfied=True, summary=f"Target frame: {frame} (Localiser)",
+        ), False
+    return CapabilityStatus(
+        capability="target_frame", consumer="dmp", name="Target frame", satisfied=False,
+        summary="Target frame: no provider",
+        blockers=["Target frame: the Localiser is not in scope, so no frame is published."],
+    ), False
+
+
+REQUIRED_CAPABILITIES: List[RequiredCapability] = [
+    RequiredCapability(
+        "measured_wrench", "impedance_controller", "Measured wrench", _evaluate_measured_wrench,
+        external_fields=("measured_wrench_topic",),
+    ),
+    RequiredCapability("target_frame", "dmp", "Target frame", _evaluate_target_frame),
+]
 
 
 def scope_for(pipeline: Optional[str], additional_sensors: Optional[List[str]] = None) -> List[str]:
@@ -226,6 +333,7 @@ def validate_configuration(
     pipeline: Optional[str],
     additional_sensors: Optional[List[str]] = None,
     external_sources: Optional[Dict[str, ExternalSource]] = None,
+    module_answers: Optional[Dict[str, dict]] = None,
 ) -> ConfigurationValidation:
     """Pure function: check each in-scope consumer's required inputs against the pipeline scope."""
     if not is_assessed(pipeline):
@@ -260,15 +368,64 @@ def validate_configuration(
             external_schema=dep.external_schema,
             minimum_fields=list(dep.external_minimum_fields),
             conditional_fields=list(dep.external_conditional_fields),
+            field_notes=list(dep.external_field_notes),
             source_name=source.source_name,
             contract_agreed=source.contract_agreed,
             schema_reference=source.schema_reference,
         ))
 
-    if result.blocking:
+    _evaluate_capabilities(result, in_scope, additional_sensors or [], module_answers or {}, external_sources)
+
+    if result.blocking or result.capability_blockers:
         result.status = "invalid"
     elif result.owner_confirmation_needed or any(not r.complete for r in result.external_inputs):
         result.status = "incomplete"
     elif result.external_inputs:
         result.status = "valid_with_external_inputs"
     return result
+
+
+def validate_use_case(use_case: UseCase) -> ConfigurationValidation:
+    return validate_configuration(
+        use_case.answers.q_pipeline, use_case.answers.q3_additional_sensors,
+        use_case.external_sources, use_case.module_answers,
+    )
+
+
+def capability_deploy_blockers(validation: ConfigurationValidation, consumer: str) -> List[str]:
+    """Why a consumer cannot be deployed: its capabilities have no valid source or an unnamed external one."""
+    unnamed = [
+        f"{r.input_name}: name the external source"
+        for r in validation.external_inputs
+        if r.consumer == consumer and r.kind == "capability" and not r.source_name.strip()
+    ]
+    return [b for c in validation.capabilities if c.consumer == consumer for b in c.blockers] + unnamed
+
+
+def _evaluate_capabilities(
+    result: ConfigurationValidation,
+    in_scope: set,
+    sensors: List[str],
+    module_answers: Dict[str, dict],
+    external_sources: Dict[str, ExternalSource],
+) -> None:
+    for capability in REQUIRED_CAPABILITIES:
+        if capability.consumer not in in_scope:
+            continue
+        status, needs_external = capability.evaluate(in_scope, sensors, module_answers)
+        if needs_external:
+            source = external_sources.get(capability.id) or ExternalSource()
+            req = ExternalInputRequirement(
+                dependency_id=capability.id, consumer=capability.consumer,
+                consumer_name=node_name(capability.consumer), input_name=capability.name.lower(),
+                kind="capability", minimum_fields=list(capability.external_fields),
+                source_name=source.source_name, contract_agreed=source.contract_agreed,
+                schema_reference=source.schema_reference,
+            )
+            result.external_inputs.append(req)
+            status.satisfied = status.satisfied and req.complete
+            if status.satisfied:
+                status.summary = f"{capability.name}: external source {req.source_name.strip()}"
+            else:
+                status.summary = f"{capability.name}: external input required"
+        result.capabilities.append(status)

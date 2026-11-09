@@ -11,9 +11,26 @@ _CONTROLLER_DEPENDENCIES = [
     "dmp_to_cartesian_controller", "dmp_to_impedance_controller", "impedance_controller_to_cartesian_controller",
 ]
 
+_SOLVER_SOURCE = ExternalSource(source_name="Partner AOI", contract_agreed=True)
+_WRENCH_SOURCE = ExternalSource(source_name="Partner F/T", contract_agreed=True)
+_GRABBER_WRENCH = {"impedance_controller": {"measured_wrench_source": "grabber"}}
+_EXTERNAL_WRENCH = {
+    "impedance_controller": {"measured_wrench_source": "external", "measured_wrench_topic": "/partner/wrench"},
+}
+
+
+def _wrench(validation):
+    [capability] = [c for c in validation.capabilities if c.capability == "measured_wrench"]
+    return capability
+
+
+def _requirement(validation, dependency_id):
+    [req] = [r for r in validation.external_inputs if r.dependency_id == dependency_id]
+    return req
+
 
 def test_both_pipelines_need_no_external_input():
-    result = validate_configuration("both")
+    result = validate_configuration("both", ["tactile"], module_answers=_GRABBER_WRENCH)
 
     assert result.status == "valid"
     assert result.external_inputs == []
@@ -27,37 +44,40 @@ def test_inspection_only_is_valid():
 def test_grinding_only_requires_external_defect_input():
     result = validate_configuration("grinding")
 
-    [req] = result.external_inputs
+    req = _requirement(result, "estimation_to_orienteering_solver")
     assert req.consumer == "orienteering_solver"
     assert req.input_name == "defects"
     assert req.provider_name == "Estimation Algorithm"
     assert "defect.severity" in req.minimum_fields
-    assert result.status == "incomplete"
+    assert result.status == "invalid"
 
 
 def test_grinding_only_with_named_source_but_no_agreed_contract_is_incomplete():
-    sources = {"estimation_to_orienteering_solver": ExternalSource(source_name="Partner AOI")}
+    sources = {
+        "estimation_to_orienteering_solver": ExternalSource(source_name="Partner AOI"),
+        "measured_wrench": _WRENCH_SOURCE,
+    }
 
-    assert validate_configuration("grinding", external_sources=sources).status == "incomplete"
+    result = validate_configuration("grinding", external_sources=sources, module_answers=_EXTERNAL_WRENCH)
+
+    assert result.status == "incomplete"
 
 
 def test_grinding_only_with_agreed_source_is_valid_with_external_inputs():
-    sources = {
-        "estimation_to_orienteering_solver": ExternalSource(source_name="Partner AOI", contract_agreed=True)
-    }
+    sources = {"estimation_to_orienteering_solver": _SOLVER_SOURCE, "measured_wrench": _WRENCH_SOURCE}
 
-    result = validate_configuration("grinding", external_sources=sources)
+    result = validate_configuration("grinding", external_sources=sources, module_answers=_EXTERNAL_WRENCH)
 
     assert result.status == "valid_with_external_inputs"
-    assert result.external_inputs[0].complete
+    assert all(r.complete for r in result.external_inputs)
 
 
 def test_external_source_kept_for_out_of_scope_dependency_is_not_counted():
-    sources = {
-        "estimation_to_orienteering_solver": ExternalSource(source_name="Partner AOI", contract_agreed=True)
-    }
+    sources = {"estimation_to_orienteering_solver": _SOLVER_SOURCE}
 
-    assert validate_configuration("both", external_sources=sources).status == "valid"
+    result = validate_configuration("both", ["tactile"], sources, _GRABBER_WRENCH)
+
+    assert result.status == "valid"
 
 
 def test_dmp_is_a_cot_module_consuming_the_ordered_grinding_targets():
@@ -80,7 +100,7 @@ def test_dmp_is_in_scope_for_grinding_and_both_but_not_inspection():
 
 
 def test_dmp_needs_the_orienteering_solver_and_is_satisfied_when_it_is_in_scope():
-    result = validate_configuration("both")
+    result = validate_configuration("both", ["tactile"], module_answers=_GRABBER_WRENCH)
 
     assert "orienteering_solver_to_dmp" in result.satisfied
     assert result.status == "valid"
@@ -184,4 +204,157 @@ def test_pending_external_input_does_not_reset_advanced_lifecycle_status():
         sync_external_input_status(uc)
 
         assert uc.modules["orienteering_solver"].status == status
+
+
+# --- Required capabilities ------------------------------------------------------------------------
+
+
+def test_grinding_only_without_an_external_wrench_source_needs_external_input_and_blocks_deploy():
+    from app.engine.module_dependencies import capability_deploy_blockers
+
+    result = validate_configuration("grinding")
+
+    req = _requirement(result, "measured_wrench")
+    assert req.consumer == "impedance_controller" and req.kind == "capability" and not req.complete
+    assert result.status == "invalid"
+    assert capability_deploy_blockers(result, "impedance_controller")
+
+
+def test_grinding_only_with_a_grabber_source_is_a_blocker_because_the_grabber_is_out_of_scope():
+    result = validate_configuration("grinding", ["tactile"], module_answers=_GRABBER_WRENCH)
+
+    assert result.status == "invalid"
+    assert not _wrench(result).satisfied
+    assert "not in scope" in _wrench(result).blockers[0]
+    assert [r for r in result.external_inputs if r.kind == "capability"] == []
+
+
+def test_both_with_the_grabber_as_source_and_tactile_sensing_satisfies_the_capability():
+    result = validate_configuration("both", ["tactile"], module_answers=_GRABBER_WRENCH)
+
+    assert _wrench(result).satisfied and _wrench(result).provider == "grabber"
+    assert "/magician_grabber/wrench_sensed" in _wrench(result).summary
+    assert result.external_inputs == []
+
+
+def test_both_with_the_grabber_as_source_but_without_tactile_sensing_is_a_blocker():
+    result = validate_configuration("both", [], module_answers=_GRABBER_WRENCH)
+
+    assert result.status == "invalid"
+    assert "tactile" in _wrench(result).blockers[0]
+
+
+def test_the_grabber_source_can_use_a_custom_topic():
+    answers = {"impedance_controller": {"measured_wrench_source": "grabber", "measured_wrench_topic": "/ft/custom"}}
+
+    assert "/ft/custom" in _wrench(validate_configuration("both", ["tactile"], module_answers=answers)).summary
+
+
+def test_both_without_a_chosen_source_is_a_blocker_even_with_tactile_sensing():
+    result = validate_configuration("both", ["tactile"])
+
+    assert result.status == "invalid"
+    assert "choose a source" in _wrench(result).blockers[0]
+
+
+def test_an_external_source_needs_a_topic():
+    answers = {"impedance_controller": {"measured_wrench_source": "external"}}
+
+    result = validate_configuration("both", ["tactile"], {"measured_wrench": _WRENCH_SOURCE}, answers)
+
+    assert result.status == "invalid"
+    assert "measured_wrench_topic" in _wrench(result).blockers[0]
+
+
+def test_an_external_wrench_source_with_topic_and_agreed_contract_is_satisfied():
+    result = validate_configuration(
+        "both", ["tactile"], {"measured_wrench": _WRENCH_SOURCE}, _EXTERNAL_WRENCH,
+    )
+
+    assert result.status == "valid_with_external_inputs"
+    assert _wrench(result).satisfied and _wrench(result).provider == "external"
+    assert "Partner F/T" in _wrench(result).summary
+
+
+def test_an_external_wrench_source_without_a_name_blocks_deploy_but_only_makes_the_status_incomplete():
+    from app.engine.module_dependencies import capability_deploy_blockers
+
+    result = validate_configuration("both", ["tactile"], module_answers=_EXTERNAL_WRENCH)
+
+    assert result.status == "incomplete"
+    assert capability_deploy_blockers(result, "impedance_controller") == [
+        "measured wrench: name the external source"
+    ]
+
+
+def test_the_capability_source_is_kept_per_capability_id_not_per_dependency():
+    result = validate_configuration("both", ["tactile"], module_answers=_EXTERNAL_WRENCH)
+
+    assert _requirement(result, "measured_wrench").minimum_fields == ["measured_wrench_topic"]
+
+
+def test_the_dmp_target_frame_comes_from_the_localiser_with_its_default_frame():
+    for pipeline in ("grinding", "both"):
+        [frame] = [c for c in validate_configuration(pipeline).capabilities if c.capability == "target_frame"]
+
+        assert frame.consumer == "dmp" and frame.provider == "localiser" and frame.satisfied
+        assert frame.summary == "Target frame: fender (Localiser)"
+
+
+def test_the_dmp_target_frame_follows_the_localiser_mesh_frame():
+    answers = {"localiser": {"q_local_mesh_link": "car_body_frame"}}
+
+    [frame] = [
+        c for c in validate_configuration("grinding", module_answers=answers).capabilities
+        if c.capability == "target_frame"
+    ]
+
+    assert frame.summary == "Target frame: car_body_frame (Localiser)"
+
+
+def test_capabilities_are_only_evaluated_for_consumers_in_scope():
+    assert validate_configuration("inspection").capabilities == []
+    assert validate_configuration(None).capabilities == []
+
+
+def test_capabilities_never_become_dependencies_or_arrows():
+    from app.engine.module_dependencies import REQUIRED_CAPABILITIES, DEPENDENCIES, visible_dependency_edges, scope_for
+
+    capability_ids = {c.id for c in REQUIRED_CAPABILITIES}
+
+    assert not capability_ids & {d.id for d in DEPENDENCIES}
+    assert not {c.consumer for c in REQUIRED_CAPABILITIES} - set(scope_for("both"))
+    assert all(e.provider not in capability_ids for e in visible_dependency_edges(scope_for("both", ["tactile"])))
+
+
+def test_a_capability_never_pulls_a_module_into_scope():
+    from app.engine.module_dependencies import scope_for
+
+    assert "grabber" not in scope_for("grinding", ["tactile"])
+
+
+def test_the_defect_type_and_frame_are_minimum_fields_of_the_external_handover():
+    [req] = [
+        r for r in validate_configuration("grinding").external_inputs
+        if r.dependency_id == "estimation_to_orienteering_solver"
+    ]
+
+    assert {"defect.type", "coordinate_frame.frame_id"} <= set(req.minimum_fields)
+    assert not {"defect.type", "coordinate_frame.frame_id"} & set(req.conditional_fields)
+    assert any("defect class" in note for note in req.field_notes)
+    assert any("Localiser" in note for note in req.field_notes)
+
+
+def test_a_missing_wrench_source_makes_the_impedance_controller_need_action_until_agreed():
+    from app.engine.questionnaire_engine import sync_external_input_status
+
+    uc = _grinding_use_case()
+    assert uc.modules["impedance_controller"].status == "needs_action"
+
+    uc.module_answers["impedance_controller"] = _EXTERNAL_WRENCH["impedance_controller"]
+    uc.external_sources["measured_wrench"] = _WRENCH_SOURCE
+    sync_external_input_status(uc)
+
+    assert uc.modules["impedance_controller"].status == "ok"
+
 
