@@ -74,6 +74,9 @@ _Avoid_: model, prototype (on its own), DMP (that is the module, not the primiti
 The single process that hosts the DMP, Cartesian Controller and Impedance Controller. It is configured once at startup and restarted to change; COT cannot tune it live. The three are separate COT modules but share one startup configuration.
 _Avoid_: IIT player, grinding module
 
+**Runtime deploy**:
+The deploy action of the IIT grinding runtime. It can be started from any of its three tiles and always does the same: it checks that all three modules are computed, not out of date, and free of deploy blockers and open required capabilities, then combines their results into one `params.yaml` and returns notes only (artifact path, restart the runtime, names not verified with IIT). COT never sets parameters on, starts or restarts the runtime.
+
 **Shared runtime parameter**:
 A startup parameter of the IIT grinding runtime that serves more than one of its modules (e.g. the control rate). It has one value for the whole runtime, edited in one place and shown wherever it applies.
 

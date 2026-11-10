@@ -29,6 +29,7 @@ from PySide6.QtGui import QDesktopServices
 
 from app.engine.module_dependencies import ExternalInputRequirement
 from app.engine.module_registry import heading_anchor, load_module_readme, resolve_readme_link
+from app.engine.runtime_deploy import is_runtime_module
 from app.engine.shared_parameters import without_shared
 from app.models.use_case import ModuleState
 from gui.components.external_inputs import ExternalInputForm
@@ -389,14 +390,17 @@ class ModuleDetail(QDialog):
             hbox.addWidget(btn)
 
 
-        elif status in ("computed", "deploy_failed"):
-            btn = QPushButton("Deploy to ROS 2")
-            btn.setStyleSheet("background: #16a34a; color: white; padding: 6px 14px; border-radius: 4px;")
-            btn.clicked.connect(lambda: self.action_requested.emit(self._module.module_id, "deploy"))
-            hbox.addWidget(btn)
-
-        elif status == "deployed":
-            btn = QPushButton("Re-deploy to ROS 2")
+        elif status in ("computed", "deploy_failed", "deployed"):
+            redeploy = status == "deployed"
+            if is_runtime_module(self._module.module_id):
+                note = QLabel("Deploys the whole IIT grinding runtime (DMP, Cartesian Controller and "
+                              "Impedance Controller), not only this module.")
+                note.setStyleSheet("color: #4b5563;")
+                hbox.addWidget(note)
+                label = "Re-deploy IIT grinding runtime" if redeploy else "Deploy IIT grinding runtime"
+            else:
+                label = "Re-deploy to ROS 2" if redeploy else "Deploy to ROS 2"
+            btn = QPushButton(label)
             btn.setStyleSheet("background: #16a34a; color: white; padding: 6px 14px; border-radius: 4px;")
             btn.clicked.connect(lambda: self.action_requested.emit(self._module.module_id, "deploy"))
             hbox.addWidget(btn)

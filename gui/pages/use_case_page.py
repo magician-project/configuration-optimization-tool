@@ -24,6 +24,9 @@ from app.models.use_case import UseCase, ComputeResult, ExternalSource
 from app.engine.module_dependencies import capability_deploy_blockers, validate_use_case
 from app.engine.module_registry import is_assessed
 from app.engine.result_freshness import answers_fingerprint, out_of_date_modules
+from app.engine.runtime_deploy import (
+    RUNTIME_MODULES, deploy_runtime, is_runtime_module, runtime_deploy_blockers,
+)
 from app.engine.shared_parameters import shared_values
 from app.engine.questionnaire_engine import (
     compute_impacts, apply_impacts_to_modules, consumers_awaiting_external_input,
@@ -554,6 +557,9 @@ class UseCasePage(QWidget):
         ms = uc.modules.get(module_id)
         if ms is None or ms.status == "out_of_scope":
             return
+        if is_runtime_module(module_id):
+            self._deploy_runtime(module_id)
+            return
         if ms.compute_result is None:
             QMessageBox.warning(self, "Cannot deploy", "Run Compute first.")
             return
@@ -623,5 +629,44 @@ class UseCasePage(QWidget):
 
         uc.updated_at = datetime.now(timezone.utc).isoformat()
         json_store.save(uc)
+        self._refresh_grid()
+        self._refresh_open_dialog(module_id)
+
+    def _deploy_runtime(self, module_id: str) -> None:
+        """Deploy the whole IIT grinding runtime (ADR-0005), whichever of its three tiles asked."""
+        uc = self._use_case
+        reasons = runtime_deploy_blockers(uc)
+        if reasons:
+            QMessageBox.warning(
+                self, "Deployment blocked",
+                "The IIT grinding runtime (DMP, Cartesian Controller and Impedance Controller) "
+                "is not ready to deploy:\n- " + "\n- ".join(reasons),
+            )
+            return
+
+        try:
+            deployment = deploy_runtime(uc, json_store.runtime_deploy_dir(uc.id))
+        except Exception as exc:
+            logger.exception("Failed to write the IIT grinding runtime artifact")
+            QMessageBox.critical(self, "Deploy error", f"Could not write the runtime artifact: {exc}")
+            for runtime_module in RUNTIME_MODULES:
+                uc.modules[runtime_module].status = "deploy_failed"
+            json_store.save(uc)
+            self._refresh_grid()
+            self._refresh_open_dialog(module_id)
+            return
+
+        now = datetime.now(timezone.utc).isoformat()
+        for runtime_module in RUNTIME_MODULES:
+            uc.modules[runtime_module].status = "deployed"
+            uc.modules[runtime_module].deployed_at = now
+        uc.updated_at = now
+        json_store.save(uc)
+        self._show_banner("IIT grinding runtime deployed: startup artifact written.")
+        QMessageBox.information(
+            self, "IIT grinding runtime deployed",
+            "Deploy covers the whole IIT grinding runtime, not only this module. Please note:\n- "
+            + "\n- ".join(deployment.notes),
+        )
         self._refresh_grid()
         self._refresh_open_dialog(module_id)

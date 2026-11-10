@@ -6,6 +6,9 @@ JSON persistence — one folder per use case:
         compute_outputs/
             {module_id}/
                 result.json
+        deploy_outputs/
+            grinding_runtime/
+                params.yaml
 """
 
 import json
@@ -38,6 +41,11 @@ def _use_case_path(use_case_id: str) -> str:
 def _compute_output_path(use_case_id: str, module_id: str) -> str:
     safe_module = "".join(c for c in module_id if c.isalnum() or c in "-_")
     return os.path.join(_use_case_dir(use_case_id), "compute_outputs", safe_module, "result.json")
+
+
+def runtime_deploy_dir(use_case_id: str) -> str:
+    """Where the startup artifact of the IIT grinding runtime is written."""
+    return os.path.join(_use_case_dir(use_case_id), "deploy_outputs", "grinding_runtime")
 
 
 # ---------------------------------------------------------------------------
