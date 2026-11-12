@@ -25,7 +25,7 @@ _STARTUP_NOTE = (
     "COT does not tune it live"
 )
 _TIME_NOTE = (
-    "COT does not check whether the phase durations fit the time constraint of the use case; "
+    "COT only compares the time constraint with one baseline cycle and never changes the phase durations; "
     "contact and safety requirements always take precedence"
 )
 

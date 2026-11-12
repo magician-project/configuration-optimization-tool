@@ -3,6 +3,7 @@ from app.models.questionnaire import QuestionnaireAnswers
 from app.models.use_case import ModuleImpact, Flag, ModuleState, ConfidenceScore, UseCase
 from app.engine.module_registry import MODULES, compute_default_modules, is_assessed
 from app.engine.module_dependencies import validate_use_case
+from app.engine.grinding_cycle import BASELINE_NOTE, baseline_cycle_time_s, time_budget_s
 
 _DEFECT_CLASS_LABELS = {"positive_dent": "Positive Dent", "negative_dent": "Negative Dent"}
 
@@ -852,6 +853,8 @@ def compute_impacts(answers: QuestionnaireAnswers, module_answers: dict = None) 
         ))
         total_characteristics += 1
 
+    total_characteristics += _add_grinding_impacts(result, answers, module_answers)
+
     # ------------------------------------------------------------------
     # Out-of-scope modules: hard filter — no impacts, no flags.
     # ------------------------------------------------------------------
@@ -1046,6 +1049,94 @@ def _compute_confidence(answers: QuestionnaireAnswers, module_answers: dict = No
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _add_grinding_impacts(result: Dict[str, Any], answers: QuestionnaireAnswers, module_answers: dict) -> int:
+    """
+    Impact rules of the IIT grinding modules. They only detect and explain, never change a
+    parameter. Out-of-scope modules are cleared by the caller. Returns the characteristics triggered.
+    """
+    triggered = 0
+
+    # Q8: the DMP needs a learned primitive per defect class (missing ones and "other" block deploy).
+    if answers.q8_defects:
+        result["dmp"]["impacts"].append(_impact(
+            characteristic="Defect classes",
+            affects="Process",
+            what_changes=(
+                f"configure learned grinding primitive for: {', '.join(_defect_names(answers))}. "
+                "A class without configured pose and wrench paths, and the class other, "
+                "blocks deployment."
+            ),
+            action_type="reconfigure",
+            reason="Q8: Defect classes selected",
+        ))
+        triggered += 1
+
+    # Q5: COT does not infer controller gains from a material.
+    if answers.q5_materials:
+        result["impedance_controller"]["impacts"].append(_impact(
+            characteristic="Material selected",
+            affects="Process",
+            what_changes=(
+                "The force reference, admissible force and admittance tuning depend on a validated "
+                "material, tool and contact-control recipe."
+            ),
+            action_type="review",
+            reason="Q5: Material selected",
+        ))
+        result["impedance_controller"]["flags"].append(_flag(
+            id="flag_grinding_material",
+            type="human_oversight",
+            message=(
+                "Validated material/tool/contact-control configuration required. "
+                "COT does not infer or tune controller gains from the selected material."
+            ),
+            module_id="impedance_controller",
+        ))
+        triggered += 1
+
+    # Q9: compare the time budget with one conservative baseline cycle.
+    budget_s = time_budget_s(answers.q9_time, answers.q9_time_value, answers.q9_time_unit)
+    cycle_s = baseline_cycle_time_s(answers.q8_defects, module_answers.get("cartesian_controller", {}))
+    if budget_s is not None and cycle_s is not None:
+        infeasible = cycle_s > budget_s
+        if infeasible:
+            characteristic = "Time constraint shorter than one grinding cycle"
+            what_changes = (
+                f"One defect cycle takes about {cycle_s:.1f} s, longer than the time constraint of "
+                f"{budget_s:g} s ({BASELINE_NOTE}). Shorten the phase durations or relax the time "
+                "constraint; contact and safety requirements always take precedence."
+            )
+        else:
+            characteristic = "Time constraint: baseline cycles in budget"
+            cycles = int(budget_s // cycle_s)
+            what_changes = (
+                f"{cycles} baseline cycle{'' if cycles == 1 else 's'} of {cycle_s:.1f} s fit in the "
+                f"time constraint of {budget_s:g} s ({BASELINE_NOTE}). This is not a prediction: the "
+                "number of defects and the travel and scheduling time between them are not included."
+            )
+        for module_id in ("dmp", "cartesian_controller"):
+            result[module_id]["impacts"].append(_impact(
+                characteristic=characteristic,
+                affects="Process",
+                what_changes=what_changes,
+                action_type="review",
+                reason="Q9: Tight time constraints specified",
+            ))
+            if infeasible:
+                result[module_id]["flags"].append(_flag(
+                    id="flag_grinding_cycle_infeasible",
+                    type="warning",
+                    message=(
+                        f"One defect cycle (about {cycle_s:.1f} s, {BASELINE_NOTE}) is longer than the "
+                        f"time constraint of {budget_s:g} s."
+                    ),
+                    module_id=module_id,
+                ))
+        triggered += 1
+
+    return triggered
+
 
 def _impact(
     characteristic: str,

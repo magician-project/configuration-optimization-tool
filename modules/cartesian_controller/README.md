@@ -61,8 +61,21 @@ Every other parameter has a default, so nothing else can be left incomplete.
 ## Notes
 
 - Startup configuration: the grinding runtime must be restarted for changes to take effect.
-- COT does not check whether the phase durations fit the time constraint of the use case; contact and
-  safety requirements always take precedence.
+- COT only compares the time constraint with one baseline cycle (see below) and never changes the phase
+  durations; contact and safety requirements always take precedence.
+
+## Use-case impact rules
+
+These rules only apply while the module is in scope. They detect and explain; they never change a parameter.
+
+- **Time constraint (Q9):** one defect cycle is estimated as `reach_duration_s + touch_dwell_s + max(baseline
+  primitive duration of the selected classes) + unload_extra_duration_s + go_away_duration_s`, using the answers
+  above (or their defaults). The baseline durations come from the [DMP](../dmp/README.md) and are "IIT baseline,
+  not measured from configured primitive files". A cycle longer than the budget gives a feasibility flag;
+  otherwise an impact states how many complete baseline cycles fit (e.g. 7 for the defaults and 5 minutes).
+  That is not a prediction: the number of defects and the travel and scheduling time between them are not included.
+
+Use-case characteristics without a question yet (**nog geen vraag**): robot / tool change and contact quality / loss.
 
 ## Open points
 
