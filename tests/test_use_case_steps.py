@@ -94,6 +94,26 @@ def test_the_specification_has_one_save_action_and_it_is_the_continue_button(qap
     assert page._next_btn.text().startswith("Save and continue")
 
 
+def test_save_and_continue_needs_a_pipeline_in_the_pending_answers(qapp, tmp_path, monkeypatch):
+    page = _page(tmp_path, monkeypatch, pipeline=None)
+
+    # Editing another question does not make the step reachable
+    page._on_answers_changed({**page._use_case.answers.model_dump(), "q3_additional_sensors": ["tactile"]})
+    assert not page._next_btn.isEnabled()
+
+    page._on_answers_changed({**page._use_case.answers.model_dump(), "q_pipeline": "both"})
+    assert page._next_btn.isEnabled()
+
+
+def test_clearing_the_saved_pipeline_disables_continue_until_it_is_chosen_again(qapp, tmp_path, monkeypatch):
+    page = _page(tmp_path, monkeypatch, pipeline="both")
+    page._show_step(_STEP_SPECIFICATION)
+
+    page._on_answers_changed({**page._use_case.answers.model_dump(), "q_pipeline": None})
+
+    assert not page._next_btn.isEnabled()
+
+
 def test_continue_does_not_mention_saving_when_nothing_is_pending(qapp, tmp_path, monkeypatch):
     page = _page(tmp_path, monkeypatch, pipeline="both")
     page._show_step(_STEP_SPECIFICATION)

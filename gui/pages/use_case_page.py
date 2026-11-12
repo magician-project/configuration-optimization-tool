@@ -234,7 +234,12 @@ class UseCasePage(QWidget):
             self._next_btn.setText("Save and continue to the modules  →")
         else:
             self._next_btn.setText("Continue to the modules  →")
-        self._next_btn.setEnabled(self._dirty or done)
+        # Pending edits decide when there are any: Save and continue must not run without a pipeline
+        if self._pending_answers is not None:
+            can_continue = is_assessed(self._pending_answers.get("q_pipeline"))
+        else:
+            can_continue = done
+        self._next_btn.setEnabled(can_continue)
         self._next_btn.setToolTip("" if self._next_btn.isEnabled() else "Choose a pipeline selection first.")
 
     def _resolve_unsaved(self) -> bool:
