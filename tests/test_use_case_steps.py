@@ -61,6 +61,19 @@ def test_next_stays_on_the_specification_while_the_pipeline_is_unanswered(qapp, 
     assert page._steps.currentIndex() == _STEP_SPECIFICATION
 
 
+def test_saving_an_unanswered_pipeline_keeps_the_modules_locked(qapp, tmp_path, monkeypatch):
+    page = _page(tmp_path, monkeypatch, pipeline="both")
+    page._show_step(_STEP_SPECIFICATION)
+    page._on_answers_changed({**page._use_case.answers.model_dump(), "q_pipeline": None})
+    # The user chooses Save in the unsaved-changes dialog
+    monkeypatch.setattr(page, "_resolve_unsaved", lambda: page._save_questionnaire() or True)
+
+    page._show_step(_STEP_MODULES)
+
+    assert json_store.load("steps").answers.q_pipeline is None
+    assert page._steps.currentIndex() == _STEP_SPECIFICATION
+
+
 def test_the_specification_can_be_reopened_from_the_modules(qapp, tmp_path, monkeypatch):
     page = _page(tmp_path, monkeypatch, pipeline="both")
 

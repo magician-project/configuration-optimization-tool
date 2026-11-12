@@ -206,6 +206,9 @@ class UseCasePage(QWidget):
             return
         if self._steps.currentIndex() == _STEP_SPECIFICATION and not self._resolve_unsaved():
             return
+        # Saving the pending edits can have removed the pipeline selection again
+        if step == _STEP_MODULES and not self._specification_done():
+            return
         self._steps.setCurrentIndex(step)
         self._update_steps()
 
