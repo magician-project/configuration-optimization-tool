@@ -6,7 +6,7 @@ they never change a parameter.
 
 import pytest
 
-from app.engine.grinding_cycle import BASELINE_PRIMITIVE_DURATION_S, baseline_cycle_time_s
+from app.engine.grinding_cycle import BASELINE_PRIMITIVE_DURATION_S, baseline_cycle_time_s, time_budget_s
 from app.engine.questionnaire_engine import compute_impacts
 from app.models.questionnaire import QuestionnaireAnswers
 
@@ -47,6 +47,38 @@ def test_no_cycle_time_without_a_class_that_has_a_baseline(classes):
 
 def test_baseline_durations_are_the_iit_values():
     assert BASELINE_PRIMITIVE_DURATION_S == {"negative_dent": 17.818, "positive_dent": 17.717}
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -5.0])
+def test_unusable_cartesian_answer_gives_no_cycle_time(value):
+    assert baseline_cycle_time_s(["negative_dent"], {"reach_duration_s": value}) is None
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), 0, -5.0])
+def test_unusable_time_budget_gives_no_budget(value):
+    assert time_budget_s("tight", value, "minutes") is None
+
+
+@pytest.mark.parametrize("module_id", CYCLE_MODULES)
+@pytest.mark.parametrize("budget", [float("nan"), float("inf")])
+def test_non_finite_budget_does_not_break_the_impacts(module_id, budget):
+    module = _time(module_id, budget)
+    assert FEASIBILITY_FLAG not in _flag_ids(module)
+    assert _characteristic(module, "baseline cycles") is None
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -100.0])
+def test_unusable_cartesian_answer_does_not_break_the_impacts(value):
+    module = _time("dmp", 5, unit="minutes", module_answers={"cartesian_controller": {"go_away_duration_s": value}})
+    assert FEASIBILITY_FLAG not in _flag_ids(module)
+    assert _characteristic(module, "baseline cycles") is None
+
+
+def test_unusable_inputs_do_not_break_other_assessments():
+    answers = QuestionnaireAnswers(
+        q_pipeline="inspection", q8_defects=["positive_dent"], q9_time="tight", q9_time_value=float("nan"),
+    )
+    compute_impacts(answers, module_answers={"cartesian_controller": {"reach_duration_s": float("nan")}})
 
 
 # --- Q8 -> DMP -------------------------------------------------------------
