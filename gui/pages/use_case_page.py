@@ -1,10 +1,11 @@
 """
-UseCasePage — tabbed view for a single use case.
-Tabs: Questionnaire | Module Dashboard.
+UseCasePage — a single use case in two steps.
+Steps: 1. Describe the use case (questionnaire) | 2. Configure the modules (module dashboard).
+The second step is locked until a pipeline selection has been saved.
 
 Workflow:
   1. Answer questionnaire → impacts/flags/confidence recomputed on every save.
-  2. In Module Dashboard: Acknowledge flags → Validate → Compute → Deploy.
+  2. In the module dashboard: Acknowledge flags → Validate → Compute → Deploy.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTabWidget, QMessageBox,
+    QStackedWidget, QMessageBox,
 )
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
 
@@ -37,12 +38,16 @@ from app.storage import json_store
 from gui.components.confidence_bar import ConfidenceBar
 from gui.components.external_inputs import ConfigurationValidationPanel
 from gui.components.questionnaire_form import QuestionnaireForm
+from gui.components.step_bar import StepBar
 from gui.components.module_grid import ModuleGrid
 from gui.components.module_detail import ModuleDetail
 from gui.components.compute_progress_dialog import ComputeProgressDialog
 from app.engine.compute_runner import ComputeRunner, is_compute_running
 
 logger = logging.getLogger(__name__)
+
+_STEP_SPECIFICATION = 0
+_STEP_MODULES = 1
 
 # Modules whose compute.py always populates ComputeResult.deploy_blockers
 # (as [] when there's nothing blocking). A stored result with
@@ -66,6 +71,7 @@ class UseCasePage(QWidget):
         self._use_case: Optional[UseCase] = None
         self._pending_answers: Optional[dict] = None
         self._dirty = False
+        self._step_chosen = False
         self._active_detail_dlg = None   # currently open ModuleDetail dialog
         self._compute_progress_dlg: Optional[ComputeProgressDialog] = None
         # Answers fingerprint per module, taken when its compute starts (the answers compute.py reads).
@@ -101,6 +107,11 @@ class UseCasePage(QWidget):
         nav.addWidget(self._title_lbl)
         root.addLayout(nav)
 
+        # Step bar (specification -> modules); the later step is locked until the specification is done
+        self._step_bar = StepBar(["Describe the use case", "Configure the modules"])
+        self._step_bar.step_clicked.connect(self._show_step)
+        root.addWidget(self._step_bar)
+
         # Status banner (hidden by default)
         self._banner = QLabel()
         self._banner.setStyleSheet(
@@ -109,11 +120,10 @@ class UseCasePage(QWidget):
         self._banner.hide()
         root.addWidget(self._banner)
 
-        # Tabs
-        self._tabs = QTabWidget()
-        root.addWidget(self._tabs, stretch=1)
+        self._steps = QStackedWidget()
+        root.addWidget(self._steps, stretch=1)
 
-        # -- Questionnaire tab
+        # -- Specification step (questionnaire)
         q_tab = QWidget()
         q_vbox = QVBoxLayout(q_tab)
         q_vbox.setContentsMargins(8, 8, 8, 8)
@@ -156,23 +166,92 @@ class UseCasePage(QWidget):
         self._save_bar.hide()
         q_vbox.addWidget(self._save_bar)
 
-        # -- Module dashboard tab (added first so it is index 0)
+        # -- Modules step (module dashboard)
         dash_tab = QWidget()
         dash_vbox = QVBoxLayout(dash_tab)
         dash_vbox.setContentsMargins(8, 8, 8, 8)
         dash_vbox.setSpacing(8)
         self._validation_panel = ConfigurationValidationPanel()
         self._validation_panel.configure_requested.connect(self._open_module_detail)
-        self._validation_panel.specification_requested.connect(lambda: self._tabs.setCurrentIndex(1))
+        self._validation_panel.specification_requested.connect(lambda: self._show_step(_STEP_SPECIFICATION))
         dash_vbox.addWidget(self._validation_panel)
         self._module_grid = ModuleGrid()
         self._module_grid.module_selected.connect(self._open_module_detail)
         dash_vbox.addWidget(self._module_grid, stretch=1)
-        self._tabs.addTab(dash_tab, "Module Dashboard")
 
-        # -- Questionnaire tab (index 1)
-        self._tabs.addTab(q_tab, "Use Case Specification")
-        self._tabs.currentChanged.connect(self._on_tab_changed)
+        self._steps.addWidget(q_tab)      # _STEP_SPECIFICATION
+        self._steps.addWidget(dash_tab)   # _STEP_MODULES
+
+        # Step navigation
+        step_nav = QHBoxLayout()
+        self._previous_btn = QPushButton("←  Edit the specification")
+        self._previous_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._previous_btn.clicked.connect(lambda: self._show_step(_STEP_SPECIFICATION))
+        step_nav.addWidget(self._previous_btn)
+        step_nav.addStretch()
+        self._next_btn = QPushButton("Save and continue to the modules  →")
+        self._next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._next_btn.setStyleSheet(
+            "background: #162759; color: white; padding: 8px 20px; border-radius: 5px; "
+            "font-weight: bold; font-size: 13px; border: none;"
+        )
+        self._next_btn.clicked.connect(self._on_next_step)
+        step_nav.addWidget(self._next_btn)
+        root.addLayout(step_nav)
+
+    # ------------------------------------------------------------------
+    # Steps
+    # ------------------------------------------------------------------
+
+    def _specification_done(self) -> bool:
+        return self._use_case is not None and is_assessed(self._use_case.answers.q_pipeline)
+
+    def _show_step(self, step: int) -> None:
+        if step == self._steps.currentIndex():
+            return
+        if step == _STEP_MODULES and not self._specification_done():
+            return
+        if self._steps.currentIndex() == _STEP_SPECIFICATION and not self._resolve_unsaved():
+            return
+        self._steps.setCurrentIndex(step)
+        self._update_steps()
+
+    def _on_next_step(self) -> None:
+        if self._dirty:
+            self._save_questionnaire()
+        if self._specification_done():
+            self._show_step(_STEP_MODULES)
+
+    def _update_steps(self) -> None:
+        current = self._steps.currentIndex()
+        done = self._specification_done()
+        self._step_bar.update_steps(
+            current,
+            done=[done, False],
+            locked=[False, not done],
+            locked_tip="Choose a pipeline selection in the first step.",
+        )
+        self._previous_btn.setVisible(current == _STEP_MODULES)
+        self._next_btn.setVisible(current == _STEP_SPECIFICATION)
+
+    def _resolve_unsaved(self) -> bool:
+        """Ask what to do with unsaved questionnaire edits; False when the user cancels."""
+        if not self._dirty:
+            return True
+        box = QMessageBox(self)
+        box.setWindowTitle("Unsaved changes")
+        box.setText("You have unsaved changes to the use case specification.")
+        save = box.addButton("Save", QMessageBox.ButtonRole.AcceptRole)
+        discard = box.addButton("Discard", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        if box.clickedButton() is save:
+            self._save_questionnaire()
+            return True
+        if box.clickedButton() is discard:
+            self._discard_changes()
+            return True
+        return False
 
     # ------------------------------------------------------------------
     # Load / refresh
@@ -190,6 +269,11 @@ class UseCasePage(QWidget):
         self._pending_answers = None
         self._save_bar.hide()
         self._refresh_ui()
+        if not self._step_chosen:
+            # A new use case starts at the questionnaire; one that is specified opens on its modules
+            self._step_chosen = True
+            self._steps.setCurrentIndex(_STEP_MODULES if self._specification_done() else _STEP_SPECIFICATION)
+            self._update_steps()
         self._watch_orphaned_computes()
 
     def _orphaned_computes(self) -> list:
@@ -250,6 +334,7 @@ class UseCasePage(QWidget):
             uc.modules, out_of_date=out_of_date_modules(uc), capabilities=validation.capabilities
         )
         self._validation_panel.update_validation(validation)
+        self._update_steps()
 
     @staticmethod
     def _validation(uc: UseCase):

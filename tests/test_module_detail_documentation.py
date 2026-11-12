@@ -65,6 +65,29 @@ def test_impacts_tab_title_shows_the_ampersand(qapp):
     assert "Impacts && Flags" in _tab_titles(_dialog("grabber"))
 
 
+def test_configuration_tab_comes_before_the_flags_tab(qapp):
+    dlg = _dialog("grabber")
+
+    assert _tab_titles(dlg) == ["Module Configuration", "Impacts && Flags", "Documentation"]
+    tabs = dlg.findChild(QTabWidget)
+    assert tabs.tabText(tabs.currentIndex()) == "Module Configuration"
+
+
+def test_module_without_configuration_opens_on_the_flags_tab(qapp):
+    assert _tab_titles(_dialog("orienteering_solver")) == ["Impacts && Flags", "Documentation"]
+
+
+def test_refresh_keeps_the_selected_tab(qapp):
+    dlg = _dialog("grabber")
+    tabs = dlg.findChild(QTabWidget)
+    tabs.setCurrentIndex(1)
+
+    dlg.refresh(dlg._module)
+
+    tabs = dlg.findChild(QTabWidget)
+    assert tabs.tabText(tabs.currentIndex()) == "Impacts && Flags"
+
+
 def test_documentation_tab_survives_refresh(qapp):
     dlg = _dialog("orienteering_solver")
     info = MODULES["orienteering_solver"]
