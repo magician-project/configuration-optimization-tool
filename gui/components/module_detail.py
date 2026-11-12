@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QWidget, QFrame, QTabWidget, QTextBrowser,
 )
 from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QColor, QDesktopServices
 
 from app.engine.module_dependencies import ExternalInputRequirement
 from app.engine.module_registry import heading_anchor, load_module_readme, resolve_readme_link
@@ -82,13 +82,16 @@ class ModuleDetail(QDialog):
         self._shared_answers: dict = dict(shared_answers or {})
         self._external_inputs: List[ExternalInputRequirement] = list(external_inputs or [])
         self._general_answers: dict = dict(general_answers or {})
+        # The flags must be looked at before they can be acknowledged
+        self._flags_seen = False
+        self._ack_btn: Optional[QPushButton] = None
         self.setWindowTitle(module.module_name)
         self.setMinimumSize(640, 560)
         self.setModal(True)
         self._build_ui()
 
     def _build_tabbed_ui(self, root: QVBoxLayout) -> None:
-        """Tabs: Impacts & Flags | Module Configuration (only with a config schema) | Documentation."""
+        """Tabs: Module Configuration (only with a config schema) | Impacts & Flags | Documentation."""
         from app.engine.schema import (
             CARTESIAN_CONTROLLER_CONFIG, DMP_CONFIG, ERGODIC_CONTROL_CONFIG, GRABBER_CONFIG,
             IMPEDANCE_CONTROLLER_CONFIG, LOCALISER_CONFIG, MOTION_PLANNER_CONFIG, VISION_CLASSIFIER_CONFIG,
@@ -109,14 +112,13 @@ class ModuleDetail(QDialog):
 
         tabs = QTabWidget()
 
-        # Tab 1: Impacts & Flags (existing dynamic content)
+        # Impacts & Flags (existing dynamic content); added after the configuration tab
         impacts_tab = QWidget()
         impacts_layout = QVBoxLayout(impacts_tab)
         impacts_layout.setContentsMargins(0, 4, 0, 0)
         self._insert_dynamic_widgets(impacts_layout)
-        tabs.addTab(impacts_tab, "Impacts && Flags")
 
-        # Tab 2: Module Configuration
+        # Tab 1: Module Configuration
         if config_questions:
             config_tab = QWidget()
             config_layout = QVBoxLayout(config_tab)
@@ -151,6 +153,12 @@ class ModuleDetail(QDialog):
 
             tabs.addTab(config_tab, "Module Configuration")
 
+        unacked = self._unacknowledged_flags()
+        flags_index = tabs.addTab(impacts_tab, f"Impacts && Flags ({unacked})" if unacked else "Impacts && Flags")
+        if unacked:
+            tabs.tabBar().setTabTextColor(flags_index, QColor("#b45309"))
+        self._flags_tab = impacts_tab
+
         # Tab 3: Documentation (module README, also for out-of-scope modules)
         docs = QTextBrowser()
         docs.setOpenLinks(False)
@@ -162,6 +170,31 @@ class ModuleDetail(QDialog):
         root.addWidget(tabs, stretch=1)
 
         root.addWidget(self._build_footer())
+
+        self._flags_seen = self._flags_seen or tabs.currentWidget() is impacts_tab
+        tabs.currentChanged.connect(self._on_tab_changed)
+        self._update_acknowledge_button()
+
+    def _unacknowledged_flags(self) -> int:
+        return sum(1 for f in self._module.flags if not f.acknowledged)
+
+    def _on_tab_changed(self, _index: int) -> None:
+        if self._tabs.currentWidget() is self._flags_tab:
+            self._flags_seen = True
+        self._update_acknowledge_button()
+
+    def _update_acknowledge_button(self) -> None:
+        if self._ack_btn is None:
+            return
+        n = self._unacknowledged_flags()
+        verb = "Acknowledge" if self._flags_seen else "Review"
+        self._ack_btn.setText(f"{verb} {n} flag(s)")
+
+    def _on_acknowledge_clicked(self) -> None:
+        if not self._flags_seen:
+            self._tabs.setCurrentWidget(self._flags_tab)
+            return
+        self.action_requested.emit(self._module.module_id, "acknowledge")
 
     def show_documentation(self, anchor: Optional[str] = None) -> None:
         """Switch to the Documentation tab, scrolled to the README section `anchor` if it exists."""
@@ -220,6 +253,7 @@ class ModuleDetail(QDialog):
         self._module = module
         self._external_inputs = list(external_inputs or [])
         root = self.layout()
+        previous_tab = self._tabs.currentIndex()
 
         # Items: 0=header(layout), 1=desc, 2=tabs, 3=footer. Remove tabs + footer, rebuild.
         for idx in (3, 2):
@@ -227,6 +261,7 @@ class ModuleDetail(QDialog):
             if item and item.widget():
                 item.widget().deleteLater()
         self._build_tabbed_ui(root)
+        self._tabs.setCurrentIndex(min(previous_tab, self._tabs.count() - 1))
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -368,13 +403,15 @@ class ModuleDetail(QDialog):
         hbox.addStretch()
 
         status = self._module.status
-        unacked = sum(1 for f in self._module.flags if not f.acknowledged)
+        unacked = self._unacknowledged_flags()
+        self._ack_btn = None
 
         if status in ("ok", "needs_action"):
             if unacked > 0:
-                btn = QPushButton(f"Acknowledge {unacked} flag(s)")
+                btn = QPushButton()
+                self._ack_btn = btn
                 btn.setStyleSheet("background: #ef4444; color: white; padding: 6px 14px; border-radius: 4px;")
-                btn.clicked.connect(lambda: self.action_requested.emit(self._module.module_id, "acknowledge"))
+                btn.clicked.connect(self._on_acknowledge_clicked)
                 hbox.addWidget(btn)
             else:
                 btn = QPushButton("Mark as Validated")
