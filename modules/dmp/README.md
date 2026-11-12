@@ -66,6 +66,23 @@ by COT.
 - COT only checks that the paths are filled in, not that the files exist on the runtime.
 - COT cannot verify the tool offset calibration.
 
+## Use-case impact rules
+
+These rules only apply while the module is in scope. They detect and explain; they never change a parameter.
+
+- **Defect classes (Q8):** an impact "configure learned grinding primitive for: `<classes>`". A missing
+  configuration and `other` are deploy blockers (see above).
+- **Time constraint (Q9):** one defect cycle is estimated as `reach_duration_s + touch_dwell_s + max(baseline
+  primitive duration of the selected classes) + unload_extra_duration_s + go_away_duration_s`, using the
+  [Cartesian Controller](../cartesian_controller/README.md) answers (or their defaults). The baseline durations
+  (NEGATIVE 17.818 s, POSITIVE 17.717 s) are "IIT baseline, not measured from configured primitive files".
+  A cycle longer than the budget gives a feasibility flag; otherwise an impact states how many complete
+  baseline cycles fit. That is not a prediction: the number of defects and the travel and scheduling time
+  between them are not included, and there is no question for the number of defects (it is runtime input).
+
+Use-case characteristics without a question yet (**nog geen vraag**): defect size / severity, geometry /
+workpiece pose, robot / tool change, F/T sensor selection, contact quality / loss and new demonstrations.
+
 ## Open points
 
 The node name, the literal parameter names, the offset format and the baseline primitives are open

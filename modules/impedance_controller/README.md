@@ -87,6 +87,17 @@ Every other parameter has a default, so nothing else can be left incomplete.
 - COT cannot verify the gains and force limits against the material and tool: use a validated
   material-tool recipe and do not infer gains from the material category.
 
+## Use-case impact rules
+
+These rules only apply while the module is in scope. They detect and explain; they never change a parameter.
+
+- **Material (Q5):** with a selected material, a review flag: "Validated material/tool/contact-control
+  configuration required. COT does not infer or tune controller gains from the selected material."
+
+Use-case characteristics without a question yet (**nog geen vraag**): defect size / severity, geometry /
+workpiece pose, robot / tool change, F/T sensor selection (beyond the measured wrench source above),
+contact quality / loss and new demonstrations.
+
 ## Open points
 
 The node name, the literal parameter names, the passing mechanism, the valid ranges of the parameters

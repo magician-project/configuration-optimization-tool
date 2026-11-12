@@ -17,6 +17,7 @@ import sys
 from datetime import datetime
 
 from app.engine.collection import active_items, collection_options
+from app.engine.grinding_cycle import BASELINE_PRIMITIVE_DURATION_S
 from app.engine.schema import DMP_CONFIG
 
 _PRIMITIVES = next(q for q in DMP_CONFIG if q["id"] == "primitives")
@@ -25,12 +26,10 @@ _PRIMITIVES = next(q for q in DMP_CONFIG if q["id"] == "primitives")
 # The DMP has no learned primitive for "other", so that class blocks deployment.
 _DEFECT_CLASS_LABELS = {"positive_dent": "POSITIVE", "negative_dent": "NEGATIVE"}
 
-# Nominal replay time of each class's learned artifact (IIT spec, read-only).
-_PRIMITIVE_DURATION_S = {"positive_dent": 17.717, "negative_dent": 17.818}
 _RBF_BASIS_COUNT = 24
 _PHASE_SAMPLES = 256
 
-_PATH_FIELDS = (("pose_path", "pose path"), ("wrench_path", "wrench path"))
+_PATH_FIELDS =  (("pose_path", "pose path"), ("wrench_path", "wrench path"))
 _AXES = ("x", "y", "z")
 
 _PATHS_NOTE = "COT only checks that the paths are filled in, not that the files exist on the runtime"
@@ -74,7 +73,7 @@ def run(answers: dict) -> dict:
             path = _path(item, field)
             if path:
                 outputs[f"primitive_{option}_{field}"] = path
-        outputs[f"primitive_{option}_duration_s"] = _PRIMITIVE_DURATION_S[option]
+        outputs[f"primitive_{option}_duration_s"] = BASELINE_PRIMITIVE_DURATION_S[option]
 
     for axis in _AXES:
         value, _ = _offset(answers, axis)
