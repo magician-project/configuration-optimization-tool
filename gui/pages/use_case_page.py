@@ -155,14 +155,6 @@ class UseCasePage(QWidget):
         discard_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         discard_btn.clicked.connect(self._discard_changes)
         save_bar_layout.addWidget(discard_btn)
-        save_btn = QPushButton("Save")
-        save_btn.setStyleSheet(
-            "background: #162759; color: white; padding: 4px 18px; "
-            "border-radius: 4px; font-weight: bold; font-size: 12px; border: none;"
-        )
-        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        save_btn.clicked.connect(self._save_questionnaire)
-        save_bar_layout.addWidget(save_btn)
         self._save_bar.hide()
         q_vbox.addWidget(self._save_bar)
 
@@ -189,11 +181,12 @@ class UseCasePage(QWidget):
         self._previous_btn.clicked.connect(lambda: self._show_step(_STEP_SPECIFICATION))
         step_nav.addWidget(self._previous_btn)
         step_nav.addStretch()
-        self._next_btn = QPushButton("Save and continue to the modules  →")
+        self._next_btn = QPushButton()
         self._next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._next_btn.setStyleSheet(
-            "background: #162759; color: white; padding: 8px 20px; border-radius: 5px; "
-            "font-weight: bold; font-size: 13px; border: none;"
+            "QPushButton { background: #162759; color: white; padding: 8px 20px; border-radius: 5px; "
+            "font-weight: bold; font-size: 13px; border: none; }"
+            "QPushButton:disabled { background: #cbd5e1; color: #64748b; }"
         )
         self._next_btn.clicked.connect(self._on_next_step)
         step_nav.addWidget(self._next_btn)
@@ -233,6 +226,13 @@ class UseCasePage(QWidget):
         )
         self._previous_btn.setVisible(current == _STEP_MODULES)
         self._next_btn.setVisible(current == _STEP_SPECIFICATION)
+        # The one save action of the specification: it saves pending edits, then continues
+        if self._dirty:
+            self._next_btn.setText("Save and continue to the modules  →")
+        else:
+            self._next_btn.setText("Continue to the modules  →")
+        self._next_btn.setEnabled(self._dirty or done)
+        self._next_btn.setToolTip("" if self._next_btn.isEnabled() else "Choose a pipeline selection first.")
 
     def _resolve_unsaved(self) -> bool:
         """Ask what to do with unsaved questionnaire edits; False when the user cancels."""
@@ -360,6 +360,7 @@ class UseCasePage(QWidget):
         self._pending_answers = answers
         self._dirty = True
         self._save_bar.show()
+        self._update_steps()
 
     def _discard_changes(self) -> None:
         """Reload from disk, losing unsaved edits."""
