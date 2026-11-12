@@ -18,9 +18,9 @@ Module owners work exclusively inside their own folder.
 | `orienteering_solver/` | Orienteering Solver | `/op_solver` | Reconfiguration |
 | `localiser/` | Localiser | `/localisation` | Reconfiguration |
 | `motion_planning/` | Motion Planner | `/motion_planner` | Reconfiguration |
-| `dmp/` | DMP | placeholder, not yet confirmed by IIT | Startup configuration |
-| `cartesian_controller/` | Cartesian Controller | placeholder, not yet confirmed by IIT | Startup configuration |
-| `impedance_controller/` | Impedance Controller | placeholder, not yet confirmed by IIT | Startup configuration |
+| `dmp/` | DMP | placeholder, not yet confirmed by IIT | Startup configuration (IIT grinding runtime; _Implemented, not Verified_) |
+| `cartesian_controller/` | Cartesian Controller | placeholder, not yet confirmed by IIT | Startup configuration (IIT grinding runtime; _Implemented, not Verified_) |
+| `impedance_controller/` | Impedance Controller | placeholder, not yet confirmed by IIT | Startup configuration (IIT grinding runtime; _Implemented, not Verified_) |
 | `tactile_sensor/` | Tactile Sensor | `/tactile_classifier_system` | Retrain + Reconfigure |
 | `vision_classifier/` | Vision Classifier | `/magician_vision_classifier` | Retrain + Reconfigure |
 
@@ -57,8 +57,11 @@ modules/<module_id>/
    runtime-level action (`app/engine/runtime_deploy.py`): it refuses unless all three are computed,
    not out of date and free of deploy blockers and open required capabilities, then combines the
    three results into one `params.yaml` (`control_rate_hz` once, from the Cartesian Controller)
-   and returns notes only. No `ros2 param set` or `service` command is generated, and COT does
+   and returns notes only (artifact path, restart the runtime, names not verified with IIT). No `ros2 param set` or `service` command is generated, and COT does
    not start or restart the runtime. These three modules' `ros_interface.py` is not used by deploy.
+   The artifact is *Implemented, not Verified* until IIT confirms the node name, the parameter
+   names and the passing mechanism ("Open questions for IIT" in
+   [`COT_DMP.md`](../docs/specs/COT_DMP.md)).
 
 ## Contract for `compute.py`
 
