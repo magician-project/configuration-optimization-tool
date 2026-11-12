@@ -2,6 +2,7 @@
 
 **ROS 2 node:** placeholder (`dmp_placeholder`) until IIT confirms the node name of the grinding runtime
 **Action type:** Startup configuration (no retraining, no live tuning)
+**Status:** _Implemented, not Verified_: the node name, parameter names and passing mechanism are not yet confirmed by IIT
 
 ## What this module does
 
