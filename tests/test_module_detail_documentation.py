@@ -4,10 +4,10 @@ import pytest
 from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLabel, QTabWidget, QTextBrowser
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QTabWidget, QTextBrowser
 
 from app.engine.module_registry import MODULES, README_EMPTY_STATE, module_readme_path
-from app.models.use_case import ModuleState
+from app.models.use_case import Flag, ModuleState
 from gui.components.module_detail import ModuleDetail
 
 _CONFIGURABLE = {
@@ -63,6 +63,45 @@ def test_configuration_tab_only_for_modules_with_config_schema(qapp, module_id):
 def test_impacts_tab_title_shows_the_ampersand(qapp):
     # A single "&" is a Qt mnemonic marker and is not displayed; "&&" renders as "&".
     assert "Impacts && Flags" in _tab_titles(_dialog("grabber"))
+
+
+def _dialog_with_flags(acknowledged: bool = False) -> ModuleDetail:
+    info = MODULES["grabber"]
+    flags = [Flag(id="f1", type="warning", message="Check the gripper", module_id="grabber",
+                  acknowledged=acknowledged)]
+    state = ModuleState(
+        module_id="grabber", module_name=info["name"], description=info["description"],
+        status="needs_action", flags=flags,
+    )
+    return ModuleDetail(state)
+
+
+def _acknowledge_button(dlg: ModuleDetail):
+    return next(b for b in dlg.findChildren(QPushButton) if "flag(s)" in b.text())
+
+
+def test_flags_tab_title_counts_the_open_flags(qapp):
+    assert _tab_titles(_dialog_with_flags())[1] == "Impacts && Flags (1)"
+    assert _tab_titles(_dialog_with_flags(acknowledged=True))[1] == "Impacts && Flags"
+
+
+def test_open_flags_must_be_reviewed_before_they_can_be_acknowledged(qapp):
+    dlg = _dialog_with_flags()
+    requested = []
+    dlg.action_requested.connect(lambda module_id, action: requested.append(action))
+    button = _acknowledge_button(dlg)
+    assert button.text() == "Review 1 flag(s)"
+
+    button.click()
+
+    tabs = dlg.findChild(QTabWidget)
+    assert tabs.tabText(tabs.currentIndex()) == "Impacts && Flags (1)"
+    assert requested == []
+    assert _acknowledge_button(dlg).text() == "Acknowledge 1 flag(s)"
+
+    _acknowledge_button(dlg).click()
+
+    assert requested == ["acknowledge"]
 
 
 def test_configuration_tab_comes_before_the_flags_tab(qapp):
